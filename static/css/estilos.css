@@ -1,0 +1,20 @@
+
+body {
+    background-color: #000;
+    color: #fff;
+}
+.btn-danger {
+    background-color: #d80000;
+    border-color: #d80000;
+}
+
+h1, p, label, div, span, a {
+    color: white !important;
+}
+
+.nav-tabs .nav-link.active {
+  background-color: #d80000;  /* Rojo corporativo */
+  color: white !important;    /* Texto blanco visible */
+  border-color: #d80000;
+}
+

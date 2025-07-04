@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}Ventas - Huentelauquén{% endblock %}
+{% block content %}
+
+<h2 class="text-white">Ventas</h2>
+<p class="text-white">Resumen general de ventas basado en datos del Google Sheet.</p>
+
+<form id="form-filtros" method="GET" class="row g-3 mb-4 text-white">
+
+  <div class="col-md-3">
+    <label for="empresa" class="form-label">Empresa</label>
+    <select id="empresa" name="empresa" class="form-select">
+      <option value="comercial" {% if empresa == "comercial" %}selected{% endif %}>Huente Comercial</option>
+      <option value="agricola" {% if empresa == "agricola" %}selected{% endif %}>Huente Agrícola</option>
+    </select>
+  </div>
+
+  <div class="col-md-3">
+    <label for="sucursal" class="form-label">Sucursal</label>
+    <select name="sucursal" class="form-select">
+      {% for s in sucursales %}
+        <option value="{{ s }}" {% if s == sucursal %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="col-md-2">
+    <label for="semana" class="form-label">Semana</label>
+    <input type="number" class="form-control" id="semana" name="semana" value="{{ filtros.semana or '' }}">
+  </div>
+
+  <div class="col-md-2">
+    <label for="año" class="form-label">Año</label>
+    <input type="number" class="form-control" id="año" name="año" value="{{ filtros.año or '' }}">
+  </div>
+
+  <div class="col-md-3">
+    <label for="desde" class="form-label">Desde</label>
+    <input type="date" class="form-control" id="desde" name="desde" value="{{ filtros.desde or '' }}">
+  </div>
+
+  <div class="col-md-3">
+    <label for="hasta" class="form-label">Hasta</label>
+    <input type="date" class="form-control" id="hasta" name="hasta" value="{{ filtros.hasta or '' }}">
+  </div>
+
+  <div class="col-md-3">
+    <label for="filtro_por" class="form-label">Filtrar por</label>
+    <select id="filtro_por" name="filtro_por" class="form-select">
+      <option value="FAMILIA" {% if filtro_por == "FAMILIA" %}selected{% endif %}>Familia</option>
+      <option value="DESCRIPCION" {% if filtro_por == "DESCRIPCION" %}selected{% endif %}>Descripción</option>
+    </select>
+  </div>
+
+  <div class="col-md-3">
+    <label for="valor" class="form-label">Valor</label>
+    <select id="valor" name="valor" class="form-select">
+      <option value="TODOS" {% if filtro_valor == "TODOS" %}selected{% endif %}>TODOS</option>
+      {% for v in opciones_valor %}
+        <option value="{{ v }}" {% if v == filtro_valor %}selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="col-md-3 d-flex align-items-end">
+    <button type="submit" class="btn btn-danger w-100">Aplicar Filtro</button>
+  </div>
+
+  <div class="col-md-3 d-flex align-items-end">
+    <a id="descargar-link" class="btn btn-danger w-100 text-center" href="#">Descargar Excel</a>
+  </div>
+
+</form>
+
+<!-- PESTAÑAS -->
+<ul class="nav nav-tabs" id="ventasTabs">
+  <li class="nav-item">
+    <a class="nav-link active" data-bs-toggle="tab" href="#detalle">Detalle</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" data-bs-toggle="tab" href="#resumen">Resumen Mensual</a>
+  </li>
+</ul>
+
+<div class="tab-content mt-3">
+  <!-- TAB DETALLE -->
+  <div class="tab-pane fade show active" id="detalle">
+    {% if detalle %}
+      <h3 class="mt-4 text-white">Detalle de Ventas</h3>
+      <div class="table-responsive">
+        <table class="table table-dark table-hover table-bordered mt-3">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Cantidad</th>
+              <th>Neto</th>
+              <th>Precio Unitario</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for fila in detalle %}
+              <tr>
+                <td>{{ fila["PRODUCTO"] }}</td>
+                <td>{{ "%.0f"|format(fila["CANTIDAD"]) if fila["PRODUCTO"] != "TOTAL" else fila["CANTIDAD"] }}</td>
+                <td>${{ "{:,.0f}".format(fila["NETO"]).replace(",", ".") }}</td>
+                <td>
+                  {% if fila["PRECIO UNITARIO"] %}
+                    ${{ "{:,.0f}".format(fila["PRECIO UNITARIO"]).replace(",", ".") }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-warning">No hay datos para mostrar en el detalle.</p>
+    {% endif %}
+  </div>
+
+  <!-- TAB RESUMEN -->
+  <div class="tab-pane fade" id="resumen">
+    {% if resumen_mensual %}
+      <h3 class="mt-4 text-white">Resumen Mensual</h3>
+      <pre class="bg-dark text-white p-3" style="font-family: 'Consolas', monospace; font-size: 13px;">
+{{ resumen_mensual }}
+      </pre>
+    {% else %}
+      <p class="text-warning">No hay datos para mostrar en el resumen mensual.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Scripts de interacción -->
+<script>
+  // Recarga automática al cambiar Empresa o Filtro Por
+  document.getElementById("empresa").addEventListener("change", function () {
+    document.getElementById("form-filtros").submit();
+  });
+
+  document.getElementById("filtro_por").addEventListener("change", function () {
+    document.getElementById("form-filtros").submit();
+  });
+
+  // Limpieza automática de filtros cruzados
+  document.getElementById("desde").addEventListener("input", function () {
+    document.getElementById("semana").value = "";
+    document.getElementById("año").value = "";
+  });
+
+  document.getElementById("hasta").addEventListener("input", function () {
+    document.getElementById("semana").value = "";
+    document.getElementById("año").value = "";
+  });
+
+  document.getElementById("semana").addEventListener("input", function () {
+    document.getElementById("desde").value = "";
+    document.getElementById("hasta").value = "";
+  });
+
+  document.getElementById("año").addEventListener("input", function () {
+    document.getElementById("desde").value = "";
+    document.getElementById("hasta").value = "";
+  });
+
+</script>
+
+<script>
+  function actualizarLinkDescarga() {
+    const form = document.querySelector("form");
+    const params = new URLSearchParams(new FormData(form)).toString();
+    document.getElementById("descargar-link").href = `/descargar_excel?${params}`;
+  }
+
+  // Actualizar link de descarga al cargar
+  window.onload = actualizarLinkDescarga;
+
+  // Y cada vez que se cambie algún campo:
+  document.querySelectorAll("form select, form input").forEach(el => {
+    el.addEventListener("change", actualizarLinkDescarga);
+  });
+</script>
+
+
+{% endblock %}
+
