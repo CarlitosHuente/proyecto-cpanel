@@ -7,6 +7,8 @@
 
 <form id="form-filtros" method="GET" class="row g-3 mb-4 text-white">
 
+  <input type="hidden" name="tab" id="tab" value="{{ filtros.tab or 'detalle' }}">
+
   <div class="col-md-3">
     <label for="empresa" class="form-label">Empresa</label>
     <select id="empresa" name="empresa" class="form-select">
@@ -69,22 +71,21 @@
   <div class="col-md-3 d-flex align-items-end">
     <a id="descargar-link" class="btn btn-danger w-100 text-center" href="#">Descargar Excel</a>
   </div>
-
 </form>
 
 <!-- PESTAÑAS -->
 <ul class="nav nav-tabs" id="ventasTabs">
   <li class="nav-item">
-    <a class="nav-link active" data-bs-toggle="tab" href="#detalle">Detalle</a>
+    <a class="nav-link {% if filtros.tab != 'resumen' %}active{% endif %}" data-bs-toggle="tab" href="#detalle">Detalle</a>
   </li>
   <li class="nav-item">
-    <a class="nav-link" data-bs-toggle="tab" href="#resumen">Resumen Mensual</a>
+    <a class="nav-link {% if filtros.tab == 'resumen' %}active{% endif %}" data-bs-toggle="tab" href="#resumen">Resumen Mensual</a>
   </li>
 </ul>
 
 <div class="tab-content mt-3">
   <!-- TAB DETALLE -->
-  <div class="tab-pane fade show active" id="detalle">
+  <div class="tab-pane fade {% if filtros.tab != 'resumen' %}show active{% endif %}" id="detalle">
     {% if detalle %}
       <h3 class="mt-4 text-white">Detalle de Ventas</h3>
       <div class="table-responsive">
@@ -121,52 +122,66 @@
   </div>
 
   <!-- TAB RESUMEN -->
-  <div class="tab-pane fade" id="resumen">
-    {% if resumen_mensual %}
-      <h3 class="mt-4 text-white">Resumen Mensual</h3>
-      <pre class="bg-dark text-white p-3" style="font-family: 'Consolas', monospace; font-size: 13px;">
-{{ resumen_mensual }}
-      </pre>
+  <div class="tab-pane fade {% if filtros.tab == 'resumen' %}show active{% endif %}" id="resumen">
+    <h3 class="mt-4 text-white">Resumen Mensual</h3>
+
+    {% if resumen_mensual and resumen_mensual.tabla %}
+      <div class="table-responsive">
+        <table class="table table-dark table-bordered table-hover text-center align-middle">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Meses</th>
+              {% for mes in meses %}
+                <th>{{ mes }}</th>
+              {% endfor %}
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for fila in resumen_mensual.tabla %}
+              <tr>
+                <td rowspan="3" class="fw-bold align-middle">{{ fila.producto }}</td>
+                <td>Neto</td>
+                {% for val in fila.neto %}
+                  <td>${{ val }}</td>
+                {% endfor %}
+                <td>{{ fila.total_neto }}</td>
+              </tr>
+              <tr>
+                <td>Cant.</td>
+                {% for val in fila.cant %}
+                  <td>{{ val }}</td>
+                {% endfor %}
+                <td>{{ fila.total_cant }}</td>
+              </tr>
+              <tr>
+                <td>Unit.</td>
+                {% for val in fila.unit %}
+                  <td>${{ val }}</td>
+                {% endfor %}
+                <td>{{ fila.total_unit }}</td>
+              </tr>
+            {% endfor %}
+
+            <!-- Totales -->
+            <tr class="table-secondary text-dark fw-bold">
+              <td colspan="2">TOTAL</td>
+              {% for val in resumen_mensual.total.neto %}
+                <td>{{ val }}</td>
+              {% endfor %}
+              <td>{{ resumen_mensual.total.total_neto }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     {% else %}
       <p class="text-warning">No hay datos para mostrar en el resumen mensual.</p>
     {% endif %}
   </div>
 </div>
 
-<!-- Scripts de interacción -->
-<script>
-  // Recarga automática al cambiar Empresa o Filtro Por
-  document.getElementById("empresa").addEventListener("change", function () {
-    document.getElementById("form-filtros").submit();
-  });
-
-  document.getElementById("filtro_por").addEventListener("change", function () {
-    document.getElementById("form-filtros").submit();
-  });
-
-  // Limpieza automática de filtros cruzados
-  document.getElementById("desde").addEventListener("input", function () {
-    document.getElementById("semana").value = "";
-    document.getElementById("año").value = "";
-  });
-
-  document.getElementById("hasta").addEventListener("input", function () {
-    document.getElementById("semana").value = "";
-    document.getElementById("año").value = "";
-  });
-
-  document.getElementById("semana").addEventListener("input", function () {
-    document.getElementById("desde").value = "";
-    document.getElementById("hasta").value = "";
-  });
-
-  document.getElementById("año").addEventListener("input", function () {
-    document.getElementById("desde").value = "";
-    document.getElementById("hasta").value = "";
-  });
-
-</script>
-
+<!-- Scripts -->
 <script>
   function actualizarLinkDescarga() {
     const form = document.querySelector("form");
@@ -174,15 +189,68 @@
     document.getElementById("descargar-link").href = `/descargar_excel?${params}`;
   }
 
-  // Actualizar link de descarga al cargar
+  // Guardar pestaña activa al hacer clic
+  document.querySelectorAll('.nav-link[data-bs-toggle="tab"]').forEach(tab => {
+    tab.addEventListener("click", function () {
+      const href = tab.getAttribute("href").replace("#", "");
+      document.getElementById("tab").value = href;
+    });
+  });
+
   window.onload = actualizarLinkDescarga;
 
-  // Y cada vez que se cambie algún campo:
   document.querySelectorAll("form select, form input").forEach(el => {
     el.addEventListener("change", actualizarLinkDescarga);
+  });
+
+  // Limpieza cruzada fechas-semana
+  document.getElementById("desde").addEventListener("input", () => {
+    document.getElementById("semana").value = "";
+    document.getElementById("año").value = "";
+  });
+  document.getElementById("hasta").addEventListener("input", () => {
+    document.getElementById("semana").value = "";
+    document.getElementById("año").value = "";
+  });
+  document.getElementById("semana").addEventListener("input", () => {
+    document.getElementById("desde").value = "";
+    document.getElementById("hasta").value = "";
+  });
+  document.getElementById("año").addEventListener("input", () => {
+    document.getElementById("desde").value = "";
+    document.getElementById("hasta").value = "";
+  });
+</script>
+
+<script>
+  function actualizarLinkDescarga() {
+    const form = document.querySelector("form");
+    const params = new URLSearchParams(new FormData(form));
+
+    // Identifica la pestaña activa (href="#detalle" o href="#resumen")
+    const activeTabHref = document.querySelector(".nav-link.active").getAttribute("href");
+    const activeTab = activeTabHref.replace("#", ""); // "detalle" o "resumen"
+
+    params.set("tab", activeTab);  // Agrega el parámetro tab
+
+    // Aplica los parámetros al href del botón de descarga
+    document.getElementById("descargar-link").href = `/descargar_excel?${params.toString()}`;
+  }
+
+  // Ejecutar al cargar
+  window.onload = actualizarLinkDescarga;
+
+  // Ejecutar cuando se modifique algún filtro
+  document.querySelectorAll("form select, form input").forEach(el => {
+    el.addEventListener("change", actualizarLinkDescarga);
+  });
+
+  // Ejecutar también al cambiar de pestaña
+  document.querySelectorAll('.nav-link').forEach(tab => {
+    tab.addEventListener('shown.bs.tab', actualizarLinkDescarga);
   });
 </script>
 
 
-{% endblock %}
 
+{% endblock %}
