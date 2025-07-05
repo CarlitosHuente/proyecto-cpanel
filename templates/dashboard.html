@@ -1,8 +1,102 @@
-
 {% extends "base.html" %}
-{% block title %}Dashboard - Huentelauquén{% endblock %}
+{% block title %}Dashboard de Ventas{% endblock %}
+
 {% block content %}
-<h1 class="text-white">Bienvenido {{ usuario }}</h1>
-<p class="text-white">Aquí pronto verás los informes visuales con filtros y dashboards.</p>
-<a href="{{ url_for('auth.logout') }}" class="btn btn-outline-light">Cerrar sesión</a>
+<style>
+    .sticky-top-dark {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background-color: #000;
+        padding: 10px;
+    }
+</style>
+
+<div class="container-fluid sticky-top-dark">
+    <!-- Fila 1 -->
+    <div class="row">
+        <!-- Col 1: Título -->
+        <div class="col-md-3">
+            <h2 style="color: red;">Dashboard de Ventas</h2>
+        </div>
+
+        <!-- Col 2: Sucursales -->
+        <div class="col-md-9 text-center">
+            <strong style="color:white;">Sucursal:</strong>
+            <div id="sucursales" class="btn-group flex-wrap justify-content-center" role="group"></div>
+        </div>
+    </div>
+
+    <!-- Fila 2 -->
+    <div class="row mt-3">
+        <!-- Col 1: Empresa -->
+        <div class="col-md-3">
+            <label style="color:white;">Empresa:</label>
+            <select id="empresa" onchange="cargarSucursales()" class="form-select mb-2">
+                <option value="comercial">Huente Comercial</option>
+                <option value="agricola">Huente Agrícola</option>
+            </select>
+        </div>
+
+        <!-- Col 2: Semana / Año / Fechas -->
+        <div class="col-md-9">
+            <div class="row">
+                <div class="col">
+                    <label style="color:white;">Semana:</label>
+                    <input type="number" id="semana" min="1" max="53" class="form-control">
+                </div>
+                <div class="col">
+                    <label style="color:white;">Año:</label>
+                    <input type="number" id="año" min="2020" class="form-control">
+                </div>
+                <div class="col">
+                    <label style="color:white;">Desde:</label>
+                    <input type="date" id="desde" class="form-control">
+                </div>
+                <div class="col">
+                    <label style="color:white;">Hasta:</label>
+                    <input type="date" id="hasta" class="form-control">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- GRÁFICOS -->
+<div class="container-fluid mt-4">
+  <div class="p-4 bg-black rounded shadow" style="border: 1px solid #333;">
+    <div class="row">
+      <!-- TORTA -->
+      <div class="col-lg-6 d-flex justify-content-center align-items-center">
+        <div id="grafico_torta" class="w-100"></div>
+      </div>
+
+      <!-- BARRAS + TARJETA -->
+      <div class="col-lg-6 d-flex flex-column justify-content-between">
+        <div class="d-flex mb-3">
+          <div id="grafico_barras_neto" class="w-50 me-2"></div>
+          <div id="grafico_barras_cantidad" class="w-50 ms-2"></div>
+        </div>
+        <div class="d-flex justify-content-center">
+          <div class="card bg-dark text-white text-center shadow w-100 p-3">
+            <div style="font-size: 1rem;">Neto Vendido:</div>
+            <div id="monto_neto" style="font-size: 2rem; font-weight: bold;">$0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+
+
+
+
+
+
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 {% endblock %}
+

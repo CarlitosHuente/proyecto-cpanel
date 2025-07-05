@@ -7,6 +7,7 @@ from routes.ventas_routes import ventas_bp
 
 
 
+
 app = Flask(__name__)
 app.secret_key = "clave_secreta_web"
 app.register_blueprint(ventas_bp)
