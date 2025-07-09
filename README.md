@@ -5,6 +5,8 @@ Aplicacion para los Informes.
 git add .
 git commit -m "Primer cambio desde VS Code"
 git push origin main
+git push origin main --force
+
 
 # Crear CArpeta Local
 
