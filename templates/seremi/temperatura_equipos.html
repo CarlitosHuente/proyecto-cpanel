@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Temperatura Equipos{% endblock %}
+{% block content %}
+
+<h2 class="text-white">Temperatura por Equipos</h2>
+<p class="text-white">Consulta mensual por sucursal y descarga de reportes.</p>
+
+<form method="get" class="row g-3 text-white mb-4">
+  <div class="col-md-4">
+    <label for="sucursal" class="form-label">Sucursal</label>
+    <select name="sucursal" id="sucursal" class="form-select">
+      {% for s in sucursales %}
+        <option value="{{ s }}" {% if s == sucursal_activa %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="col-md-4">
+    <label for="mes" class="form-label">Mes</label>
+    <select name="mes" id="mes" class="form-select">
+      {% for num, nombre in meses %}
+        <option value="{{ num }}" {% if num == mes_actual %}selected{% endif %}>{{ nombre }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="col-md-4 d-flex align-items-end">
+    <button type="submit" class="btn btn-danger w-100">Aplicar Filtros</button>
+  </div>
+  <div class="text-end mb-4">
+    <a class="btn btn-danger" target="_blank"
+      href="/seremi/temperatura_equipos/print?sucursal={{ sucursal_activa }}&mes={{ mes_actual }}">
+      🖨 Ver como PDF (imprimir)
+    </a>
+  </div>
+
+</form>
+
+
+<div class="text-end mb-4">
+  <a class="btn btn-danger" href="/seremi/temperatura_equipos/pdf?sucursal={{ sucursal_activa }}&mes={{ mes_actual }}">Descargar PDF</a>
+</div>
+
+
+{% if equipos %}
+  {% for equipo, registros in equipos.items() %}
+    <div class="mb-4 p-3 border rounded bg-dark">
+      <h5 class="text-danger">Equipo: {{ equipo }}</h5>
+      <ul class="mb-0">
+        <table class="table table-dark table-bordered">
+          <thead>
+            <tr>
+              <th>Día</th>
+              <th>Ingreso</th>
+              <th>Intermedio</th>
+              <th>Salida</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for dia, temps in registros %}
+              <tr>
+                <td>{{ "%02d"|format(dia) }}</td>
+                <td>{{ temps[0] }}</td>
+                <td>{{ temps[1] }}</td>
+                <td>{{ temps[2] }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+      </ul>
+    </div>
+  {% endfor %}
+{% else %}
+  <p class="text-warning">No hay registros para los filtros seleccionados.</p>
+{% endif %}
+
+{% endblock %}

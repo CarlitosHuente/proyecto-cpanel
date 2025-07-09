@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Reporte de Temperatura</title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #000; margin: 30px; }
+    .equipo { page-break-before: always; }
+    .equipo:first-of-type { page-break-before: avoid; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #000; padding: 5px; text-align: center; font-size: 13px; }
+    h2, h4 { margin: 4px 0; }
+    .logo { width: 120px; }
+    .encabezado { display: flex; align-items: center; margin-bottom: 10px; }
+    .encabezado .info { flex: 1; text-align: center; }
+    .btn-print {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      padding: 8px 16px;
+      background: #d80000;
+      color: #fff;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    @media print {
+      .btn-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<button class="btn-print" onclick="window.print()">🖨 Imprimir</button>
+
+{% for equipo in equipos %}
+  <div class="equipo">
+    <div class="encabezado">
+      <img src="{{ url_for('static', filename='img/logo.png') }}" class="logo">
+      <div class="info">
+        <h2>Planilla de Control de Temperatura</h2>
+        <h4>Equipo: {{ equipo.nombre }}</h4>
+        <div>Sucursal: {{ equipo.sucursal }} | Mes: {{ equipo.mes }}</div>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Día</th>
+          <th>Ingreso</th>
+          <th>Intermedio</th>
+          <th>Salida</th>
+          <th>Responsable</th>
+          <th>Supervisor</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for fila in equipo.registros %}
+          <tr>
+            <td>{{ fila.dia }}</td>
+            <td>{{ fila.ingreso }}</td>
+            <td>{{ fila.intermedio }}</td>
+            <td>{{ fila.salida }}</td>
+            <td>{{ fila.responsables }}</td>
+            <td></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endfor %}
+
+</body>
+</html>

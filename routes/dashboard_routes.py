@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, session, redirect, url_for, request, jsonify
-from utils.sheet_cache import obtener_datos, forzar_actualizacion
+from utils.sheet_cache import obtener_datos, forzar_actualizacion, obtener_fecha_actualizacion
 from utils.filters import filtrar_dataframe
 
 dashboard_bp = Blueprint('dashboard', __name__)
@@ -8,7 +8,12 @@ dashboard_bp = Blueprint('dashboard', __name__)
 def dashboard():
     if "usuario" not in session:
         return redirect(url_for("auth.login"))
-    return render_template("dashboard.html", usuario=session["usuario"])
+    
+    fecha_actualizacion = obtener_fecha_actualizacion("comercial")
+
+    return render_template("dashboard.html", 
+                           usuario=session["usuario"],
+                           fecha_actualizacion=fecha_actualizacion)
 
 
 @dashboard_bp.route("/refresh")
@@ -82,9 +87,8 @@ def api_dashboard_data():
         "ventas_por_familia": torta_data,
         "detalle_por_familia": detalle_por_familia,
         "ventas_familia_raw": ventas_por_familia.to_dict(orient="records"),
-        "total_neto": total_neto  # ← nueva línea
+        "total_neto": total_neto
     })
-
 
 
 @dashboard_bp.route("/api/dashboard-productos")

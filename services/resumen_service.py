@@ -27,7 +27,9 @@ def obtener_resumen_mensual_tabular(df, filtros):
     if tipo == "FAMILIA":
         if valor != "TODOS":
             df = df[df["FAMILIA"] == valor]
-        campo = "FAMILIA"
+            campo = "DESCRIPCION"  # Agrupa por productos si filtraste una familia
+        else:
+            campo = "FAMILIA"      # Agrupa por familias si no hay filtro
     elif tipo == "DESCRIPCION":
         if valor != "TODOS":
             df = df[df["DESCRIPCION"] == valor]

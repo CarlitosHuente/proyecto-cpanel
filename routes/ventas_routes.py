@@ -8,6 +8,9 @@ from utils.utils_excel import aplicar_formato_numerico_excel
 from openpyxl import load_workbook
 import io
 from flask import send_file
+from utils.sheet_cache import obtener_fecha_actualizacion
+
+
 
 
 
@@ -144,8 +147,8 @@ def ventas():
         filtro_valor=filtros["valor"],
         sucursal=filtros["sucursal"],
         empresa=empresa,
-        sucursales=sucursales
-    )
+        sucursales=sucursales,
+        fecha_actualizacion=obtener_fecha_actualizacion("temperatura_equipos"))
 
 
 

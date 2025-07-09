@@ -40,8 +40,28 @@
                 <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo" width="120">
             </a>
         </div>
+        {% if fecha_actualizacion %}
+        <div style="font-size: 0.7rem; color: #ccc; font-style: italic;">
+            Última actualización: {{ fecha_actualizacion.strftime("%d/%m/%Y %H:%M") }}
+        </div>
+        {% endif %}
+
         <a href="{{ url_for('dashboard.dashboard') }}">Dashboard</a>
         <a href="{{ url_for('ventas.ventas') }}">Ventas</a>
+        <!-- Menú SEREMI -->
+        <div class="dropdown">
+            <a class="dropdown-toggle d-block px-3 py-2 text-white" href="#" role="button" id="seremiDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                Seremi
+            </a>
+            <ul class="dropdown-menu bg-dark border-0" aria-labelledby="seremiDropdown">
+                <li><a class="dropdown-item text-white" href="{{ url_for('seremi.temperatura_equipos') }}">Temperatura Equipos</a></li>
+                <li><a class="dropdown-item text-white" href="{{ url_for('seremi.temperatura_productos') }}">Temperatura Productos</a></li>
+                <li><a class="dropdown-item text-white" href="{{ url_for('seremi.cambio_aceite') }}">Cambio de Aceite</a></li>
+                <li><a class="dropdown-item text-white" href="{{ url_for('seremi.mantenciones') }}">Mantenciones</a></li>
+                <li><a class="dropdown-item text-white" href="{{ url_for('seremi.personal') }}">Registro del Personal</a></li>
+            </ul>
+        </div>
+
         <a href="#">Clientes</a>
         <a href="#">Quesería</a>
         <a href="#">Lechería</a>

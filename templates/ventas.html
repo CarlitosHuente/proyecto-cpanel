@@ -141,7 +141,7 @@
           <tbody>
             {% for fila in resumen_mensual.tabla %}
               <tr>
-                <td rowspan="3" class="fw-bold align-middle">{{ fila.producto }}</td>
+                <td rowspan="3" class="align-middle">{{ fila.producto }}</td>
                 <td>Neto</td>
                 {% for val in fila.neto %}
                   <td>{{ val }}</td>

@@ -3,6 +3,9 @@ from flask import Flask
 from routes.auth_routes import auth_bp
 from routes.dashboard_routes import dashboard_bp
 from routes.ventas_routes import ventas_bp
+from routes.seremi_routes import seremi_bp
+
+
 
 
 
@@ -14,6 +17,8 @@ app.register_blueprint(ventas_bp)
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(dashboard_bp)
+
+app.register_blueprint(seremi_bp)
 
 import os
 
