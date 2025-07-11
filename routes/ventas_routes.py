@@ -9,6 +9,8 @@ from openpyxl import load_workbook
 import io
 from flask import send_file
 from utils.sheet_cache import obtener_fecha_actualizacion
+from utils.auth import login_requerido
+
 
 
 
@@ -18,6 +20,7 @@ ventas_bp = Blueprint("ventas", __name__)
 
 #@ventas_bp.route("/ventas", methods=["GET"])
 @ventas_bp.route("/ventas", methods=["GET"])
+@login_requerido
 def ventas():
     empresa = request.args.get("empresa", "comercial")
     df = obtener_datos(empresa)
@@ -153,6 +156,7 @@ def ventas():
 
 
 @ventas_bp.route("/descargar_excel")
+@login_requerido
 def descargar_excel():
     empresa = request.args.get("empresa", "comercial")
     df = obtener_datos(empresa)

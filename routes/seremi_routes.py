@@ -6,11 +6,13 @@ from datetime import datetime
 from collections import defaultdict
 import pandas as pd
 from utils.sheet_cache import obtener_fecha_actualizacion
+from utils.auth import login_requerido
 
 
 seremi_bp = Blueprint("seremi", __name__, url_prefix="/seremi")
 
 @seremi_bp.route("/temperatura_equipos")
+@login_requerido
 def temperatura_equipos():
     df = obtener_datos("temperatura_equipos")
 
@@ -74,22 +76,27 @@ def temperatura_equipos():
 
 
 @seremi_bp.route("/temperatura_productos")
+@login_requerido
 def temperatura_productos():
     return render_template("seremi/temperatura_productos.html")
 
 @seremi_bp.route("/cambio_aceite")
+@login_requerido
 def cambio_aceite():
     return render_template("seremi/cambio_aceite.html")
 
 @seremi_bp.route("/mantenciones")
+@login_requerido
 def mantenciones():
     return render_template("seremi/mantenciones.html")
 
 @seremi_bp.route("/personal")
+@login_requerido
 def personal():
     return render_template("seremi/personal.html")
 
 @seremi_bp.route("/temperatura_equipos/print")
+@login_requerido
 def imprimir_temperatura_equipos():
     df = obtener_datos("temperatura_equipos")
     df_equipos = obtener_datos("equipos_info")

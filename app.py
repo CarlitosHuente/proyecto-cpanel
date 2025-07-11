@@ -4,6 +4,7 @@ from routes.auth_routes import auth_bp
 from routes.dashboard_routes import dashboard_bp
 from routes.ventas_routes import ventas_bp
 from routes.seremi_routes import seremi_bp
+from datetime import timedelta
 
 
 
@@ -12,6 +13,7 @@ from routes.seremi_routes import seremi_bp
 
 
 app = Flask(__name__)
+app.permanent_session_lifetime = timedelta(minutes=10) #Tiempo Maximo de inactividad.
 app.secret_key = "clave_secreta_web"
 app.register_blueprint(ventas_bp)
 

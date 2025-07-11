@@ -13,6 +13,7 @@ def login():
         password = request.form["password"]
         ok, info = verificar_usuario(usuario, password)
         if ok:
+            session.permanent = True
             session["usuario"] = info["usuario"]
             registrar_acceso(usuario, "EXITO", "acceso concedido")
             return redirect(url_for("dashboard.dashboard"))

@@ -1,10 +1,13 @@
 from flask import Blueprint, render_template, session, redirect, url_for, request, jsonify
 from utils.sheet_cache import obtener_datos, forzar_actualizacion, obtener_fecha_actualizacion
 from utils.filters import filtrar_dataframe
+from utils.auth import login_requerido  # ← importar el decorador
+
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
 @dashboard_bp.route("/dashboard")
+@login_requerido
 def dashboard():
     if "usuario" not in session:
         return redirect(url_for("auth.login"))
@@ -17,6 +20,7 @@ def dashboard():
 
 
 @dashboard_bp.route("/refresh")
+@login_requerido
 def refrescar_datos():
     empresa = request.args.get("empresa", "comercial")
     forzar_actualizacion(empresa)
@@ -27,6 +31,7 @@ def refrescar_datos():
 # ===========================
 
 @dashboard_bp.route("/api/sucursales")
+@login_requerido
 def api_sucursales():
     empresa = request.args.get("empresa", "comercial")
     df = obtener_datos(empresa)
@@ -35,6 +40,7 @@ def api_sucursales():
 
 
 @dashboard_bp.route("/api/dashboard-data")
+@login_requerido
 def api_dashboard_data():
     empresa = request.args.get("empresa", "comercial")
     sucursal = request.args.get("sucursal")
@@ -92,6 +98,7 @@ def api_dashboard_data():
 
 
 @dashboard_bp.route("/api/dashboard-productos")
+@login_requerido
 def api_dashboard_productos():
     empresa = request.args.get("empresa", "comercial")
     sucursal = request.args.get("sucursal")
