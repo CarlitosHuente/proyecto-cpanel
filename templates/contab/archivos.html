@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Archivo Mayor{% endblock %}
+{% block content %}
+<h2 class="text-white">Carga del Libro Mayor</h2>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+    <div class="alert alert-{{ category }}">{{ message }}</div>
+  {% endfor %}
+{% endwith %}
+
+{% if existe_mayor %}
+  <p class="text-white">Archivo activo: <strong>mayor.xlsx</strong></p>
+  <a href="{{ url_for('contab.descargar_mayor') }}" class="btn btn-success me-2">Descargar</a>
+  <a href="{{ url_for('contab.eliminar_mayor') }}" class="btn btn-danger">Eliminar</a>
+{% else %}
+  <p class="text-warning">No hay archivo cargado aún.</p>
+{% endif %}
+
+<hr>
+
+<form method="POST" enctype="multipart/form-data">
+  <div class="mb-3">
+    <label class="form-label text-white">Actualizar Archivo (solo .xlsx)</label>
+    <input type="file" name="archivo_excel" accept=".xlsx" class="form-control" required>
+  </div>
+  <button type="submit" class="btn btn-danger">Subir / Reemplazar</button>
+</form>
+{% endblock %}

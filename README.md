@@ -24,4 +24,5 @@ pip install -r requirements.txt
 # y ejecutar la app
 python app.py
 
-#
+# Crear ZIP
+git archive -o huente_app.zip HEAD

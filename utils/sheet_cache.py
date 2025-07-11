@@ -1,4 +1,7 @@
 import pandas as pd
+from datetime import datetime
+import pytz
+
 
 _ultima_actualizacion = {}
 
@@ -37,7 +40,9 @@ def obtener_datos(empresa="comercial"):
                     df[col] = df[col].astype(str).str.strip().str.replace(r"[\\\/]", "", regex=True).str.upper()
 
         _cache[empresa] = df
-        _ultima_actualizacion[empresa] = datetime.now()
+        chile = pytz.timezone("America/Santiago")
+        _ultima_actualizacion[empresa] = datetime.now(chile)
+
 
     return _cache[empresa].copy()
 

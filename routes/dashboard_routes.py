@@ -22,8 +22,9 @@ def dashboard():
 @dashboard_bp.route("/refresh")
 @login_requerido
 def refrescar_datos():
-    empresa = request.args.get("empresa", "comercial")
-    forzar_actualizacion(empresa)
+    from utils.sheet_cache import URLS, forzar_actualizacion
+    for nombre in URLS.keys():
+        forzar_actualizacion(nombre)
     return redirect(request.referrer or url_for("dashboard.dashboard"))
 
 # ===========================
