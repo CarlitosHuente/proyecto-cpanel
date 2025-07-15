@@ -18,3 +18,25 @@ h1, p, label, div, span, a {
   border-color: #d80000;
 }
 
+table {
+  border-collapse: collapse;
+  width: 100%;
+  table-layout: fixed;
+}
+
+thead th {
+  position: sticky;
+  top: 0;
+  background-color: #111;
+  z-index: 2;
+  text-align: center;
+}
+/* Solo primera columna (NOMBRE) */
+.table td:first-child,
+.table th:first-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
