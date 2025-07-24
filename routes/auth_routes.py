@@ -2,6 +2,7 @@
 from flask import Blueprint, render_template, request, redirect, session, url_for
 from utils.auth import verificar_usuario
 from utils.logger import registrar_acceso
+from utils.sheet_cache import refrescar_todo_el_cache
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -15,6 +16,7 @@ def login():
         if ok:
             session.permanent = True
             session["usuario"] = info["usuario"]
+            refrescar_todo_el_cache()
             registrar_acceso(usuario, "EXITO", "acceso concedido")
             return redirect(url_for("dashboard.dashboard"))
         else:

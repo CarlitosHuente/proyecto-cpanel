@@ -36,11 +36,25 @@
 <div class="d-flex">
     <div class="sidebar position-fixed">
         <div class="text-center mb-4">
-            <a href="{{ url_for('dashboard.refrescar_datos') }}">
+            <a href="/refresh" title="Actualizar datos">
                 <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo" width="120">
             </a>
         </div>
         {% if fecha_actualizacion %}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; width: auto; max-width: 90%;">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+                    </div>
+                {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+
         <div style="font-size: 0.7rem; color: #ccc; font-style: italic;">
             Última actualización: {{ fecha_actualizacion.strftime("%d/%m/%Y %H:%M") }}
         </div>
@@ -100,9 +114,10 @@
     }
   });
 </script>
-
-
-
+<footer class="text-end text-white p-2" style="font-size: 0.8rem;">
+    Última actualización: 
+    {{ fecha_actualizacion.strftime('%d-%m-%Y %H:%M') if fecha_actualizacion else 'Desconocida' }}
+</footer>
 
 </body>
 </html>

@@ -4,6 +4,7 @@ from utils.filters import filtrar_dataframe
 from utils.auth import login_requerido  # ← importar el decorador
 
 
+
 dashboard_bp = Blueprint('dashboard', __name__)
 
 @dashboard_bp.route("/dashboard")
@@ -17,15 +18,6 @@ def dashboard():
     return render_template("dashboard.html", 
                            usuario=session["usuario"],
                            fecha_actualizacion=fecha_actualizacion)
-
-
-@dashboard_bp.route("/refresh")
-@login_requerido
-def refrescar_datos():
-    from utils.sheet_cache import URLS, forzar_actualizacion
-    for nombre in URLS.keys():
-        forzar_actualizacion(nombre)
-    return redirect(request.referrer or url_for("dashboard.dashboard"))
 
 # ===========================
 # RUTAS PARA CARGA DINÁMICA
