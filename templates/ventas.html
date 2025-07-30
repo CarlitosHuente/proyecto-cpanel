@@ -36,6 +36,20 @@
     <input type="number" class="form-control" id="año" name="año" value="{{ filtros.año or '' }}">
   </div>
 
+  <div class="col-md-2">
+  <label for="dia_semana" class="form-label">Día de Semana</label>
+  <select id="dia_semana" name="dia_semana" class="form-select">
+    <option value="TODOS">Todos</option>
+    <option value="1">Lunes</option>
+    <option value="2">Martes</option>
+    <option value="3">Miércoles</option>
+    <option value="4">Jueves</option>
+    <option value="5">Viernes</option>
+    <option value="6">Sábado</option>
+    <option value="7">Domingo</option>
+  </select>
+</div>
+
   <div class="col-md-3">
     <label for="desde" class="form-label">Desde</label>
     <input type="date" class="form-control" id="desde" name="desde" value="{{ filtros.desde or '' }}">
@@ -80,6 +94,9 @@
   </li>
   <li class="nav-item">
     <a class="nav-link {% if filtros.tab == 'resumen' %}active{% endif %}" data-bs-toggle="tab" href="#resumen">Resumen Mensual</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" data-bs-toggle="tab" href="#detalle_dia">Detalle por Día</a>
   </li>
 </ul>
 
@@ -178,6 +195,46 @@
     {% else %}
       <p class="text-warning">No hay datos para mostrar en el resumen mensual.</p>
     {% endif %}
+  </div>
+  <!-- Detalle por Dia -->
+  <div class="tab-pane fade" id="detalle_dia">
+    
+    {% if detalle_dia_data and detalle_dia_data.tabla %}
+      <h3 class="mt-4 text-white">{{ detalle_dia_data.titulo }}</h3>
+
+      <div class="table-responsive">
+        <table class="table table-dark table-hover table-bordered mt-3 text-center">
+          <thead>
+            <tr>
+              <th>{{ filtros.filtro_por|title }}</th>
+
+              {% for columna in detalle_dia_data.columnas %}
+                <th>{{ columna }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for fila in detalle_dia_data.tabla %}
+              <tr>
+                <td>{{ fila[filtros.filtro_por] }}</td>
+
+                {% for columna in detalle_dia_data.columnas %}
+                  <td>
+                    {% set valor = fila[columna] | default(0) %}
+                    {{ "{:,.0f}".format(valor).replace(",", ".") }}
+                  </td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+    {% else %}
+      <h3 class="mt-4 text-white">Detalle por Día</h3>
+      <p class="text-warning">No hay datos para mostrar con los filtros seleccionados.</p>
+    {% endif %}
+
   </div>
 </div>
 

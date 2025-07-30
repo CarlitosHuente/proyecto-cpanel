@@ -10,6 +10,7 @@ import io
 from flask import send_file
 from utils.sheet_cache import obtener_fecha_actualizacion
 from utils.auth import login_requerido
+from services.ventas_por_dia_service import obtener_detalle_por_dia
 
 
 
@@ -79,7 +80,7 @@ def ventas():
         filtros["desde"],
         filtros["hasta"]
     )
-
+###
     import pprint
     print("=== FILTROS APLICADOS ===")
     pprint.pprint(filtros)
@@ -105,7 +106,14 @@ def ventas():
     print(detalle_df.head())
     print("Filas encontradas:", len(detalle_df))
 
+    # === Lógica para la nueva pestaña "Detalle por Día" ===
+    filtros["dia_semana"] = request.args.get("dia_semana", "TODOS")
 
+    # El servicio interno se encargará de filtrar por día de la semana.
+    if not detalle_df.empty:
+        detalle_dia_data = obtener_detalle_por_dia(detalle_df.copy(), filtros)
+    else:
+        detalle_dia_data = {"tabla": [], "columnas": [], "titulo": "No hay datos para los filtros seleccionados"}
 
     # Generar detalle
 # Generar detalle agrupado visualmente (sin afectar Excel)
@@ -113,13 +121,20 @@ def ventas():
         detalle_df = obtener_detalle(detalle_df, filtros)
 
         # Agrupación visual solo para la vista
+        # Reemplaza esto en la función ventas() de ventas_routes.py
+
+        # Agrupación visual solo para la vista
         detalle_agrupado = (
             detalle_df.groupby("PRODUCTO", as_index=False)
-            .agg({
-                "CANTIDAD": "sum",
-                "NETO": "sum"
-            })
-            .assign(PRECIO_UNITARIO=lambda d: d["NETO"] / d["CANTIDAD"])
+            .agg(
+                CANTIDAD=("CANTIDAD", "sum"),
+                NETO=("NETO", "sum")
+            )
+        )
+        # Calculamos el precio unitario de forma segura
+        detalle_agrupado["PRECIO_UNITARIO"] = detalle_agrupado.apply(
+            lambda row: row["NETO"] / row["CANTIDAD"] if row["CANTIDAD"] != 0 else 0,
+            axis=1
         )
 
         detalle = detalle_agrupado.to_dict(orient="records")
@@ -151,7 +166,8 @@ def ventas():
         sucursal=filtros["sucursal"],
         empresa=empresa,
         sucursales=sucursales,
-        fecha_actualizacion=obtener_fecha_actualizacion("temperatura_equipos"))
+        fecha_actualizacion=obtener_fecha_actualizacion("temperatura_equipos"),
+        detalle_dia_data=detalle_dia_data)
 
 
 

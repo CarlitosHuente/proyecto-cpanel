@@ -131,3 +131,22 @@ def api_dashboard_productos():
     ]
     return jsonify(data)
 
+# ... (al final de dashboard_routes.py)
+
+@dashboard_bp.route("/api/latest-date-info")
+@login_requerido
+def api_latest_date_info():
+    empresa = request.args.get("empresa", "comercial")
+    try:
+        df = obtener_datos(empresa)
+        if not df.empty and "FECHA" in df.columns:
+            fecha_mas_reciente = df["FECHA"].max()
+            año = fecha_mas_reciente.year
+            semana = fecha_mas_reciente.isocalendar().week
+            return jsonify({"año": año, "semana": semana})
+    except Exception as e:
+        print(f"Error obteniendo la última fecha: {e}")
+        # Devolver valores por defecto en caso de error
+        from datetime import datetime
+        hoy = datetime.now()
+        return jsonify({"año": hoy.year, "semana": hoy.isocalendar().week})
