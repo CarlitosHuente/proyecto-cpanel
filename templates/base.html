@@ -31,12 +31,20 @@
         }
     </style>
 </head>
+
+<div id="loading-overlay">
+    <div class="spinner"></div>
+    <p>Actualizando todos los datos, por favor espere...</p>
+</div>
+
 <body>
 
 <div class="d-flex">
     <div class="sidebar position-fixed">
         <div class="text-center mb-4">
             <a href="/refresh" title="Actualizar datos">
+
+            <a href="/refresh" title="Actualizar datos" onclick="mostrarOverlay()">
                 <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo" width="120">
             </a>
         </div>
@@ -114,11 +122,23 @@
     }
   });
 </script>
+
+
 <footer class="text-end text-white p-2" style="font-size: 0.8rem;">
     Última actualización: 
     {{ fecha_actualizacion.strftime('%d-%m-%Y %H:%M') if fecha_actualizacion else 'Desconocida' }}
 </footer>
 
+<script>
+  // Función para mostrar la pantalla de carga
+  function mostrarOverlay() {
+    document.getElementById('loading-overlay').style.display = 'flex';
+  }
+
+  // No necesitamos una función para ocultarlo, porque cuando el servidor
+  // responde, la página se recarga por completo y el overlay
+  // volverá a su estado original (oculto por el CSS).
+</script>
 </body>
 </html>
 

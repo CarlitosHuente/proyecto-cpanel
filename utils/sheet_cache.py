@@ -1,68 +1,93 @@
+# Asegúrate de tener estos imports al principio del archivo sheet_cache.py
 import pandas as pd
 from datetime import datetime
 import pytz
-from bs4 import BeautifulSoup
-import re
 import io
-import requests
+import os # Necesario para construir la ruta al archivo de credenciales
+
+# Imports para la API de Google
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
 
 _ultima_actualizacion = {}
 _cache = {}
-
+# ... (Aquí va tu diccionario de URLS, sin cambios)
 URLS = {
     "comercial": "https://docs.google.com/spreadsheets/d/e/2PACX-1vSwgsbEzQxQAkBXjP5LfyqOalCDCEJRq_YxMrGII-VkijQSbjm_zxMZpXMVE6LtKhIYWYyhFYC6-UwY/pub?output=csv",
     "agricola": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ5rxTxzzXBCjef9Mvoe74H95ZbZ1p2xsDrdazyk1lN1mYCaOry4PJiOrypoxNOub_T7o9fZmJ7QYHt/pub?output=csv",
     "temperatura_equipos": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRkmW7dl4WeFzctQZhjY8ENeSkyhl1a5sy_4t9qA08QsxIbp_JiHNV8ZP6gWsA204izNAEiIPh3AUCH/pub?output=csv",
     "equipos_info": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRkmW7dl4WeFzctQZhjY8ENeSkyhl1a5sy_4t9qA08QsxIbp_JiHNV8ZP6gWsA204izNAEiIPh3AUCH/pub?gid=946296021&single=true&output=csv",
-    "mayor": "https://drive.google.com/drive/folders/1zFjARS82JAuay19WxxgepBl7jYylgPIn"
+    "mayor": "1zFjARS82JAuay19WxxgepBl7jYylgPIn" # Ahora aquí solo guardamos el ID de la carpeta
 }
 
 
+# --- REEMPLAZA TU FUNCIÓN obtener_datos CON ESTA ---
+
 def obtener_datos(empresa="comercial"):
     if empresa not in _cache:
-        url = URLS.get(empresa)
+        url_o_id = URLS.get(empresa)
 
-        if not url:
-            raise Exception(f"No se ha definido la URL para '{empresa}'")
+        if not url_o_id:
+            raise Exception(f"No se ha definido la URL o ID para '{empresa}'")
 
-        # 🟡 ESPECIAL: archivo contable mayor.xlsx desde carpeta pública
+        # 🟡 NUEVA LÓGICA PARA EL ARCHIVO CONTABLE "MAYOR" USANDO LA API
         elif empresa == "mayor":
-            folder_id = "1zFjARS82JAuay19WxxgepBl7jYylgPIn"
-            embed_url = f"https://drive.google.com/embeddedfolderview?id={folder_id}#list"
+            try:
+                # 1. Configurar credenciales
+                SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
+                # Construye la ruta al archivo de credenciales en la raíz del proyecto
+                BASE_DIR = os.path.dirname(os.path.abspath(__file__)) # Directorio de este archivo (utils)
+                ROOT_DIR = os.path.dirname(BASE_DIR) # Raíz del proyecto
+                SERVICE_ACCOUNT_FILE = os.path.join(ROOT_DIR, 'credenciales_google.json')
 
-            response = requests.get(embed_url)
-            if response.status_code != 200:
-                raise Exception("No se pudo acceder al listado público de la carpeta.")
+                creds = service_account.Credentials.from_service_account_file(
+                    SERVICE_ACCOUNT_FILE, scopes=SCOPES)
 
-            soup = BeautifulSoup(response.text, "html.parser")
-            file_id = None
-            for link in soup.find_all("a", href=True):
-                texto = link.text.strip().lower()
-                href = link["href"]
-                if "mayor.xlsx" in texto and "/file/d/" in href:
-                    match = re.search(r"/file/d/([a-zA-Z0-9_-]+)", href)
-                    if match:
-                        file_id = match.group(1)
-                        break
+                # 2. Construir el servicio de la API de Drive
+                drive_service = build('drive', 'v3', credentials=creds)
+                
+                folder_id = url_o_id # Usamos el ID de la carpeta guardado en URLS
+                file_name = 'mayor.xlsx'
 
-            if not file_id:
-                raise Exception("No se encontró 'mayor.xlsx' en la carpeta pública.")
+                # 3. Buscar el archivo por nombre dentro de la carpeta específica
+                query = f"name='{file_name}' and '{folder_id}' in parents and trashed=false"
+                results = drive_service.files().list(q=query, fields="files(id, name)").execute()
+                items = results.get('files', [])
 
-            download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-            excel_response = requests.get(download_url)
-            if excel_response.status_code != 200:
-                raise Exception("Error al descargar el archivo Excel desde Google Drive.")
+                if not items:
+                    raise Exception(f"No se encontró el archivo '{file_name}' en la carpeta de Drive.")
 
-            df = pd.read_excel(io.BytesIO(excel_response.content), engine="openpyxl")
-            df.columns = df.columns.str.strip().str.upper()
-            df["FECHA"] = pd.to_datetime(df["FECHA"], errors="coerce")
-            df = df.dropna(subset=["FECHA", "NOMBRE", "DEBE", "HABER"])
-            df["AÑO"] = df["FECHA"].dt.year
-            df["MES"] = df["FECHA"].dt.month
+                file_id = items[0]['id']
 
-        # 🟥 COMERCIAL / AGRICOLA
+                # 4. Descargar el contenido del archivo
+                request = drive_service.files().get_media(fileId=file_id)
+                file_content = io.BytesIO()
+                downloader = MediaIoBaseDownload(file_content, request)
+                
+                done = False
+                while done is False:
+                    status, done = downloader.next_chunk()
+                    print(f"Descargando archivo... {int(status.progress() * 100)}%.")
+
+                file_content.seek(0) # Mover el cursor al inicio del contenido en memoria
+
+                # 5. Cargar en Pandas y procesar (misma lógica que ya tenías)
+                df = pd.read_excel(file_content, engine="openpyxl")
+                df.columns = df.columns.str.strip().str.upper()
+                df["FECHA"] = pd.to_datetime(df["FECHA"], errors="coerce")
+                df = df.dropna(subset=["FECHA", "NOMBRE", "DEBE", "HABER"])
+                df["AÑO"] = df["FECHA"].dt.year
+                df["MES"] = df["FECHA"].dt.month
+            
+            except Exception as e:
+                # Si algo falla (ej: credenciales mal puestas), la app no se caerá
+                print(f"ERROR al cargar 'mayor.xlsx' desde la API de Drive: {e}")
+                return pd.DataFrame() # Devuelve un DataFrame vacío en caso de error
+
+        # 🟥 LÓGICA PARA COMERCIAL / AGRICOLA (QUEDA IGUAL)
         else:
-            df = pd.read_csv(url, encoding="utf-8")
+            df = pd.read_csv(url_o_id, encoding="utf-8")
             df.columns = df.columns.str.strip().str.upper()
 
             if empresa in ["comercial", "agricola"]:
@@ -89,7 +114,6 @@ def obtener_datos(empresa="comercial"):
         _ultima_actualizacion[empresa] = datetime.now(chile)
 
     return _cache[empresa].copy()
-
 
 def obtener_fecha_actualizacion(empresa="comercial"):
     return _ultima_actualizacion.get(empresa)
