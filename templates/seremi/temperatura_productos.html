@@ -1,5 +1,79 @@
 {% extends "base.html" %}
-{% block title %}Título del Reporte{% endblock %}
+{% block title %}Temperatura Productos{% endblock %}
 {% block content %}
-  <h2 class="text-white">Reporte en construcción</h2>
+
+<h2 class="text-white">Temperatura por Productos</h2>
+<p class="text-white">Consulta mensual por sucursal y descarga de reportes.</p>
+
+<form method="get" class="row g-3 text-white mb-4">
+  <div class="col-md-4">
+    <label for="sucursal" class="form-label">Sucursal</label>
+    <select name="sucursal" id="sucursal" class="form-select">
+      {% for s in sucursales %}
+        <option value="{{ s }}" {% if s == sucursal_activa %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="col-md-4">
+    <label for="mes" class="form-label">Mes</label>
+    <select name="mes" id="mes" class="form-select">
+      {% for num, nombre in meses %}
+        <option value="{{ num }}" {% if num == mes_actual %}selected{% endif %}>{{ nombre }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="col-md-4 d-flex align-items-end">
+    <button type="submit" class="btn btn-danger w-100">Aplicar Filtros</button>
+  </div>
+</form>
+
+<div class="text-end mb-4">
+    <a class="btn btn-danger" target="_blank"
+      href="/seremi/temperatura_productos/print?sucursal={{ sucursal_activa }}&mes={{ mes_actual }}">
+      🖨️ Ver como PDF (imprimir)
+    </a>
+</div>
+
+{% if sucursales_data %}
+  {% for sucursal_nombre, productos in sucursales_data.items() %}
+    <div class="mb-5">
+      <h3 class="text-white border-bottom pb-2 mb-3">Sucursal: {{ sucursal_nombre }}</h3>
+      
+      {% for producto_nombre, registros in productos.items() %}
+        <div class="mb-4 p-3 border rounded bg-dark">
+          <h5 class="text-danger">Producto: {{ producto_nombre }}</h5>
+          
+          <div class="table-responsive">
+            <table class="table table-dark table-bordered text-center">
+              <thead>
+                <tr>
+                  <th>Día</th>
+                  <th>T° 13 Hrs</th>
+                  <th>T° 17 Hrs</th>
+                  <th>T° 21 Hrs</th>
+                  <th>Responsables</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for registro in registros %}
+                  <tr>
+                    <td>{{ registro.dia }}</td>
+                    <td>{{ registro.t_13 }}</td>
+                    <td>{{ registro.t_17 }}</td>
+                    <td>{{ registro.t_21 }}</td>
+                    <td>{{ registro.responsables }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endfor %}
+{% else %}
+  <p class="text-warning">No hay registros para los filtros seleccionados.</p>
+{% endif %}
 {% endblock %}

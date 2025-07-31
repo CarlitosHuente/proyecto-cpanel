@@ -5,6 +5,7 @@ Aplicacion para los Informes.
 git add .
 git commit -m "Primer cambio desde VS Code"
 git push origin main
+git push --set-upstream origin prueba-cambios //Rama
 git push origin main --force
 
 

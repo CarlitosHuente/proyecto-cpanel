@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Reporte de Temperatura de Productos</title>
+  <style>
+    /* Estilos para la impresión */
+    body { font-family: Arial, sans-serif; color: #000; margin: 20px; }
+    .planilla { 
+      page-break-before: always; /* Cada planilla en una nueva página */
+      width: 100%;
+    }
+    .planilla:first-of-type { page-break-before: avoid; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #000; padding: 4px; text-align: center; font-size: 11px; }
+    h4 { margin: 4px 0; }
+    .header-table, .info-table, .data-table { width: 100%; border-collapse: collapse; margin-bottom: 15px;}
+    .header-table td { border: 1px solid #000; padding: 5px; vertical-align: middle; }
+    .info-table td { border: 1px solid #000; padding: 5px; text-align: center; font-weight: bold; }
+    .logo { width: 120px; text-align: center; }
+    .btn-print {
+      position: fixed; top: 10px; right: 10px; padding: 8px 16px;
+      background: #d80000; color: #fff; border: none; font-weight: bold; cursor: pointer;
+    }
+    @media print {
+      .btn-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<button class="btn-print" onclick="window.print()">🖨️ Imprimir</button>
+
+{% for sucursal_nombre, productos in sucursales_data.items() %}
+  {% for producto_nombre, registros in productos.items() %}
+    <div class="planilla">
+      
+      <table class="header-table">
+        <tr>
+          <td rowspan="2" style="width: 70%; text-align: center;">
+            <h4>REGISTRO DE TEMPERATURA DE PRODUCTOS</h4>
+            <h4>ALIMENTOS FRIOS</h4>
+          </td>
+          <td rowspan="2" class="logo">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" style="width: 120px;">
+          </td>
+        </tr>
+        <tr></tr>
+        <tr>
+          <td colspan="2" style="text-align: center; font-weight: bold; font-size: 14px; padding: 8px;">
+            Sucursal: {{ sucursal_nombre }} &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; Producto: {{ producto_nombre }} &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; Mes: {{ mes }}
+          </td>
+        </tr>
+      </table>
+
+      <table class="info-table">
+        <tr>
+          <td>RANGOS ÓPTIMOS DE TEMPERATURAS (CENTRO GEOMÉTRICO):<br>FRÍOS 0/5° C -- CONGELADOS -25°C/-18°C -- ALIMENTOS CALIENTES > 65°C</td>
+        </tr>
+      </table>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width: 8%;">Día</th>
+            <th>T° 13 Hrs</th>
+            <th>T° 17 Hrs</th>
+            <th>T° 21 Hrs</th>
+            <th style="width: 35%;">Responsables</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for registro in registros %}
+            <tr>
+              <td>{{ registro.dia }}</td>
+              <td>{{ registro.t_13 }}</td>
+              <td>{{ registro.t_17 }}</td>
+              <td>{{ registro.t_21 }}</td>
+              <td>{{ registro.responsables }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endfor %}
+{% endfor %}
+
+</body>
+</html>
