@@ -376,6 +376,8 @@ def imprimir_temperatura_productos():
 
 
 
+# Reemplaza la función imprimir_personal() completa en seremi_routes.py
+
 @seremi_bp.route("/personal/print")
 @login_requerido
 def imprimir_personal():
@@ -416,28 +418,30 @@ def imprimir_personal():
         registros_procesados.append(row)
     df_final = pd.DataFrame(registros_procesados)
 
-    # --- NUEVA LÓGICA: REPORTE CONTINUO POR MES ---
+    # Lógica de reporte continuo por mes
     data_para_imprimir = {}
     for sucursal, grupo_sucursal in df_final.groupby("SUCURSAL"):
-        # Obtenemos los registros existentes para la sucursal
-        registros_existentes = {fecha.date(): grupo.to_dict(orient="records") 
-                                for fecha, grupo in grupo_sucursal.groupby("FECHA")}
-
+        
+        # --- INICIO DE LA CORRECCIÓN ---
+        # Agrupamos por DÍA (dt.date) en lugar de por fecha y hora exacta
+        # LÍNEA CORREGIDA
+        registros_existentes = {fecha: grupo.to_dict(orient="records") 
+                                for fecha, grupo in grupo_sucursal.groupby(grupo_sucursal['FECHA'].dt.date)}
+        # --- FIN DE LA CORRECCIÓN ---
+        
         lista_mes_completo = []
         num_dias_mes = calendar.monthrange(año_actual, mes_actual)[1]
 
         for dia in range(1, num_dias_mes + 1):
             fecha_actual = datetime(año_actual, mes_actual, dia).date()
-
+            
             if fecha_actual in registros_existentes:
-                # Si hay registros, los añadimos a la lista
                 for registro in registros_existentes[fecha_actual]:
                     registro['FECHA_EVALUACION'] = fecha_actual
                     lista_mes_completo.append(registro)
             else:
-                # Si no hay registros, añadimos una fila vacía de marcador
                 lista_mes_completo.append({'FECHA_EVALUACION': fecha_actual, 'is_empty': True})
-
+        
         data_para_imprimir[sucursal] = lista_mes_completo
 
     return render_template("seremi/print_personal.html",
