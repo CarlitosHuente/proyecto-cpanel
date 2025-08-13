@@ -1,4 +1,8 @@
 
+# Al principio de app.py
+from dotenv import load_dotenv
+load_dotenv() # Carga las variables del archivo .env
+
 from flask import Flask, redirect, request, flash
 from routes.auth_routes import auth_bp
 from routes.dashboard_routes import dashboard_bp
@@ -9,6 +13,8 @@ from routes.contab_routes import contab_bp
 from utils.sheet_cache import refrescar_todo_el_cache, obtener_fecha_actualizacion
 from flask import redirect, request
 import os
+
+
 
 
 
