@@ -49,7 +49,7 @@ def callback():
             return redirect(url_for("dashboard.dashboard"))
         else:
             supabase.auth.sign_out()
-            return "Acceso denegado. Tu correo no está autorizado para usar esta aplicación.", 403
+            return "Acceso denegado. Tu correo no está autorizado para usar esta aplicación. contactar con soporte : carlos.carvajal@huentelauquen.cl", 403
 
     except Exception as e:
         return f"Ha ocurrido un error durante el inicio de sesión: {e}", 500
