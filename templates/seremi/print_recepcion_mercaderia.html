@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Reporte de Recepción de Mercadería</title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #000; margin: 20px; }
+    .planilla { page-break-before: always; }
+    .planilla:first-of-type { page-break-before: avoid; }
+    h2, h3, h4 { text-align: center; margin: 5px 0;}
+    h2 { font-size: 16px; }
+    h3 { font-size: 14px; }
+    h4 { font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { border: 1px solid #000; padding: 4px; font-size: 9px; text-align: center; }
+    .logo { width: 120px; float: right; }
+    .clearfix::after { content: ""; clear: both; display: table; }
+    .header { margin-bottom: 20px; }
+    @media print { .btn-print { display: none; } }
+    .btn-print {
+      position: fixed; top: 10px; right: 10px; padding: 8px 16px;
+      background: #d80000; color: #fff; border: none; font-weight: bold; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<button class="btn-print" onclick="window.print()">🖨️ Imprimir</button>
+
+{% for sucursal, productos in data_final.items() %}
+  <div class="planilla">
+    <div class="clearfix header">
+        <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo" class="logo">
+        <h2>REGISTRO DE RECEPCIÓN DE MERCADERÍA</h2>
+        <h3>Sucursal: {{ sucursal }} | Mes: {{ mes }}</h3>
+    </div>
+    
+    {% for producto, registros in productos.items() %}
+      <h4>Producto: {{ producto }}</h4>
+      <table>
+          <thead>
+              <tr>
+                  <th>Fecha</th>
+                  <th>Cantidad</th>
+                  <th>Lote</th>
+                  <th>Elaboración</th>
+                  <th>Vencimiento</th>
+                  <th>Temp.</th>
+                  <th>Daño Envase</th>
+                  <th>Limpio</th>
+                  <th>Recepción</th>
+                  <th>Responsable</th>
+              </tr>
+          </thead>
+          <tbody>
+              {% for r in registros %}
+                  <tr>
+                      <td>{{ r.FECHA.strftime('%d-%m-%Y %H:%M') }}</td>
+                      <td>{{ r.CANTIDAD }}</td>
+                      <td>{{ r.LOTE }}</td>
+                      <td>{{ r.ELABORACION }}</td>
+                      <td>{{ r.VENCIMIENTO }}</td>
+                      <td>{{ r.TEMPERATURA }}°C</td>
+                      <td>{{ r['DAÑO ENVASE'] }}</td>
+                      <td>{{ r.LIMPIO }}</td>
+                      <td>{{ r.RECEPCION }}</td>
+                      <td>{{ r.RESPONSABLE }}</td>
+                  </tr>
+              {% endfor %}
+          </tbody>
+      </table>
+    {% endfor %}
+  </div>
+{% endfor %}
+
+</body>
+</html>

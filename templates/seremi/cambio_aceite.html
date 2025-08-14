@@ -1,5 +1,66 @@
 {% extends "base.html" %}
-{% block title %}Título del Reporte{% endblock %}
+{% block title %}Cambio de Aceite{% endblock %}
 {% block content %}
-  <h2 class="text-white">Reporte en construcción</h2>
+
+<h2 class="text-white">Registro de Cambio de Aceite</h2>
+<p class="text-white">Últimos 10 registros por sucursal.</p>
+
+<form method="get" class="row g-3 text-white mb-4">
+  <div class="col-md-6">
+    <label for="sucursal" class="form-label">Sucursal</label>
+    <select name="sucursal" id="sucursal" class="form-select">
+      {% for s in sucursales %}
+        <option value="{{ s }}" {% if s == sucursal_activa %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="col-md-6 d-flex align-items-end">
+    <button type="submit" class="btn btn-danger w-100">Aplicar Filtro</button>
+  </div>
+</form>
+<div class="text-end mb-4">
+    <a class="btn btn-danger" target="_blank"
+      href="{{ url_for('seremi.imprimir_cambio_aceite', sucursal=sucursal_activa) }}">
+      🖨️ Ver como PDF (imprimir)
+    </a>
+</div>
+
+{% if data_por_sucursal %}
+  {% for sucursal, registros in data_por_sucursal.items() %}
+    <div class="mb-5 p-3 border rounded bg-dark">
+      <h3 class="text-white border-bottom pb-2 mb-3">Sucursal: {{ sucursal }}</h3>
+
+      <div class="table-responsive">
+        <table class="table table-dark table-hover table-bordered text-center" style="font-size: 0.9rem;">
+          <thead>
+            <tr>
+              <th style="width: 15%;">Fecha</th>
+              <th style="width: 15%;">Equipo</th>
+              <th style="width: 15%;">Responsable</th>
+              <th style="width: 15%;">Tipo Mantención</th>
+              <th style="width: 10%;">Cantidad (lts)</th>
+              <th>Observaciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in registros %}
+              <tr>
+                <td>{{ r.FECHA.strftime('%d-%m-%Y %H:%M') }}</td>
+                <td>{{ r.EQUIPO }}</td>
+                <td>{{ r.RESPONSABLE }}</td>
+                <td>{{ r.TIPO_MANTENIMIENTO }}</td>
+                <td>{{ r['CANTIDAD (LTS)'] }}</td>
+                <td class="text-start">{{ r.OBSERVACIONES }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endfor %}
+{% else %}
+  <p class="text-warning">No hay registros para los filtros seleccionados.</p>
+{% endif %}
+
 {% endblock %}

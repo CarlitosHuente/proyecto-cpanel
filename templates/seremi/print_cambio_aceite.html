@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Reporte de Cambio de Aceite</title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #000; margin: 20px; }
+    .planilla { page-break-before: always; }
+    .planilla:first-of-type { page-break-before: avoid; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #000; padding: 5px; font-size: 10px; text-align: center; }
+    .main-title { text-align: center; font-weight: bold; font-size: 16px; margin-bottom: 5px;}
+    .sucursal-title { text-align: center; font-size: 14px; margin-bottom: 20px; }
+    .logo { width: 120px; float: right; }
+    .clearfix::after { content: ""; clear: both; display: table; }
+    @media print { .btn-print { display: none; } }
+    .btn-print {
+      position: fixed; top: 10px; right: 10px; padding: 8px 16px;
+      background: #d80000; color: #fff; border: none; font-weight: bold; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<button class="btn-print" onclick="window.print()">🖨️ Imprimir</button>
+
+{% for sucursal, registros in data_por_sucursal.items() %}
+  <div class="planilla">
+    <div class="clearfix">
+        <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo" class="logo">
+        <div class="main-title">REGISTRO DE CAMBIO DE ACEITE</div>
+    </div>
+    <div class="sucursal-title">
+        <strong>Sucursal:</strong> {{ sucursal }}
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 15%;">Fecha</th>
+                <th style="width: 15%;">Equipo</th>
+                <th style="width: 15%;">Responsable</th>
+                <th style="width: 15%;">Tipo Mantención</th>
+                <th style="width: 10%;">Cantidad (lts)</th>
+                <th>Observaciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in registros %}
+              <tr>
+                <td>{{ r.FECHA.strftime('%d-%m-%Y %H:%M') }}</td>
+                <td>{{ r.EQUIPO }}</td>
+                <td>{{ r.RESPONSABLE }}</td>
+                <td>{{ r.TIPO_MANTENIMIENTO }}</td>
+                <td>{{ r['CANTIDAD (LTS)'] }}</td>
+                <td style="text-align: left;">{{ r.OBSERVACIONES }}</td>
+              </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+  </div>
+{% endfor %}
+
+</body>
+</html>

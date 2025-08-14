@@ -164,12 +164,89 @@ def temperatura_productos():
 @seremi_bp.route("/cambio_aceite")
 @login_requerido
 def cambio_aceite():
-    return render_template("seremi/cambio_aceite.html")
+    df = obtener_datos("cambio_aceite")
+
+    # Normalizar datos
+    df.columns = df.columns.str.strip().str.upper()
+    df['FECHA'] = pd.to_datetime(df['FECHA'], format='%d-%m-%Y %H:%M:%S', errors='coerce')
+    df = df.dropna(subset=['FECHA'])
+
+    # --- FILTRO (YA NO SE USA MES) ---
+    sucursal_activa = request.args.get("sucursal", default="TODAS")
+
+    if sucursal_activa != "TODAS":
+        df_a_procesar = df[df["SUCURSAL"] == sucursal_activa]
+    else:
+        df_a_procesar = df
+
+    # Agrupamos por sucursal y obtenemos los 10 más recientes de cada una
+    data_por_sucursal = {}
+    if not df_a_procesar.empty:
+        for sucursal, grupo in df_a_procesar.groupby("SUCURSAL"):
+            # --- LÓGICA NUEVA: ORDENAR Y TOMAR LOS ÚLTIMOS 10 ---
+            grupo_ordenado = grupo.sort_values(by="FECHA", ascending=False).head(10)
+            data_por_sucursal[sucursal] = grupo_ordenado.to_dict(orient="records")
+
+    # Lista para el filtro de sucursal
+    sucursales = sorted(obtener_datos("cambio_aceite")["SUCURSAL"].dropna().unique().tolist())
+    sucursales.insert(0, "TODAS")
+
+    return render_template("seremi/cambio_aceite.html",
+                           data_por_sucursal=data_por_sucursal,
+                           sucursales=sucursales,
+                           sucursal_activa=sucursal_activa,
+                           fecha_actualizacion=obtener_fecha_actualizacion("cambio_aceite"))
+
+
 #############################
-@seremi_bp.route("/mantenciones")
+# Reemplaza la función recepcion_mercaderia() existente en seremi_routes.py
+
+@seremi_bp.route("/recepcion_mercaderia")
 @login_requerido
-def mantenciones():
-    return render_template("seremi/mantenciones.html")
+def recepcion_mercaderia():
+    df = obtener_datos("recepcion_mercaderia")
+
+    # Normalizar datos
+    df.columns = df.columns.str.strip().str.upper()
+    # El formato de fecha en el sheet es DD/MM/YYYY
+    df['FECHA'] = pd.to_datetime(df['FECHA'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
+    df = df.dropna(subset=['FECHA'])
+    df['MES'] = df['FECHA'].dt.month
+
+    # Filtros
+    sucursal_activa = request.args.get("sucursal", default="TODAS")
+    mes_actual = int(request.args.get("mes", default=datetime.now().month))
+
+    df_filtrado_mes = df[df["MES"] == mes_actual]
+
+    if sucursal_activa != "TODAS":
+        df_a_procesar = df_filtrado_mes[df_filtrado_mes["SUCURSAL"] == sucursal_activa]
+    else:
+        df_a_procesar = df_filtrado_mes
+
+    # Agrupación anidada: Sucursal -> Producto
+    data_final = {}
+    if not df_a_procesar.empty:
+        for sucursal, grupo_sucursal in df_a_procesar.groupby("SUCURSAL"):
+            productos_data = {}
+            for producto, grupo_producto in grupo_sucursal.groupby("PRODUCTO"):
+                # Ordenamos los registros del más reciente al más antiguo
+                grupo_ordenado = grupo_producto.sort_values(by="FECHA", ascending=False)
+                productos_data[producto] = grupo_ordenado.to_dict(orient="records")
+            data_final[sucursal] = productos_data
+
+    # Listas para los filtros
+    sucursales = sorted(obtener_datos("recepcion_mercaderia")["SUCURSAL"].dropna().unique().tolist())
+    sucursales.insert(0, "TODAS")
+    meses = [(i + 1, nombre.title()) for i, nombre in enumerate(NOMBRES_MESES)]
+
+    return render_template("seremi/recepcion_mercaderia.html",
+                           data_final=data_final,
+                           sucursales=sucursales,
+                           sucursal_activa=sucursal_activa,
+                           meses=meses,
+                           mes_actual=mes_actual,
+                           fecha_actualizacion=obtener_fecha_actualizacion("recepcion_mercaderia"))
 
 #############################################
 
@@ -376,7 +453,7 @@ def imprimir_temperatura_productos():
 
 
 
-# Reemplaza la función imprimir_personal() completa en seremi_routes.py
+#la función imprimir_personal() completa en seremi_routes.py
 
 @seremi_bp.route("/personal/print")
 @login_requerido
@@ -447,3 +524,71 @@ def imprimir_personal():
     return render_template("seremi/print_personal.html",
                            data_para_imprimir=data_para_imprimir,
                            mes=f"{nombre_mes} {año_actual}")
+
+# Pega esta nueva función al final de seremi_routes.py
+
+@seremi_bp.route("/cambio_aceite/print")
+@login_requerido
+def imprimir_cambio_aceite():
+    # La lógica es idéntica a la de la vista principal
+    df = obtener_datos("cambio_aceite")
+
+    df.columns = df.columns.str.strip().str.upper()
+    df['FECHA'] = pd.to_datetime(df['FECHA'], format='%d-%m-%Y %H:%M:%S', errors='coerce')
+    df = df.dropna(subset=['FECHA'])
+
+    sucursal_activa = request.args.get("sucursal", default="TODAS")
+
+    if sucursal_activa != "TODAS":
+        df_a_procesar = df[df["SUCURSAL"] == sucursal_activa]
+    else:
+        df_a_procesar = df
+
+    data_por_sucursal = {}
+    if not df_a_procesar.empty:
+        for sucursal, grupo in df_a_procesar.groupby("SUCURSAL"):
+            grupo_ordenado = grupo.sort_values(by="FECHA", ascending=False).head(10)
+            data_por_sucursal[sucursal] = grupo_ordenado.to_dict(orient="records")
+
+    return render_template("seremi/print_cambio_aceite.html",
+                           data_por_sucursal=data_por_sucursal)
+
+# Pega esta nueva función al final de seremi_routes.py
+
+@seremi_bp.route("/recepcion_mercaderia/print")
+@login_requerido
+def imprimir_recepcion_mercaderia():
+    # La lógica es idéntica a la de la vista principal
+    df = obtener_datos("recepcion_mercaderia")
+
+    df.columns = df.columns.str.strip().str.upper()
+    df['FECHA'] = pd.to_datetime(df['FECHA'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
+    df = df.dropna(subset=['FECHA'])
+    df['MES'] = df['FECHA'].dt.month
+
+    sucursal_activa = request.args.get("sucursal", default="TODAS")
+    mes_actual = int(request.args.get("mes", default=datetime.now().month))
+
+    df_filtrado_mes = df[df["MES"] == mes_actual]
+
+    if sucursal_activa != "TODAS":
+        df_a_procesar = df_filtrado_mes[df_filtrado_mes["SUCURSAL"] == sucursal_activa]
+    else:
+        df_a_procesar = df_filtrado_mes
+
+    data_final = {}
+    if not df_a_procesar.empty:
+        for sucursal, grupo_sucursal in df_a_procesar.groupby("SUCURSAL"):
+            productos_data = {}
+            for producto, grupo_producto in grupo_sucursal.groupby("PRODUCTO"):
+                grupo_ordenado = grupo_producto.sort_values(by="FECHA", ascending=False)
+                productos_data[producto] = grupo_ordenado.to_dict(orient="records")
+            data_final[sucursal] = productos_data
+
+    nombre_mes = NOMBRES_MESES[mes_actual - 1].title()
+    año = df['FECHA'].dt.year.max() if not df.empty else datetime.now().year
+
+    return render_template("seremi/print_recepcion_mercaderia.html",
+                           data_final=data_final,
+                           mes=f"{nombre_mes} {año}",
+                           sucursal_activa=sucursal_activa)

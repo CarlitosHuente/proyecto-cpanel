@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Recepción de Mercadería{% endblock %}
+{% block content %}
+
+<h2 class="text-white">Registro de Recepción de Mercadería</h2>
+<p class="text-white">Consulta mensual por sucursal y producto.</p>
+
+<form method="get" class="row g-3 text-white mb-4">
+  <div class="col-md-4">
+    <label for="sucursal" class="form-label">Sucursal</label>
+    <select name="sucursal" id="sucursal" class="form-select">
+      {% for s in sucursales %}
+        <option value="{{ s }}" {% if s == sucursal_activa %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="col-md-4">
+    <label for="mes" class="form-label">Mes</label>
+    <select name="mes" id="mes" class="form-select">
+      {% for num, nombre in meses %}
+        <option value="{{ num }}" {% if num == mes_actual %}selected{% endif %}>{{ nombre }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="col-md-4 d-flex align-items-end">
+    <button type="submit" class="btn btn-danger w-100">Aplicar Filtros</button>
+  </div>
+</form>
+<div class="text-end mb-4">
+<a class="btn btn-danger" target="_blank"
+href="{{ url_for('seremi.imprimir_recepcion_mercaderia', sucursal=sucursal_activa, mes=mes_actual) }}">
+🖨️ Ver como PDF (imprimir)
+</a>
+</div>
+
+{% if data_final %}
+  {% for sucursal, productos in data_final.items() %}
+    <div class="mb-5">
+      <h3 class="text-white border-bottom pb-2 mb-3">Sucursal: {{ sucursal }}</h3>
+
+      {% for producto, registros in productos.items() %}
+        <div class="mb-4 p-3 border rounded bg-dark">
+          <h5 class="text-danger">Producto: {{ producto }}</h5>
+          <div class="table-responsive">
+            <table class="table table-dark table-hover table-bordered text-center" style="font-size: 0.8rem;">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Cantidad</th>
+                  <th>Lote</th>
+                  <th>Elaboración</th>
+                  <th>Vencimiento</th>
+                  <th>Temp.</th>
+                  <th>Daño Envase</th>
+                  <th>Limpio</th>
+                  <th>Recepción</th>
+                  <th>Responsable</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in registros %}
+                  <tr>
+                    <td>{{ r.FECHA.strftime('%d-%m-%Y %H:%M') }}</td>
+                    <td>{{ r.CANTIDAD }}</td>
+                    <td>{{ r.LOTE }}</td>
+                    <td>{{ r.ELABORACION }}</td>
+                    <td>{{ r.VENCIMIENTO }}</td>
+                    <td>{{ r.TEMPERATURA }}°C</td>
+                    <td>{{ r['DAÑO ENVASE'] }}</td>
+                    <td>{{ r.LIMPIO }}</td>
+                    <td>{{ r.RECEPCION }}</td>
+                    <td>{{ r.RESPONSABLE }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endfor %}
+{% else %}
+  <p class="text-warning">No hay registros para los filtros seleccionados.</p>
+{% endif %}
+
+{% endblock %}
