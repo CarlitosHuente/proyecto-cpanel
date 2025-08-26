@@ -28,6 +28,8 @@ URLS = {
 
 # --- REEMPLAZA TU FUNCIÓN obtener_datos CON ESTA ---
 
+# Reemplaza la función completa en utils/sheet_cache.py
+
 def obtener_datos(empresa="comercial"):
     if empresa not in _cache:
         url_o_id = URLS.get(empresa)
@@ -35,26 +37,20 @@ def obtener_datos(empresa="comercial"):
         if not url_o_id:
             raise Exception(f"No se ha definido la URL o ID para '{empresa}'")
 
-        # 🟡 NUEVA LÓGICA PARA EL ARCHIVO CONTABLE "MAYOR" USANDO LA API
         elif empresa == "mayor":
             try:
-                # 1. Configurar credenciales
                 SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
-                # Construye la ruta al archivo de credenciales en la raíz del proyecto
-                BASE_DIR = os.path.dirname(os.path.abspath(__file__)) # Directorio de este archivo (utils)
-                ROOT_DIR = os.path.dirname(BASE_DIR) # Raíz del proyecto
+                BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+                ROOT_DIR = os.path.dirname(BASE_DIR)
                 SERVICE_ACCOUNT_FILE = os.path.join(ROOT_DIR, 'credenciales_google.json')
 
                 creds = service_account.Credentials.from_service_account_file(
                     SERVICE_ACCOUNT_FILE, scopes=SCOPES)
 
-                # 2. Construir el servicio de la API de Drive
                 drive_service = build('drive', 'v3', credentials=creds)
-                
-                folder_id = url_o_id # Usamos el ID de la carpeta guardado en URLS
+                folder_id = url_o_id
                 file_name = 'mayor.xlsx'
 
-                # 3. Buscar el archivo por nombre dentro de la carpeta específica
                 query = f"name='{file_name}' and '{folder_id}' in parents and trashed=false"
                 results = drive_service.files().list(q=query, fields="files(id, name)").execute()
                 items = results.get('files', [])
@@ -63,8 +59,6 @@ def obtener_datos(empresa="comercial"):
                     raise Exception(f"No se encontró el archivo '{file_name}' en la carpeta de Drive.")
 
                 file_id = items[0]['id']
-
-                # 4. Descargar el contenido del archivo
                 request = drive_service.files().get_media(fileId=file_id)
                 file_content = io.BytesIO()
                 downloader = MediaIoBaseDownload(file_content, request)
@@ -72,11 +66,8 @@ def obtener_datos(empresa="comercial"):
                 done = False
                 while done is False:
                     status, done = downloader.next_chunk()
-                    print(f"Descargando archivo... {int(status.progress() * 100)}%.")
-
-                file_content.seek(0) # Mover el cursor al inicio del contenido en memoria
-
-                # 5. Cargar en Pandas y procesar (misma lógica que ya tenías)
+                
+                file_content.seek(0)
                 df = pd.read_excel(file_content, engine="openpyxl")
                 df.columns = df.columns.str.strip().str.upper()
                 df["FECHA"] = pd.to_datetime(df["FECHA"], errors="coerce")
@@ -85,18 +76,21 @@ def obtener_datos(empresa="comercial"):
                 df["MES"] = df["FECHA"].dt.month
             
             except Exception as e:
-                # Si algo falla (ej: credenciales mal puestas), la app no se caerá
                 print(f"ERROR al cargar 'mayor.xlsx' desde la API de Drive: {e}")
-                return pd.DataFrame() # Devuelve un DataFrame vacío en caso de error
+                return pd.DataFrame()
 
-        # 🟥 LÓGICA PARA COMERCIAL / AGRICOLA (QUEDA IGUAL)
         else:
-            df = pd.read_csv(url_o_id, encoding="utf-8")
+            # --- INICIO DE LA SOLUCIÓN ---
+            # Añadimos un User-Agent para simular una petición de navegador
+            storage_options = {'User-Agent': 'Mozilla/5.0'}
+            df = pd.read_csv(url_o_id, encoding="utf-8", storage_options=storage_options)
+            # --- FIN DE LA SOLUCIÓN ---
+            
             df.columns = df.columns.str.strip().str.upper()
 
             if empresa in ["comercial", "agricola"]:
+                # ... (el resto de la función sigue igual)
                 df.rename(columns={"AÃ‘O": "AÑO"}, inplace=True)
-
                 columnas_requeridas = ["FECHA", "DESCRIPCION", "NETO", "CANTIDAD"]
                 faltantes = [col for col in columnas_requeridas if col not in df.columns]
                 if faltantes:
