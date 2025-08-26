@@ -10,7 +10,7 @@ google-auth==2.19.0
 google-auth-httplib2==0.1.0
 google-auth-oauthlib==1.0.0
 beautifulsoup4==4.12.2
-supabase==2.0.4
+supabase==2.15.3
 python-dotenv==1.0.0
 rq==1.15.1
 redis==4.6.0
