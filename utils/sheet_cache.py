@@ -13,29 +13,29 @@ from googleapiclient.http import MediaIoBaseDownload
 _ultima_actualizacion = {}
 _cache = {}
 # ... (Aquí va tu diccionario de URLS, sin cambios)
-#URLS = {
-#    "comercial": "https://docs.google.com/spreadsheets/d/e/2PACX-1vSwgsbEzQxQAkBXjP5LfyqOalCDCEJRq_YxMrGII-VkijQSbjm_zxMZpXMVE6LtKhIYWYyhFYC6-UwY/pub?output=csv",
-#    "agricola": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ5rxTxzzXBCjef9Mvoe74H95ZbZ1p2xsDrdazyk1lN1mYCaOry4PJiOrypoxNOub_T7o9fZmJ7QYHt/pub?output=csv",
-#    "temperatura_equipos": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRkmW7dl4WeFzctQZhjY8ENeSkyhl1a5sy_4t9qA08QsxIbp_JiHNV8ZP6gWsA204izNAEiIPh3AUCH/pub?output=csv",
-#    "equipos_info": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRkmW7dl4WeFzctQZhjY8ENeSkyhl1a5sy_4t9qA08QsxIbp_JiHNV8ZP6gWsA204izNAEiIPh3AUCH/pub?gid=946296021&single=true&output=csv",
-#    "mayor": "1zFjARS82JAuay19WxxgepBl7jYylgPIn",
-#    "temperatura_productos": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRkmW7dl4WeFzctQZhjY8ENeSkyhl1a5sy_4t9qA08QsxIbp_JiHNV8ZP6gWsA204izNAEiIPh3AUCH/pub?gid=513903553&single=true&output=csv",
-#    "registro_personal":"https://docs.google.com/spreadsheets/d/e/2PACX-1vRkmW7dl4WeFzctQZhjY8ENeSkyhl1a5sy_4t9qA08QsxIbp_JiHNV8ZP6gWsA204izNAEiIPh3AUCH/pub?gid=279098862&single=true&output=csv",
-#    "cambio_aceite" :"https://docs.google.com/spreadsheets/d/e/2PACX-1vRkmW7dl4WeFzctQZhjY8ENeSkyhl1a5sy_4t9qA08QsxIbp_JiHNV8ZP6gWsA204izNAEiIPh3AUCH/pub?gid=999262441&single=true&output=csv",
-#    "recepcion_mercaderia":"https://docs.google.com/spreadsheets/d/e/2PACX-1vRkmW7dl4WeFzctQZhjY8ENeSkyhl1a5sy_4t9qA08QsxIbp_JiHNV8ZP6gWsA204izNAEiIPh3AUCH/pub?gid=1201172647&single=true&output=csv"
-#}
-
 URLS = {
-    "comercial": "https://raw.githubusercontent.com/CarlitosHuente/carlitoshuente/refs/heads/main/data2/Ventas_Comercial_24-25%20-%20Hoja%201.csv",
-    "agricola": "https://raw.githubusercontent.com/CarlitosHuente/carlitoshuente/refs/heads/main/data2/Ventas_Agricola_24-25%20-%20Hoja%201.csv",
-    "temperatura_equipos": "https://raw.githubusercontent.com/CarlitosHuente/carlitoshuente/refs/heads/main/data2/Huentelauquen_Locales%20-%20Temperatura_Productos.csv",
-    "equipos_info": "https://raw.githubusercontent.com/CarlitosHuente/carlitoshuente/refs/heads/main/data2/Huentelauquen_Locales%20-%20Equipos.csv",
+    "comercial": "https://docs.google.com/spreadsheets/d/e/2PACX-1vSwgsbEzQxQAkBXjP5LfyqOalCDCEJRq_YxMrGII-VkijQSbjm_zxMZpXMVE6LtKhIYWYyhFYC6-UwY/pub?output=csv",
+    "agricola": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ5rxTxzzXBCjef9Mvoe74H95ZbZ1p2xsDrdazyk1lN1mYCaOry4PJiOrypoxNOub_T7o9fZmJ7QYHt/pub?output=csv",
+    "temperatura_equipos": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRkmW7dl4WeFzctQZhjY8ENeSkyhl1a5sy_4t9qA08QsxIbp_JiHNV8ZP6gWsA204izNAEiIPh3AUCH/pub?output=csv",
+    "equipos_info": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRkmW7dl4WeFzctQZhjY8ENeSkyhl1a5sy_4t9qA08QsxIbp_JiHNV8ZP6gWsA204izNAEiIPh3AUCH/pub?gid=946296021&single=true&output=csv",
     "mayor": "1zFjARS82JAuay19WxxgepBl7jYylgPIn",
-    "temperatura_productos": "https://raw.githubusercontent.com/CarlitosHuente/carlitoshuente/refs/heads/main/data2/Huentelauquen_Locales%20-%20Temperatura_Productos.csv",
-    "registro_personal":"https://raw.githubusercontent.com/CarlitosHuente/carlitoshuente/refs/heads/main/data2/Huentelauquen_Locales%20-%20Registro_Personal.csv",
-    "cambio_aceite" :"https://raw.githubusercontent.com/CarlitosHuente/carlitoshuente/refs/heads/main/data2/Huentelauquen_Locales%20-%20Cambio_Aceite.csv",
-    "recepcion_mercaderia":"https://raw.githubusercontent.com/CarlitosHuente/carlitoshuente/refs/heads/main/data2/Huentelauquen_Locales%20-%20Recepcion_Mercaderia.csv"
+    "temperatura_productos": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRkmW7dl4WeFzctQZhjY8ENeSkyhl1a5sy_4t9qA08QsxIbp_JiHNV8ZP6gWsA204izNAEiIPh3AUCH/pub?gid=513903553&single=true&output=csv",
+    "registro_personal":"https://docs.google.com/spreadsheets/d/e/2PACX-1vRkmW7dl4WeFzctQZhjY8ENeSkyhl1a5sy_4t9qA08QsxIbp_JiHNV8ZP6gWsA204izNAEiIPh3AUCH/pub?gid=279098862&single=true&output=csv",
+    "cambio_aceite" :"https://docs.google.com/spreadsheets/d/e/2PACX-1vRkmW7dl4WeFzctQZhjY8ENeSkyhl1a5sy_4t9qA08QsxIbp_JiHNV8ZP6gWsA204izNAEiIPh3AUCH/pub?gid=999262441&single=true&output=csv",
+    "recepcion_mercaderia":"https://docs.google.com/spreadsheets/d/e/2PACX-1vRkmW7dl4WeFzctQZhjY8ENeSkyhl1a5sy_4t9qA08QsxIbp_JiHNV8ZP6gWsA204izNAEiIPh3AUCH/pub?gid=1201172647&single=true&output=csv"
 }
+
+#URLS = {
+#   "comercial": "https://raw.githubusercontent.com/CarlitosHuente/carlitoshuente/refs/heads/main/data2/Ventas_Comercial_24-25%20-%20Hoja%201.csv",
+#  "agricola": "https://raw.githubusercontent.com/CarlitosHuente/carlitoshuente/refs/heads/main/data2/Ventas_Agricola_24-25%20-%20Hoja%201.csv",
+# "temperatura_equipos": "https://raw.githubusercontent.com/CarlitosHuente/carlitoshuente/refs/heads/main/data2/Huentelauquen_Locales%20-%20Temperatura_Productos.csv",
+#"equipos_info": "https://raw.githubusercontent.com/CarlitosHuente/carlitoshuente/refs/heads/main/data2/Huentelauquen_Locales%20-%20Equipos.csv",
+#    "mayor": "1zFjARS82JAuay19WxxgepBl7jYylgPIn",
+#    "temperatura_productos": "https://raw.githubusercontent.com/CarlitosHuente/carlitoshuente/refs/heads/main/data2/Huentelauquen_Locales%20-%20Temperatura_Productos.csv",
+#    "registro_personal":"https://raw.githubusercontent.com/CarlitosHuente/carlitoshuente/refs/heads/main/data2/Huentelauquen_Locales%20-%20Registro_Personal.csv",
+#    "cambio_aceite" :"https://raw.githubusercontent.com/CarlitosHuente/carlitoshuente/refs/heads/main/data2/Huentelauquen_Locales%20-%20Cambio_Aceite.csv",
+#    "recepcion_mercaderia":"https://raw.githubusercontent.com/CarlitosHuente/carlitoshuente/refs/heads/main/data2/Huentelauquen_Locales%20-%20Recepcion_Mercaderia.csv"
+#}
 
 
 # --- REEMPLAZA TU FUNCIÓN obtener_datos CON ESTA ---
