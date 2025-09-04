@@ -547,7 +547,7 @@ def imprimir_cambio_aceite():
     data_por_sucursal = {}
     if not df_a_procesar.empty:
         for sucursal, grupo in df_a_procesar.groupby("SUCURSAL"):
-            grupo_ordenado = grupo.sort_values(by="FECHA", ascending=False).head(10)
+            grupo_ordenado = grupo.sort_values(by="FECHA", ascending=False).head(20)
             data_por_sucursal[sucursal] = grupo_ordenado.to_dict(orient="records")
 
     return render_template("seremi/print_cambio_aceite.html",
