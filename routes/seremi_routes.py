@@ -184,7 +184,7 @@ def cambio_aceite():
     if not df_a_procesar.empty:
         for sucursal, grupo in df_a_procesar.groupby("SUCURSAL"):
             # --- LÓGICA NUEVA: ORDENAR Y TOMAR LOS ÚLTIMOS 10 ---
-            grupo_ordenado = grupo.sort_values(by="FECHA", ascending=False).head(10)
+            grupo_ordenado = grupo.sort_values(by="FECHA", ascending=False).head(20)
             data_por_sucursal[sucursal] = grupo_ordenado.to_dict(orient="records")
 
     # Lista para el filtro de sucursal
