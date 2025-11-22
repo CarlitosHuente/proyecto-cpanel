@@ -1,4 +1,5 @@
 venv/
+env/
 __pycache__/
 *.pyc
 .env
@@ -7,3 +8,4 @@ credentials
 uploads
 credenciales_google.json
 .env
+*.json
