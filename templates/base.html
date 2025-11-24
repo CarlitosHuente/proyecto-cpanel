@@ -99,6 +99,9 @@
         <a href="#">Lechería</a>
         <a href="#">Fca Papaya</a>
         <a href="#">Fca Empanada</a>
+        {% if session.get('rol') in ['superusuario'] %}
+            <a href="/config/usuarios">Configuración</a>
+        {% endif %}
         <a href="{{ url_for('auth.logout') }}">Cerrar sesión</a>
     </div>
 

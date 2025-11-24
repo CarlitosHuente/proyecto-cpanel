@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 class="mb-4">Editar usuario #{{ usuario.id }}</h2>
+
+<form method="POST" class="col-md-6">
+
+    <div class="mb-3">
+        <label class="form-label text-white">Email</label>
+        <input type="email" name="email" class="form-control"
+               value="{{ usuario.email }}" required>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label text-white">Rol</label>
+        <select name="rol" class="form-select" required>
+            {% for r in roles %}
+                <option value="{{ r }}" {% if r == usuario.rol %}selected{% endif %}>
+                    {{ r }}
+                </option>
+            {% endfor %}
+        </select>
+        <div class="form-text text-muted">
+            Selecciona uno de los roles definidos en el sistema.
+        </div>
+    </div>
+
+
+    <div class="mb-3 form-check">
+        <input type="checkbox" name="activo" class="form-check-input"
+               id="chkActivo" {% if usuario.activo %}checked{% endif %}>
+        <label class="form-check-label text-white" for="chkActivo">Usuario activo</label>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label text-white">Nueva contraseña</label>
+        <input type="password" name="password" class="form-control">
+        <div class="form-text text-muted">
+            Déjala en blanco si no quieres cambiar la clave.
+        </div>
+    </div>
+
+    <button type="submit" class="btn btn-danger">Guardar cambios</button>
+    <a href="{{ url_for('config.usuarios') }}" class="btn btn-secondary ms-2">Cancelar</a>
+</form>
+{% endblock %}

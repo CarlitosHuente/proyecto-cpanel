@@ -8,20 +8,12 @@ from routes.auth_routes import auth_bp
 from routes.dashboard_routes import dashboard_bp
 from routes.ventas_routes import ventas_bp
 from routes.seremi_routes import seremi_bp
+from routes.config_routes import config_bp
 from datetime import timedelta
 from routes.contab_routes import contab_bp
 from utils.sheet_cache import refrescar_todo_el_cache, obtener_fecha_actualizacion
 from flask import redirect, request
 import os
-
-
-
-
-
-
-
-
-
 
 app = Flask(__name__)
 app.permanent_session_lifetime = timedelta(minutes=10) #Tiempo Maximo de inactividad.
@@ -39,6 +31,7 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(dashboard_bp)
 app.register_blueprint(seremi_bp)
 app.register_blueprint(contab_bp)
+app.register_blueprint(config_bp)
 
 
 

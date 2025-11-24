@@ -6,7 +6,7 @@ from datetime import datetime
 from collections import defaultdict
 import pandas as pd
 from utils.sheet_cache import obtener_fecha_actualizacion
-from utils.auth import login_requerido
+from utils.auth import login_requerido, permiso_modulo
 import calendar
 
 
@@ -14,6 +14,7 @@ seremi_bp = Blueprint("seremi", __name__, url_prefix="/seremi")
 
 @seremi_bp.route("/temperatura_equipos")
 @login_requerido
+@permiso_modulo("seremi")
 def temperatura_equipos():
     df = obtener_datos("temperatura_equipos")
 
@@ -82,6 +83,7 @@ def temperatura_equipos():
 
 @seremi_bp.route("/temperatura_productos")
 @login_requerido
+@permiso_modulo("seremi")
 def temperatura_productos():
     df = obtener_datos("temperatura_productos")
 
@@ -163,6 +165,7 @@ def temperatura_productos():
 
 @seremi_bp.route("/cambio_aceite")
 @login_requerido
+@permiso_modulo("seremi")
 def cambio_aceite():
     df = obtener_datos("cambio_aceite")
 
@@ -203,6 +206,7 @@ def cambio_aceite():
 
 @seremi_bp.route("/recepcion_mercaderia")
 @login_requerido
+@permiso_modulo("seremi")
 def recepcion_mercaderia():
     df = obtener_datos("recepcion_mercaderia")
 
@@ -253,6 +257,7 @@ def recepcion_mercaderia():
 
 @seremi_bp.route("/personal")
 @login_requerido
+@permiso_modulo("seremi")
 def personal():
     df = obtener_datos("registro_personal")
 
@@ -324,6 +329,7 @@ def personal():
 
 @seremi_bp.route("/temperatura_equipos/print")
 @login_requerido
+@permiso_modulo("seremi")
 def imprimir_temperatura_equipos():
     df = obtener_datos("temperatura_equipos")
     df_equipos = obtener_datos("equipos_info")
@@ -386,6 +392,7 @@ def imprimir_temperatura_equipos():
 
 @seremi_bp.route("/temperatura_productos/print")
 @login_requerido
+@permiso_modulo("seremi")
 def imprimir_temperatura_productos():
     # Esta lógica es una copia exacta de la función principal 'temperatura_productos'
     df = obtener_datos("temperatura_productos")
@@ -457,6 +464,7 @@ def imprimir_temperatura_productos():
 
 @seremi_bp.route("/personal/print")
 @login_requerido
+@permiso_modulo("seremi")
 def imprimir_personal():
     df = obtener_datos("registro_personal")
     df.columns = df.columns.str.strip().str.upper()
@@ -529,6 +537,7 @@ def imprimir_personal():
 
 @seremi_bp.route("/cambio_aceite/print")
 @login_requerido
+@permiso_modulo("seremi")
 def imprimir_cambio_aceite():
     # La lógica es idéntica a la de la vista principal
     df = obtener_datos("cambio_aceite")
@@ -557,6 +566,7 @@ def imprimir_cambio_aceite():
 
 @seremi_bp.route("/recepcion_mercaderia/print")
 @login_requerido
+@permiso_modulo("seremi")
 def imprimir_recepcion_mercaderia():
     # La lógica es idéntica a la de la vista principal
     df = obtener_datos("recepcion_mercaderia")

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4 text-center text-white">
+    <h2 class="mb-3">Acceso denegado</h2>
+    <p>No tienes permisos para acceder a este módulo.</p>
+    <a href="{{ url_for('auth.logout') }}" class="btn btn-danger mt-3">
+        Volver a iniciar sesión
+    </a>
+</div>
+{% endblock %}

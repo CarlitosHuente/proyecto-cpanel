@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, session, redirect, url_for, request, jsonify
 from utils.sheet_cache import obtener_datos, forzar_actualizacion, obtener_fecha_actualizacion
 from utils.filters import filtrar_dataframe
-from utils.auth import login_requerido  # ← importar el decorador
+from utils.auth import login_requerido, permiso_modulo # ← importar el decorador
 
 
 
@@ -9,6 +9,7 @@ dashboard_bp = Blueprint('dashboard', __name__)
 
 @dashboard_bp.route("/dashboard")
 @login_requerido
+@permiso_modulo("ventas")
 def dashboard():
     if "usuario" not in session:
         return redirect(url_for("auth.login"))

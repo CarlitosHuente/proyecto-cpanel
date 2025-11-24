@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+
+    <h2 class="mb-4 text-white">Administración de Usuarios Huente</h2>
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <a href="{{ url_for('config.nuevo_usuario') }}"
+           class="btn btn-success">
+            Nuevo Usuario
+        </a>
+
+        <button type="button"
+                class="btn btn-outline-info"
+                data-bs-toggle="modal"
+                data-bs-target="#modalPermisos">
+            Ver permisos de roles
+        </button>
+    </div>
+
+    <table class="table table-dark table-striped table-bordered align-middle">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Email</th>
+                <th>Rol</th>
+                <th>Activo</th>
+                <th>Creado</th>
+                <th style="width: 120px;">Acciones</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for u in usuarios %}
+            <tr>
+                <td>{{ u.id }}</td>
+                <td>{{ u.email }}</td>
+                <td>{{ u.rol }}</td>
+                <td>{{ 'Sí' if u.activo else 'No' }}</td>
+                <td>{{ u.creado_en }}</td>
+                <td>
+                    <a href="{{ url_for('config.editar_usuario', user_id=u.id) }}"
+                       class="btn btn-sm btn-outline-light">
+                        Editar
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- MODAL: Permisos por rol -->
+    <div class="modal fade" id="modalPermisos" tabindex="-1" aria-labelledby="modalPermisosLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content bg-dark text-white">
+          <div class="modal-header">
+            <h5 class="modal-title" id="modalPermisosLabel">Permisos por Rol</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body">
+
+            <table class="table table-dark table-striped table-bordered mb-0">
+                <thead>
+                    <tr>
+                        <th>Rol</th>
+                        <th>Módulos permitidos</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rol, modulos in permisos.items() %}
+                    <tr>
+                        <td>{{ rol }}</td>
+                        <td>
+                            {% if "*" in modulos %}
+                                <strong>Todos los módulos</strong>
+                            {% elif modulos %}
+                                {{ modulos | join(", ") }}
+                            {% else %}
+                                <span class="text-muted">Sin acceso a módulos</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+          </div>
+          <div class="modal-footer">
+            <button type="button"
+                    class="btn btn-secondary"
+                    data-bs-dismiss="modal">
+                Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+</div>
+{% endblock %}

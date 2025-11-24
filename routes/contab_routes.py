@@ -5,7 +5,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, send_f
 from utils.auth import login_requerido
 from flask import request, render_template
 from utils.sheet_cache import obtener_datos
-from utils.auth import login_requerido
+from utils.auth import login_requerido, permiso_modulo
 import pandas as pd
 from datetime import datetime
 
@@ -31,6 +31,7 @@ from datetime import datetime  # Asegúrate de tener esto arriba
 
 @contab_bp.route("/comparativo")
 @login_requerido
+@permiso_modulo("admin")
 def comparativo():
     from datetime import datetime
 
@@ -147,6 +148,7 @@ import tempfile
 
 @contab_bp.route("/descargar_detalle")
 @login_requerido
+@permiso_modulo("admin")
 def descargar_detalle():
     fecha_corte = request.args.get("fecha_corte")
     clasif = request.args.get("clasificacion", "Todas")
@@ -192,6 +194,7 @@ def descargar_detalle():
 # Página de carga y visualización
 @contab_bp.route("/archivos", methods=["GET", "POST"])
 @login_requerido
+@permiso_modulo("admin")
 def archivos():
     ruta = current_app.config['UPLOAD_FOLDER_CONTAB']
     nombre_mayor = "mayor.xlsx"
@@ -216,6 +219,7 @@ def archivos():
 # Descargar archivo local
 @contab_bp.route("/descargar_mayor")
 @login_requerido
+@permiso_modulo("admin")
 def descargar_mayor():
     ruta = current_app.config['UPLOAD_FOLDER_CONTAB']
     return send_from_directory(ruta, "mayor.xlsx", as_attachment=True)
@@ -223,6 +227,7 @@ def descargar_mayor():
 # Eliminar archivo local
 @contab_bp.route("/eliminar_mayor")
 @login_requerido
+@permiso_modulo("admin")
 def eliminar_mayor():
     ruta = current_app.config['UPLOAD_FOLDER_CONTAB']
     try:

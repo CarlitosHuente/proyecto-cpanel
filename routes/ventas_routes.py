@@ -9,7 +9,7 @@ from openpyxl import load_workbook
 import io
 from flask import send_file
 from utils.sheet_cache import obtener_fecha_actualizacion
-from utils.auth import login_requerido
+from utils.auth import login_requerido, permiso_modulo
 from services.ventas_por_dia_service import obtener_detalle_por_dia
 
 
@@ -22,6 +22,7 @@ ventas_bp = Blueprint("ventas", __name__)
 #@ventas_bp.route("/ventas", methods=["GET"])
 @ventas_bp.route("/ventas", methods=["GET"])
 @login_requerido
+@permiso_modulo("ventas")
 def ventas():
     empresa = request.args.get("empresa", "comercial")
     df = obtener_datos(empresa)

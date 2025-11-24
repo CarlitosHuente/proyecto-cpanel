@@ -5,18 +5,49 @@
 <div class="d-flex align-items-center justify-content-center" style="min-height: 80vh;">
     <div class="text-center">
         <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo" width="180" class="mb-4">
-        <h2 class="text-danger mb-4">La calidad no se transa2</h2>
+        <h2 class="text-danger mb-4">La calidad no se transa</h2>
 
         {% if error %}
             <div class="alert alert-danger mt-2">{{ error }}</div>
         {% endif %}
 
-        <a href="{{ url_for('auth.google_login') }}" class="btn btn-danger btn-lg">
+        <!-- Botón Google -->
+        <a href="{{ url_for('auth.google_login') }}" class="btn btn-danger btn-lg mb-3 w-100">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-google me-2" viewBox="0 0 16 16">
                 <path d="M15.545 6.558a9.42 9.42 0 0 1 .139 1.626c0 2.434-.87 4.492-2.384 5.885h.002C11.978 15.292 10.158 16 8 16A8 8 0 1 1 8 0a7.689 7.689 0 0 1 5.352 2.082l-2.284 2.284A4.347 4.347 0 0 0 8 3.166c-2.087 0-3.86 1.408-4.492 3.25C2.806 7.655 2.5 8.5 2.5 9.5s.306 1.845.87 2.583c.632 1.84 2.405 3.25 4.492 3.25 1.257 0 2.34-.37 3.187-1.004l2.284 2.284c-1.121.983-2.623 1.58-4.282 1.58-2.828 0-5.234-1.7-6.38-4.045a9.412 9.412 0 0 1 0-5.91A9.412 9.412 0 0 1 1.62 5.045C2.766 2.7 5.172 1 8 1c1.58 0 3.003.54 4.148 1.453l.002.002Z"/>
             </svg>
             Ingresar con Google
         </a>
+
+        <!-- Botón que despliega Login Huente -->
+        <button class="btn btn-outline-danger btn-lg w-100 mb-3"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#loginHuente"
+                aria-expanded="false"
+                aria-controls="loginHuente">
+            Login Huente
+        </button>
+
+        <!-- Formulario Huente oculto / colapsable -->
+        <div class="collapse" id="loginHuente">
+            <form method="POST" class="mb-4 text-start mt-3">
+                <h5 class="text-white mb-3 text-center">Login Huente</h5>
+
+                <div class="mb-3">
+                    <label class="form-label text-white">Correo</label>
+                    <input type="email" name="email" class="form-control" required>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-white">Contraseña</label>
+                    <input type="password" name="password" class="form-control" required>
+                </div>
+
+                <button type="submit" class="btn btn-danger w-100">Entrar</button>
+            </form>
+        </div>
+
     </div>
 </div>
 {% endblock %}
