@@ -72,3 +72,27 @@ thead th {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+  .col-nombre-cuenta {
+    white-space: nowrap;
+    min-width: 260px;  /* ajusta según te acomode */
+  }
+  .btn-comentario {
+    font-size: 0.75rem;
+
+    
+  }
+
+    /* Mantener la columna NOMBRE más ancha */
+  table.table td:first-child,
+  table.table th:first-child {
+      width: 350px !important;   /* ajustable */
+      min-width: 350px !important;
+      max-width: 350px !important;
+      white-space: nowrap;
+  }
+
+  /* Las demás columnas mantienen tamaño automático */
+  table.table td:not(:first-child),
+  table.table th:not(:first-child) {
+      white-space: nowrap;}

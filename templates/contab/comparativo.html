@@ -6,33 +6,53 @@
 
 <form method="GET" class="d-flex mb-3 gap-2 align-items-center flex-wrap">
   <label class="text-white mb-0 me-2">Fecha de corte:</label>
-  <input type="date" name="fecha_corte" class="form-control w-auto" value="{{ fecha_corte }}">
+  <input type="date" name="fecha_corte" class="form-control w-auto" value="{{ fecha_corte or '' }}">
 
+  <!-- Clasificación: Todas / Gastos / Ingresos -->
   <select name="clasificacion" class="form-select w-auto">
-    {% for c in ["Todas", "Activo", "Pasivo", "Gastos", "Ingresos"] %}
+    {% for c in ["Todas", "Gastos", "Ingresos"] %}
       <option value="{{ c }}" {% if c == clasificacion %}selected{% endif %}>{{ c }}</option>
     {% endfor %}
   </select>
 
+  <!-- Centro de costo -->
   <select name="centro_costo" class="form-select w-auto">
-    <option {% if centro_costo == 'Todos' %}selected{% endif %}>Todos</option>
+    <option value="Todos" {% if centro_costo == 'Todos' %}selected{% endif %}>Todos</option>
     {% for cc in centros %}
-        <option value="{{ cc }}" {% if centro_costo == cc %}selected{% endif %}>{{ cc }}</option>
+      <option value="{{ cc }}" {% if centro_costo == cc %}selected{% endif %}>{{ cc }}</option>
     {% endfor %}
   </select>
 
+  <!-- Modo Normal / Alertas -->
+  <div class="d-flex align-items-center">
+    <span class="text-white me-2">Modo:</span>
+    <div class="btn-group" role="group">
+      <button type="submit"
+              name="modo"
+              value="normal"
+              class="btn btn-sm {% if modo != 'alertas' %}btn-light{% else %}btn-outline-light{% endif %}">
+        Normal
+      </button>
+      <button type="submit"
+              name="modo"
+              value="alertas"
+              class="btn btn-sm {% if modo == 'alertas' %}btn-light{% else %}btn-outline-light{% endif %}">
+        Alertas
+      </button>
+    </div>
+  </div>
+
   <button class="btn btn-danger">Aplicar</button>
 
-  <!-- Botón de descarga alineado con el resto -->
-  <a href="{{ url_for('contab.descargar_detalle', 
+  <!-- Descargar detalle -->
+  <a href="{{ url_for('contab.descargar_detalle',
                       fecha_corte=fecha_corte,
                       clasificacion=clasificacion,
-                      centro_costo=centro_costo) }}" 
+                      centro_costo=centro_costo) }}"
      class="btn btn-success ms-2">
     Descargar Detalle
   </a>
 </form>
-
 
 
 
@@ -45,61 +65,200 @@
         {% endfor %}
       </tr>
     </thead>
-        <tbody>
-        {% for fila in tabla %}
-            <tr class="cuenta-principal" data-nombre="{{ fila['NOMBRE'] }}">
-            {% for col in columnas %}
-                <td>
-                {% if col == "NOMBRE" %}
-                    <strong><a href="#" class="toggle-detalle" data-nombre="{{ fila['NOMBRE'] }}" title="{{ fila['NOMBRE'] }}">{{ fila[col] }} </a></strong>
-                {% else %}
-                    {{ "{:,.0f}".format(fila[col]).replace(",", ".") }}
+    <tbody>
+      {% for fila in tabla %}
+        <!-- Fila principal (consolidada por NOMBRE) -->
+        <tr class="cuenta-principal" data-nombre="{{ fila['NOMBRE'] }}">
+          {% for col in columnas %}
+            {% if col == "NOMBRE" %}
+              <td class="text-start col-nombre-cuenta">
+                <strong>
+                  <a href="#"
+                     class="toggle-detalle text-decoration-none text-white"
+                     data-nombre="{{ fila['NOMBRE'] }}"
+                     title="{{ fila['NOMBRE'] }}">
+                    {{ fila[col] }}
+                  </a>
+                </strong>
+              </td>
+            {% else %}
+              {% set key_macro = fila["NOMBRE"] ~ "||" ~ col %}
+              {% set cant_alertas = alertas_macro.get(key_macro, 0) %}
+              {% set es_alerta_macro = (modo == 'alertas' and cant_alertas > 0) %}
+
+              <td
+                class="
+                  {% if es_alerta_macro and cant_alertas >= 3 %}bg-danger bg-opacity-50
+                  {% elif es_alerta_macro %}bg-warning bg-opacity-50
+                  {% endif %}
+                "
+                {% if es_alerta_macro %}
+                  data-bs-toggle="tooltip"
+                  title="{{ cant_alertas }} alerta(s) en centros de costo"
                 {% endif %}
-                </td>
-            {% endfor %}
-            </tr>
+              >
+                {% if fila[col] is not none %}
+                  {{ "{:,.0f}".format(fila[col]).replace(",", ".") }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            {% endif %}
+          {% endfor %}
+        </tr>
 
-            <!-- Fila detalle oculta -->
-            <tr class="detalle-row d-none" id="detalle-{{ fila['NOMBRE'] }}">
-            <td colspan="{{ columnas|length }}">
-                <table class="table table-sm table-bordered text-end mb-0">
-                <thead>
-                    <tr>
-                    <th>Centro Costo</th>
+        <!-- Fila de detalle por centro de costo (colapsable) -->
+        <tr class="detalle-row d-none" id="detalle-{{ fila['NOMBRE'] }}">
+          <td colspan="{{ columnas|length }}">
+            <table class="table table-sm table-bordered text-end mb-0">
+              <thead>
+                <tr>
+                  <th>Centro Costo</th>
+                  {% for mes in columnas[1:] %}
+                    <th>{{ mes }}</th>
+                  {% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for d in detalle if d['NOMBRE'] == fila['NOMBRE'] %}
+                  <tr>
+                    <td class="text-start">{{ d['CENTRO COSTO'] }}</td>
                     {% for mes in columnas[1:] %}
-                        <th>{{ mes }}</th>
-                    {% endfor %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for d in detalle if d['NOMBRE'] == fila['NOMBRE'] %}
-                    <tr>
-                        <td>{{ d['CENTRO COSTO'] }}</td>
-                        {% for mes in columnas[1:] %}
-                        <td>{{ "{:,.0f}".format(d.get(mes, 0)).replace(",", ".") }}</td>
-                        {% endfor %}
-                    </tr>
-                    {% endfor %}
-                </tbody>
-                </table>
-            </td>
-            </tr>
-        {% endfor %}
-        </tbody>
+                      {% set key_cc = d['NOMBRE'] ~ '||' ~ d['CENTRO COSTO'] ~ '||' ~ mes %}
+                      {% set ratio_cc = ratios_cc.get(key_cc) %}
+                      {% set comentario_cc = comentarios.get(key_cc) %}
+                      {% set es_alerta_cc = (modo == 'alertas' and ratio_cc) %}
 
+                      <td
+                        class="
+                          {% if es_alerta_cc and ratio_cc >= 2 %}bg-danger bg-opacity-50
+                          {% elif es_alerta_cc %}bg-warning bg-opacity-50
+                          {% endif %}
+                        "
+                        {% if comentario_cc %}
+                          data-bs-toggle="tooltip"
+                          title="{{ comentario_cc }}"
+                        {% elif es_alerta_cc %}
+                          data-bs-toggle="tooltip"
+                          title="Variación {{ ((ratio_cc - 1) * 100) | round(0) }}% sobre promedio"
+                        {% endif %}
+                      >
+                        {{ "{:,.0f}".format(d.get(mes, 0)).replace(",", ".") }}
+
+                        <!-- Comentario por centro de costo -->
+                        <button type="button"
+                                class="btn btn-link btn-comentario text-info p-0 ms-1"
+                                data-nombre="{{ d['NOMBRE'] }}"
+                                data-centro="{{ d['CENTRO COSTO'] }}"
+                                data-periodo="{{ mes }}"
+                                data-comentario="{{ comentario_cc or '' }}">
+                          📝
+                        </button>
+                      </td>
+                    {% endfor %}
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
   </table>
 </div>
 
+<!-- Modal comentarios -->
+<div class="modal fade" id="modalComentario" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white">
+      <div class="modal-header">
+        <h5 class="modal-title">Comentario de la variación</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p id="comentario-contexto" class="small text-muted mb-2"></p>
+        <textarea id="comentario-texto" class="form-control" rows="4"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+        <button type="button" class="btn btn-danger btn-sm" id="btn-borrar-comentario">Borrar</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-guardar-comentario">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
-document.querySelectorAll(".toggle-detalle").forEach(el => {
-  el.addEventListener("click", function(e) {
-    e.preventDefault();
-    const nombre = this.dataset.nombre;
-    const filaDetalle = document.getElementById("detalle-" + nombre);
-    filaDetalle.classList.toggle("d-none");
+document.addEventListener("DOMContentLoaded", function () {
+  // Toggle detalle por cuenta
+  document.querySelectorAll(".toggle-detalle").forEach(el => {
+    el.addEventListener("click", function(e) {
+      e.preventDefault();
+      const nombre = this.dataset.nombre;
+      const filaDetalle = document.getElementById("detalle-" + nombre);
+      if (filaDetalle) {
+        filaDetalle.classList.toggle("d-none");
+      }
+    });
+  });
+
+  // Comentarios
+  let nombreActual = null;
+  let periodoActual = null;
+  let centroActual = null;
+  const modalEl = document.getElementById('modalComentario');
+  const modalComentario = new bootstrap.Modal(modalEl);
+
+  document.querySelectorAll(".btn-comentario").forEach(btn => {
+    btn.addEventListener("click", () => {
+      nombreActual = btn.dataset.nombre;
+      periodoActual = btn.dataset.periodo;
+      centroActual = btn.dataset.centro;
+      const comentario = btn.dataset.comentario || "";
+
+      document.getElementById("comentario-texto").value = comentario;
+      document.getElementById("comentario-contexto").innerText =
+        `${nombreActual} – ${centroActual} – ${periodoActual}`;
+
+      modalComentario.show();
+    });
+  });
+
+  async function enviarComentario(texto) {
+    const resp = await fetch("{{ url_for('contab.guardar_comentario_api') }}", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        nombre: nombreActual,
+        periodo: periodoActual,
+        centro_costo: centroActual,
+        comentario: texto
+      })
+    });
+
+    if (!resp.ok) {
+      alert("No se pudo guardar el comentario");
+      return;
+    }
+    window.location.reload();
+  }
+
+  document.getElementById("btn-guardar-comentario").addEventListener("click", () => {
+    enviarComentario(document.getElementById("comentario-texto").value);
+  });
+
+  document.getElementById("btn-borrar-comentario").addEventListener("click", () => {
+    enviarComentario("");
+  });
+
+  // Tooltips
+  const tooltipTriggerList = [].slice.call(
+    document.querySelectorAll('[data-bs-toggle="tooltip"]')
+  );
+  tooltipTriggerList.forEach(el => {
+    new bootstrap.Tooltip(el);
   });
 });
 </script>
-
 
 {% endblock %}

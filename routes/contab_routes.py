@@ -8,9 +8,33 @@ from utils.sheet_cache import obtener_datos
 from utils.auth import login_requerido, permiso_modulo
 import pandas as pd
 from datetime import datetime
+import json
 
 
 contab_bp = Blueprint("contab", __name__, url_prefix="/contab")
+
+COMENTARIOS_FILE_NAME = "comentarios_comparativo.json"
+
+def _ruta_comentarios():
+    # Usa la misma carpeta donde guardas mayor.xlsx
+    return os.path.join(current_app.config['UPLOAD_FOLDER_CONTAB'], COMENTARIOS_FILE_NAME)
+
+def cargar_comentarios():
+    ruta = _ruta_comentarios()
+    if os.path.exists(ruta):
+        try:
+            with open(ruta, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def guardar_comentarios(datos: dict):
+    ruta = _ruta_comentarios()
+    with open(ruta, "w", encoding="utf-8") as f:
+        json.dump(datos, f, ensure_ascii=False, indent=2)
+
+
 
 # URL del webhook de Google Apps Script
 URL_WEBHOOK_SCRIPT = "https://script.google.com/macros/s/AKfycbxUK2SQ_fDaX1wEcTDLfnefcZPCZDp3A5rrqd2gZ6KBHV7qbBuysYTXltBBLXraNGj7/exec"
@@ -39,6 +63,7 @@ def comparativo():
     fecha_corte = request.args.get("fecha_corte")
     clasif = request.args.get("clasificacion", "Todas")
     centro_costo = request.args.get("centro_costo", "Todos")
+    modo = request.args.get("modo", "normal")  # "normal" o "alertas"
 
     # Cargar datos
     df = obtener_datos("mayor")
@@ -67,8 +92,6 @@ def comparativo():
     # Clasificación contable
     df["CUENTA"] = df["CUENTA"].astype(str)
     df["CLASIFICACION"] = df["CUENTA"].str[0].map({
-        "1": "Activo",
-        "2": "Pasivo",
         "3": "Gastos",
         "4": "Ingresos"
     }).fillna("Otros")
@@ -98,11 +121,59 @@ def comparativo():
         .reindex(columns=etiquetas, fill_value=0)
         .reset_index()
     )
-
+    
     # Adjuntar CUENTA y CLASIFICACION para ordenar
     datos_aux = df[["NOMBRE", "CUENTA", "CLASIFICACION"]].drop_duplicates()
     pivot = pd.merge(datos_aux, pivot, on="NOMBRE", how="right")
     pivot = pivot.sort_values("CUENTA")
+
+
+    # Cálculo de ratios para "modo alertas"
+    # pivot tiene columnas: NOMBRE, CUENTA, CLASIFICACION, <meses>
+    # --- ALERTAS POR CENTRO DE COSTO ---
+    # detalle_raw: NOMBRE, CENTRO COSTO, PERIODO, SALDO_MES
+    detalle_raw = (
+        df[df["PERIODO"].isin(etiquetas)]
+        .assign(SALDO_MES=lambda x: x["DEBE"] - x["HABER"])
+        .groupby(["NOMBRE", "CENTRO COSTO", "PERIODO"], as_index=False)
+        .agg(SALDO_MES=("SALDO_MES", "sum"))
+    )
+
+    # Pivot por centro de costo
+    pivot_cc = detalle_raw.pivot_table(
+        index=["NOMBRE", "CENTRO COSTO"],
+        columns="PERIODO",
+        values="SALDO_MES",
+        aggfunc="sum",
+    ).reset_index()
+
+    # Ratios por centro de costo
+    ratios_cc = {}          # clave: NOMBRE||CENTRO||PERIODO  → ratio
+    alertas_macro = {}      # clave: NOMBRE||PERIODO → cantidad de CC con alerta
+
+    if not pivot_cc.empty:
+        valores_cc = pivot_cc[etiquetas].replace(0, pd.NA)
+        promedios_cc = valores_cc.mean(axis=1, skipna=True)
+
+        for idx, row in pivot_cc.iterrows():
+            nombre = row["NOMBRE"]
+            centro = row["CENTRO COSTO"]
+            prom = promedios_cc.iloc[idx]
+            if pd.isna(prom) or prom == 0:
+                continue
+
+            for periodo in etiquetas:
+                val = row[periodo]
+                if pd.isna(val) or val == 0:
+                    continue
+                ratio = float(val / prom)
+                if ratio >= 1.3:
+                    key_cc = f"{nombre}||{centro}||{periodo}"
+                    ratios_cc[key_cc] = ratio
+
+                    key_macro = f"{nombre}||{periodo}"
+                    alertas_macro[key_macro] = alertas_macro.get(key_macro, 0) + 1
+
 
     # Columnas visuales
     columnas = ["NOMBRE"] + etiquetas
@@ -129,18 +200,27 @@ def comparativo():
         fill_value=0
     ).reset_index()
 
+    # Comentarios persistentes (para alertas y vista ejecutiva)
+    comentarios = cargar_comentarios()
+
+
     # Preparar formato para JS o HTML
     detalle_dict = detalle.to_dict(orient="records")
 
-
-    return render_template("contab/comparativo.html",
-                           tabla=final.to_dict(orient="records"),
-                           columnas=columnas,
-                           fecha_corte=fecha_corte,
-                           clasificacion=clasif,
-                           centro_costo=centro_costo,
-                           centros=todos_centros,
-                           detalle=detalle_dict)
+    return render_template(
+        "contab/comparativo.html",
+        tabla=final.to_dict(orient="records"),
+        columnas=columnas,
+        fecha_corte=fecha_corte,
+        clasificacion=clasif,
+        centro_costo=centro_costo,
+        centros=todos_centros,
+        detalle=detalle_dict,
+        modo=modo,
+        alertas_macro=alertas_macro,
+        ratios_cc=ratios_cc,
+        comentarios=comentarios,
+    )
 
 
 from flask import send_file
@@ -215,6 +295,30 @@ def archivos():
 
     existe_mayor = os.path.exists(path_mayor)
     return render_template("contab/archivos.html", existe_mayor=existe_mayor)
+
+
+@contab_bp.route("/guardar_comentario", methods=["POST"])
+@login_requerido
+def guardar_comentario_api():
+    data = request.get_json() or {}
+    nombre = (data.get("nombre") or "").strip()
+    periodo = (data.get("periodo") or "").strip()
+    centro = (data.get("centro_costo") or "").strip()
+    comentario = (data.get("comentario") or "").strip()
+
+    if not nombre or not periodo or not centro:
+        return {"ok": False, "error": "Faltan datos"}, 400
+
+    comentarios = cargar_comentarios()
+    key = f"{nombre}||{centro}||{periodo}"
+
+    if comentario:
+        comentarios[key] = comentario
+    else:
+        comentarios.pop(key, None)
+
+    guardar_comentarios(comentarios)
+    return {"ok": True}
 
 # Descargar archivo local
 @contab_bp.route("/descargar_mayor")

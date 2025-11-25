@@ -17,6 +17,13 @@ import os
 
 app = Flask(__name__)
 app.permanent_session_lifetime = timedelta(minutes=10) #Tiempo Maximo de inactividad.
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+UPLOAD_FOLDER_CONTAB = os.path.join(BASE_DIR, "uploads", "contab")
+# Crea la carpeta si no existe
+os.makedirs(UPLOAD_FOLDER_CONTAB, exist_ok=True)
+
+# Deja la ruta disponible para toda la app
+app.config["UPLOAD_FOLDER_CONTAB"] = UPLOAD_FOLDER_CONTAB
 
 
 @app.context_processor

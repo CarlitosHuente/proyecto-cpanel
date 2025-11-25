@@ -14,12 +14,18 @@
             height: 100vh;
             background-color: #111;
             padding-top: 20px;
+            width: 220px;
+            overflow: hidden;
+            transition: width 0.2s ease;
         }
         .sidebar a {
             color: white;
             padding: 12px;
             display: block;
             text-decoration: none;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .sidebar a:hover {
             background-color: #d80000;
@@ -28,6 +34,45 @@
         .main-content {
             margin-left: 220px;
             padding: 20px;
+            transition: margin-left 0.2s ease;
+        }
+        /* Estado colapsado */
+        body.sidebar-collapsed .sidebar {
+            width: 70px;
+        }
+        body.sidebar-collapsed .main-content {
+            margin-left: 70px;
+        }
+        body.sidebar-collapsed .sidebar img {
+            width: 70px;
+        }
+        body.sidebar-collapsed .sidebar .texto-menu {
+            display: none;
+        }
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0,0,0,0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            z-index: 2000;
+        }
+        #loading-overlay .spinner {
+            width: 3rem;
+            height: 3rem;
+            border: 0.4rem solid #fff;
+            border-top-color: #d80000;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        #loading-overlay p {
+            margin-top: 1rem;
+            color: #fff;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -41,39 +86,45 @@
 
 <div class="d-flex">
     <div class="sidebar position-fixed">
-        <div class="text-center mb-4">
-            <a href="/refresh" title="Actualizar datos">
-
+        <div class="text-center mb-3">
             <a href="/refresh" title="Actualizar datos" onclick="mostrarOverlay()">
                 <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo" width="120">
             </a>
         </div>
+
+        <!-- Botón para colapsar / expandir sidebar -->
+        <div class="text-center mb-3">
+            <button type="button" class="btn btn-outline-light btn-sm w-75" id="btn-toggle-sidebar">
+                ☰
+            </button>
+        </div>
+
         {% if fecha_actualizacion %}
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 <div style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; width: auto; max-width: 90%;">
                 {% for category, message in messages %}
                     <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
                     </div>
                 {% endfor %}
                 </div>
             {% endif %}
         {% endwith %}
 
-
         <div style="font-size: 0.7rem; color: #ccc; font-style: italic;">
             Última actualización: {{ fecha_actualizacion.strftime("%d/%m/%Y %H:%M") }}
         </div>
         {% endif %}
 
-        <a href="{{ url_for('dashboard.dashboard') }}">Dashboard</a>
-        <a href="{{ url_for('ventas.ventas') }}">Ventas</a>
+        <a href="{{ url_for('dashboard.dashboard') }}"><span class="texto-menu">Dashboard</span></a>
+        <a href="{{ url_for('ventas.ventas') }}"><span class="texto-menu">Ventas</span></a>
+
         <!-- Menú SEREMI -->
         <div class="dropdown">
             <a class="dropdown-toggle d-block px-3 py-2 text-white" href="#" role="button" id="seremiDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                Seremi
+                <span class="texto-menu">Seremi</span>
             </a>
             <ul class="dropdown-menu bg-dark border-0" aria-labelledby="seremiDropdown">
                 <li><a class="dropdown-item text-white" href="{{ url_for('seremi.temperatura_equipos') }}">Temperatura Equipos</a></li>
@@ -83,10 +134,11 @@
                 <li><a class="dropdown-item text-white" href="{{ url_for('seremi.personal') }}">Registro del Personal</a></li>
             </ul>
         </div>
+
         <!-- Menú Contabilidad -->
         <div class="dropdown">
             <a class="dropdown-toggle d-block px-3 py-2 text-white" href="#" role="button" id="contabDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                Contabilidad
+                <span class="texto-menu">Contabilidad</span>
             </a>
             <ul class="dropdown-menu bg-dark border-0" aria-labelledby="contabDropdown">
                 <li><a class="dropdown-item text-white" href="{{ url_for('contab.comparativo') }}">Comparativo</a></li>
@@ -94,15 +146,15 @@
             </ul>
         </div>
 
-        <a href="#">Clientes</a>
-        <a href="#">Quesería</a>
-        <a href="#">Lechería</a>
-        <a href="#">Fca Papaya</a>
-        <a href="#">Fca Empanada</a>
+        <a href="#"><span class="texto-menu">Clientes</span></a>
+        <a href="#"><span class="texto-menu">Quesería</span></a>
+        <a href="#"><span class="texto-menu">Lechería</span></a>
+        <a href="#"><span class="texto-menu">Fca Papaya</span></a>
+        <a href="#"><span class="texto-menu">Fca Empanada</span></a>
         {% if session.get('rol') in ['superusuario'] %}
-            <a href="/config/usuarios">Configuración</a>
+            <a href="/config/usuarios"><span class="texto-menu">Configuración</span></a>
         {% endif %}
-        <a href="{{ url_for('auth.logout') }}">Cerrar sesión</a>
+        <a href="{{ url_for('auth.logout') }}"><span class="texto-menu">Cerrar sesión</span></a>
     </div>
 
     <div class="main-content flex-grow-1">
@@ -110,12 +162,13 @@
     </div>
 </div>
 
-<!-- Bootstrap JS para habilitar pestañas -->
+<!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
 
-<!-- Activar pestaña por hash (ej: #resumen) -->
+<!-- Tabs por hash + manejo sidebar -->
 <script>
   document.addEventListener("DOMContentLoaded", function () {
+    // Activar pestaña por hash (ej: #resumen)
     const hash = window.location.hash;
     if (hash) {
       const tab = document.querySelector(`a[href="${hash}"]`);
@@ -123,25 +176,34 @@
         new bootstrap.Tab(tab).show();
       }
     }
+
+    // Estado inicial del sidebar (colapsado o no)
+    const colapsado = localStorage.getItem("sidebarCollapsed") === "1";
+    if (colapsado) {
+      document.body.classList.add("sidebar-collapsed");
+    }
+
+    // Botón para colapsar/expandir sidebar
+    const btnToggle = document.getElementById("btn-toggle-sidebar");
+    if (btnToggle) {
+      btnToggle.addEventListener("click", function () {
+        document.body.classList.toggle("sidebar-collapsed");
+        const ahoraColapsado = document.body.classList.contains("sidebar-collapsed");
+        localStorage.setItem("sidebarCollapsed", ahoraColapsado ? "1" : "0");
+      });
+    }
   });
-</script>
 
-
-<footer class="text-end text-white p-2" style="font-size: 0.8rem;">
-    Última actualización: 
-    {{ fecha_actualizacion.strftime('%d-%m-%Y %H:%M') if fecha_actualizacion else 'Desconocida' }}
-</footer>
-
-<script>
   // Función para mostrar la pantalla de carga
   function mostrarOverlay() {
     document.getElementById('loading-overlay').style.display = 'flex';
   }
-
-  // No necesitamos una función para ocultarlo, porque cuando el servidor
-  // responde, la página se recarga por completo y el overlay
-  // volverá a su estado original (oculto por el CSS).
 </script>
+
+<footer class="text-end text-white p-2" style="font-size: 0.8rem;">
+    Última actualización:
+    {{ fecha_actualizacion.strftime('%d-%m-%Y %H:%M') if fecha_actualizacion else 'Desconocida' }}
+</footer>
+
 </body>
 </html>
-
