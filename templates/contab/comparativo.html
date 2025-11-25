@@ -61,8 +61,13 @@
     <thead>
       <tr>
         {% for col in columnas %}
-          <th>{{ col }}</th>
+          {% if col == "NOMBRE" %}
+              <th class="text-start col-nombre-cuenta" style="min-width:350px; max-width:350px; white-space:nowrap;">{{ col }}</th>  <!-- CAMBIO -->
+          {% else %}
+              <th>{{ col }}</th>
+          {% endif %}
         {% endfor %}
+
       </tr>
     </thead>
     <tbody>
