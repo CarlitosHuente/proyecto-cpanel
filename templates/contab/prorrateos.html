@@ -1,0 +1,1063 @@
+{% extends "base.html" %}
+{% block title %}Prorrateos Contables{% endblock %}
+
+{% block content %}
+
+<h2 class="text-white mb-3">Prorrateos Contables</h2>
+
+<form method="GET" class="d-flex mb-3 gap-2 align-items-center flex-wrap">
+  <label class="text-white mb-0 me-2">Periodo:</label>
+  <input type="month" name="periodo" class="form-control w-auto" value="{{ periodo }}">
+  <input type="hidden" name="tab" value="{{ pestaña }}">
+  <button class="btn btn-danger">Cambiar periodo</button>
+</form>
+
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item">
+    <a class="nav-link {% if pestaña == 'cc' %}active{% endif %}"
+       href="{{ url_for('contab.prorrateos', periodo=periodo, tab='cc') }}">
+       Servicios Generales
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if pestaña == 'cuentas' %}active{% endif %}"
+       href="{{ url_for('contab.prorrateos', periodo=periodo, tab='cuentas') }}">
+       Cuentas
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if pestaña == 'fabrica' %}active{% endif %}"
+       href="{{ url_for('contab.prorrateos', periodo=periodo, tab='fabrica') }}">
+       Fábrica Empanadas
+    </a>
+  </li>
+</ul>
+
+
+<div class="tab-content">
+  <div class="tab-pane fade {% if pestaña == 'cc' %}show active{% endif %}" id="tab-cc">
+    {% if not cuentas_serv_generales %}
+      <div class="alert alert-warning">
+        No se encontraron movimientos en el centro de costo
+        <strong>Servicios Generales</strong> para el periodo seleccionado.
+      </div>
+    {% else %}
+      <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
+        <table class="table table-dark table-bordered table-hover align-middle">
+          <thead>
+            <tr>
+              <th class="text-start">Cuenta (Servicios Generales)</th>
+              <th class="text-end">Monto periodo</th>
+              <th class="text-center">Prorrateo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in cuentas_serv_generales %}
+              <tr>
+                <td class="text-start">{{ c.nombre }}</td>
+                <td class="text-end">
+                  {{ "{:,.0f}".format(c.monto).replace(",", ".") }}
+                </td>
+                <td class="text-center">
+                  {% if c.tiene_regla %}
+                    <span class="badge bg-success me-2">Definido</span>
+                  {% else %}
+                    <span class="badge bg-secondary me-2">Sin definir</span>
+                  {% endif %}
+                  <button type="button"
+                          class="btn btn-sm btn-outline-light btn-configurar-sg"
+                          data-cuenta="{{ c.nombre }}">
+                    Configurar
+                  </button>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="tab-pane fade {% if pestaña == 'cuentas' %}show active{% endif %}" id="tab-cuentas">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h5 class="mb-0">Prorrateo de cuentas globales</h5>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-outline-info" id="btn-ver-ventas">
+          Ver ventas periodo
+        </button>
+        <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#modalAgregarCuenta">
+          + Agregar cuenta
+        </button>
+      </div>
+    </div>
+
+    <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
+      <table class="table table-dark table-bordered table-hover align-middle">
+        <thead>
+          <tr>
+            <th class="text-start">Cuenta contable</th>
+            <th class="text-center">Tipo prorrateo</th>
+            <th class="text-end">Monto periodo</th>
+            <th class="text-center">Estado / Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in cuentas_prorrateo %}
+            <tr>
+              <td class="text-start nombre-cuenta-preview"
+                  data-cuenta="{{ c.nombre }}"
+                  data-tipo="{{ c.tipo }}"
+                  data-monto="{{ c.monto }}">
+                <u style="cursor:pointer;">{{ c.nombre }}</u>
+              </td>
+              <td class="text-center">
+                {% if c.tipo == "VENTAS_SUCURSAL" %}
+                    <span class="badge bg-info">Automático (ventas)</span>
+                    <button class="btn btn-sm btn-link text-danger p-0 ms-2" onclick="gestionarCuenta('{{ c.nombre }}', '', 'eliminar')" title="Quitar de la lista">✕</button>
+                    
+                {% elif c.tipo == "MANUAL_SUCURSAL" %}
+                    {% if c.tiene_regla %}
+                        <span class="badge bg-success me-2">Definido</span>
+                    {% else %}
+                        <span class="badge bg-secondary me-2">Sin definir</span>
+                    {% endif %}
+                    
+                    <button type="button" class="btn btn-sm btn-outline-light btn-configurar-cuenta" data-cuenta="{{ c.nombre }}">
+                        Configurar
+                    </button>
+                    
+                    <button class="btn btn-sm btn-outline-danger ms-1" onclick="gestionarCuenta('{{ c.nombre }}', '', 'eliminar')" title="Eliminar cuenta">
+                        🗑
+                    </button>
+                {% endif %}
+             </td>
+              <td class="text-end">
+                {{ "{:,.0f}".format(c.monto).replace(",", ".") }}
+              </td>
+              <td class="text-center">
+                {% if c.tipo == "VENTAS_SUCURSAL" %}
+                  <span class="badge bg-info">Automático (ventas)</span>
+                {% elif c.tipo == "MANUAL_SUCURSAL" %}
+                  {% if c.tiene_regla %}
+                    <span class="badge bg-success me-2">Definido</span>
+                  {% else %}
+                    <span class="badge bg-secondary me-2">Sin definir</span>
+                  {% endif %}
+                  <button type="button"
+                          class="btn btn-sm btn-outline-light btn-configurar-cuenta"
+                          data-cuenta="{{ c.nombre }}">
+                    Configurar
+                  </button>
+                {% else %}
+                  <span class="badge bg-secondary">Sin acción</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+    <div class="tab-pane fade {% if pestaña == 'fabrica' %}show active{% endif %}" id="tab-fabrica">
+    {% if not gastos_fabrica %}
+      <div class="alert alert-warning">
+        No se encontraron movimientos en el centro de costo
+        <strong>Fábrica Empanadas</strong> para el periodo seleccionado.
+      </div>
+    {% else %}
+      <div class="row">
+        <div class="col-lg-8 mb-3">
+          <h5>Gastos centro de costo fábrica ({{ periodo }})</h5>
+          <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
+            <table class="table table-dark table-bordered table-hover align-middle">
+              <thead>
+                <tr>
+                  <th class="text-start">Cuenta</th>
+                  <th class="text-start">Nombre cuenta</th>
+                  <th class="text-end">Monto periodo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for g in gastos_fabrica %}
+                  <tr>
+                    <td class="text-start">{{ g.cuenta }}</td>
+                    <td class="text-start">{{ g.nombre }}</td>
+                    <td class="text-end">
+                      {{ "{:,.0f}".format(g.monto).replace(",", ".") }}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th colspan="2" class="text-end">Total gastos fábrica</th>
+                  <th class="text-end">
+                    {{ "{:,.0f}".format(total_gastos_fabrica).replace(",", ".") }}
+                  </th>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <div class="col-lg-4 mb-3">
+          <div class="card bg-secondary text-white">
+            <div class="card-body">
+              <h5 class="card-title">Costeo básico de empanada</h5>
+              <p class="small text-light mb-2">
+                Este cálculo usa solo los gastos del centro de costo Fábrica Empanadas
+                del periodo seleccionado.
+              </p>
+
+              <div class="mb-2">
+                <label class="form-label mb-1">Empanadas elaboradas en el periodo</label>
+                <input type="number"
+                       class="form-control form-control-sm bg-dark text-white border-secondary"
+                       id="emp-elaboradas"
+                       min="0"
+                       step="1"
+                       value="{{ empanadas_elaboradas if empanadas_elaboradas else '' }}">
+              </div>
+
+              <div class="mb-2">
+                <label class="form-label mb-1">Empanadas compradas (dato de referencia)</label>
+                <input type="number"
+                       class="form-control form-control-sm bg-dark text-white border-secondary"
+                       id="emp-compradas"
+                       min="0"
+                       step="1"
+                       value="{{ empanadas_compradas if empanadas_compradas else '' }}">
+              </div>
+
+              <hr class="border-light">
+
+              <p class="mb-1 text-white">
+                <strong>Total gastos fábrica:</strong><br>
+                {{ "{:,.0f}".format(total_gastos_fabrica).replace(",", ".") }}
+              </p>
+
+              <p class="mb-1 text-white">
+                <strong>Costo unitario empanada elaborada:</strong><br>
+                <span id="lbl-costo-unitario-actual">
+                {% if costo_unitario_empanada and costo_unitario_empanada > 0 %}
+                  {{ "{:,.0f}".format(costo_unitario_empanada).replace(",", ".") }} por unidad
+                {% else %}
+                  —
+                {% endif %}
+                </span>
+              </p>
+              <p class="mb-1 text-white">
+                <strong>Costo unitario estimado con Costanera:</strong><br>
+                <span id="lbl-costo-unitario-estimado">
+                {% if costo_unitario_empanada_estimado and costo_unitario_empanada_estimado > 0 %}
+                  {{ "{:,.0f}".format(costo_unitario_empanada_estimado).replace(",", ".") }} por unidad
+                {% else %}
+                  —
+                {% endif %}
+                </span>
+              </p>
+
+              <button type="button"
+                      class="btn btn-sm btn-outline mt-2 w-100"
+                      id="btn-guardar-costeo-fabrica">
+                Guardar costeo
+              </button>
+
+              <small class="text-warning d-block mt-2">
+                Más adelante este costo podrá usarse para distribuir los gastos a las sucursales
+                según las ventas de empanadas.
+              </small>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="row mt-3">
+        <div class="col-12">
+          <h5>Estimación gastos compartidos Costanera → Fábrica</h5>
+          <p class="small text-muted">
+            Defina qué porcentaje de ciertos gastos del centro de costo Costanera
+            se considera parte de la Fábrica de Empanadas. Esto solo afecta
+            la estimación de costo, no modifica el mayor contable.
+          </p>
+
+          {% if not gastos_costanera_compartidos %}
+            <div class="alert alert-warning">
+              No se encontraron movimientos con centro de costo
+              <strong>Costanera</strong> para el periodo seleccionado.
+            </div>
+          {% else %}
+            <div class="table-responsive" style="max-height: 50vh; overflow-y: auto;">
+              <table class="table table-dark table-bordered table-hover align-middle">
+                <thead>
+                  <tr>
+                    <th class="text-start">Cuenta</th>
+                    <th class="text-start">Nombre cuenta</th>
+                    <th class="text-end">Monto Costanera</th>
+                    <th class="text-center" style="width: 130px;">% a Fábrica</th>
+                    <th class="text-end">Monto estimado a Fábrica</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-costanera-fabrica">
+                  {% for g in gastos_costanera_compartidos %}
+                    <tr>
+                      <td class="text-start">{{ g.cuenta }}</td>
+                      <td class="text-start">{{ g.nombre }}</td>
+                      <td class="text-end">
+                        {{ "{:,.0f}".format(g.monto).replace(",", ".") }}
+                      </td>
+                      <td class="text-center">
+                        <input type="number"
+                               class="form-control form-control-sm input-porcentaje-costanera bg-dark text-white"
+                               data-cuenta="{{ g.cuenta }}"
+                               data-monto="{{ g.monto }}"
+                               value="{% if g.porcentaje %}{{ (g.porcentaje * 100) | round(2) }}{% else %}0{% endif %}"
+                               min="0"
+                               max="100"
+                               step="0.01">
+                      </td>
+                      <td class="text-end td-monto-estimado">
+                        {{ "{:,.0f}".format(g.monto_estimado).replace(",", ".") }}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <th colspan="2" class="text-end">Total Costanera origen</th>
+                    <th class="text-end">
+                      {{ "{:,.0f}".format(total_costanera_origen).replace(",", ".") }}
+                    </th>
+                    <th class="text-end">Total a Fábrica</th>
+                    <th class="text-end" id="lbl-total-costanera-a-fabrica">
+                      {{ "{:,.0f}".format(total_costanera_a_fabrica).replace(",", ".") }}
+                    </th>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mt-2 gap-2">
+              <div>
+                </div>
+              <button type="button"
+                      class="btn btn-sm btn-light"
+                      id="btn-guardar-costanera-estimacion">
+                Guardar estimación
+              </button>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+    {% endif %}
+  </div>
+
+</div>
+
+<div class="modal fade" id="modalProrrateoSG" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white">
+      <div class="modal-header">
+        <h5 class="modal-title">Prorrateo Servicios Generales</h5>
+        <button type="button"
+                class="btn-close btn-close-white"
+                data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-2" id="texto-cuenta-sg"></p>
+
+        {% if centros_disponibles %}
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered align-middle text-end mb-0">
+              <thead>
+                <tr>
+                  <th class="text-start">Centro de costo</th>
+                  <th style="width: 120px;">%</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-prorrateo-sg">
+                {% for cc in centros_disponibles %}
+                  <tr>
+                    <td class="text-start">{{ cc }}</td>
+                    <td>
+                      <input type="number"
+                             class="form-control form-control-sm input-porcentaje"
+                             data-centro="{{ cc }}"
+                             value="0"
+                             min="0"
+                             max="100"
+                             step="0.01">
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th class="text-end">Total %</th>
+                  <th id="total-porcentaje-sg">0</th>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <small class="text-warning">
+            La suma debe ser exactamente 100%. Se guarda como proporción (0–1) en el JSON.
+          </small>
+        {% else %}
+          <div class="alert alert-warning">
+            No se encontraron centros de costo distintos de <strong>Servicios Generales</strong>
+            en el periodo seleccionado.
+          </div>
+        {% endif %}
+      </div>
+      <div class="modal-footer">
+        <button type="button"
+                class="btn btn-secondary btn-sm"
+                data-bs-dismiss="modal">Cancelar</button>
+        <button type="button"
+                class="btn btn-primary btn-sm"
+                id="btn-guardar-prorrateo-sg">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalProrrateoCuenta" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white">
+      <div class="modal-header">
+        <h5 class="modal-title">Prorrateo de cuenta global</h5>
+        <button type="button"
+                class="btn-close btn-close-white"
+                data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-2" id="texto-cuenta-global"></p>
+
+        {% if centros_disponibles %}
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered align-middle text-end mb-0">
+              <thead>
+                <tr>
+                  <th class="text-start">Centro de costo</th>
+                  <th style="width: 120px;">%</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-prorrateo-cuenta">
+                {% for cc in centros_disponibles %}
+                  <tr>
+                    <td class="text-start">{{ cc }}</td>
+                    <td>
+                      <input type="number"
+                             class="form-control form-control-sm input-porcentaje-cuenta"
+                             data-centro="{{ cc }}"
+                             value="0"
+                             min="0"
+                             max="100"
+                             step="0.01">
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th class="text-end">Total %</th>
+                  <th id="total-porcentaje-cuenta">0</th>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <small class="text-warning">
+            La suma debe ser exactamente 100%. Se guarda como proporción (0–1) en el JSON.
+          </small>
+        {% else %}
+          <div class="alert alert-warning">
+            No se encontraron centros de costo para el periodo seleccionado.
+          </div>
+        {% endif %}
+      </div>
+      <div class="modal-footer">
+        <button type="button"
+                class="btn btn-secondary btn-sm"
+                data-bs-dismiss="modal">Cancelar</button>
+        <button type="button"
+                class="btn btn-primary btn-sm"
+                id="btn-guardar-prorrateo-cuenta">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalVentasPeriodo" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white">
+      <div class="modal-header">
+        <h5 class="modal-title">Ventas del periodo</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small mb-2">
+          Periodo: {{ periodo }} – Cuentas que comienzan con <strong>41</strong>.
+        </p>
+        <p class="mb-2">
+          <strong>Total ventas:</strong>
+          {{ "{:,.0f}".format(ventas_totales|default(0.0)).replace(",", ".") }}
+        </p>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered align-middle text-end mb-0">
+            <thead>
+              <tr>
+                <th class="text-start">Centro de costo</th>
+                <th>Monto</th>
+                <th>%</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-ventas-periodo">
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalPreviewCuenta" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white">
+      <div class="modal-header">
+        <h5 class="modal-title">Vista previa de distribución</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small mb-2" id="texto-preview-cuenta"></p>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered align-middle text-end mb-0">
+            <thead>
+              <tr>
+                <th class="text-start">Centro de costo</th>
+                <th>% usado</th>
+                <th>Monto distribuido</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-preview-cuenta">
+            </tbody>
+          </table>
+        </div>
+        <small class="text-muted d-block mt-2">
+          Esta es solo una vista previa. El prorrateo real se aplicará al generar los informes.
+        </small>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+
+  // =========================
+  // Costeo Fábrica Empanadas
+  // =========================
+  const btnGuardarCosteo = document.getElementById("btn-guardar-costeo-fabrica");
+  if (btnGuardarCosteo) {
+    btnGuardarCosteo.addEventListener("click", async () => {
+      const inputElab = document.getElementById("emp-elaboradas");
+      const inputComp = document.getElementById("emp-compradas");
+      if (!inputElab || !inputComp) return;
+
+      const empElab = parseFloat((inputElab.value || "0").replace(",", ".")) || 0;
+      const empComp = parseFloat((inputComp.value || "0").replace(",", ".")) || 0;
+
+      if (empElab < 0 || empComp < 0) {
+        alert("Los valores no pueden ser negativos.");
+        return;
+      }
+
+      const resp = await fetch("{{ url_for('contab.api_guardar_prorrateo_fabrica') }}", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          periodo: "{{ periodo }}",
+          empanadas_elaboradas: empElab,
+          empanadas_compradas: empComp
+        })
+      });
+
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        alert(data.error || "No se pudo guardar el costeo de fábrica");
+        return;
+      }
+
+      window.location.reload();
+    });
+  }
+
+document.addEventListener("DOMContentLoaded", function () {
+  const periodoActual = "{{ periodo }}";
+  const totalGastosFabrica = {{ total_gastos_fabrica|default(0.0)|tojson|safe }};
+  const centrosDisponibles = {{ centros_disponibles|tojson|safe }};
+  const reglasCuentas = {{ reglas_cuentas|default({})|tojson|safe }};
+  const ventasTotales = {{ ventas_totales|default(0.0)|tojson|safe }};
+  const ventasPorCC = {{ ventas_por_cc|default({})|tojson|safe }};
+
+  // =========================
+  // Servicios Generales
+  // =========================
+  let cuentaSGActual = null;
+  const modalSGEl = document.getElementById("modalProrrateoSG");
+  const modalSG = new bootstrap.Modal(modalSGEl);
+
+  function recalcularTotalSG() {
+    const tbody = document.getElementById("tbody-prorrateo-sg");
+    if (!tbody) return;
+    let total = 0;
+    tbody.querySelectorAll(".input-porcentaje").forEach(inp => {
+      const v = parseFloat((inp.value || "0").replace(",", ".")) || 0;
+      total += v;
+    });
+    const totalEl = document.getElementById("total-porcentaje-sg");
+    if (totalEl) totalEl.innerText = total.toFixed(2);
+  }
+
+  const tbodySG = document.getElementById("tbody-prorrateo-sg");
+  if (tbodySG) {
+    tbodySG.querySelectorAll(".input-porcentaje").forEach(inp => {
+      inp.addEventListener("input", recalcularTotalSG);
+    });
+  }
+
+  document.querySelectorAll(".btn-configurar-sg").forEach(btn => {
+    btn.addEventListener("click", () => {
+      cuentaSGActual = btn.dataset.cuenta;
+      document.getElementById("texto-cuenta-sg").innerText =
+        `Cuenta: ${cuentaSGActual} – Periodo: ${periodoActual}`;
+
+      if (tbodySG) {
+        tbodySG.querySelectorAll(".input-porcentaje").forEach(inp => {
+          inp.value = 0;
+        });
+      }
+      recalcularTotalSG();
+      modalSG.show();
+    });
+  });
+
+  const btnGuardarSG = document.getElementById("btn-guardar-prorrateo-sg");
+  if (btnGuardarSG) {
+    btnGuardarSG.addEventListener("click", async () => {
+      if (!cuentaSGActual || !tbodySG) return;
+
+      const distribucion = {};
+      tbodySG.querySelectorAll(".input-porcentaje").forEach(inp => {
+        const centro = inp.dataset.centro;
+        const v = parseFloat((inp.value || "0").replace(",", ".")) || 0;
+        distribucion[centro] = v / 100.0;
+      });
+
+      const totalPct = Object.values(distribucion).reduce((a, b) => a + b, 0);
+      if (Math.abs(totalPct - 1) > 0.001) {
+        alert("La suma de los porcentajes debe ser exactamente 100%");
+        return;
+      }
+
+      const resp = await fetch("{{ url_for('contab.api_guardar_prorrateo_serv_generales') }}", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          periodo: periodoActual,
+          cuenta: cuentaSGActual,
+          distribucion: distribucion
+        })
+      });
+
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        alert(data.error || "No se pudo guardar el prorrateo");
+        return;
+      }
+
+      window.location.reload();
+    });
+  }
+
+  // =========================
+  // FUNCIONAMIENTO DE CALCULOS FÁBRICA Y FORMATO
+  // =========================
+  function formateaPesos(valor) {
+    if (!isFinite(valor)) return "—";
+    return valor.toLocaleString("es-CL", { maximumFractionDigits: 0 });
+  }
+
+  function recalcularCostosFabrica() {
+    const inputElab = document.getElementById("emp-elaboradas");
+    if (!inputElab) return;
+
+    const empElab = parseFloat((inputElab.value || "0").replace(",", ".")) || 0;
+
+    const lblActual   = document.getElementById("lbl-costo-unitario-actual");
+    const lblEstimado = document.getElementById("lbl-costo-unitario-estimado");
+    const lblTotalAFab = document.getElementById("lbl-total-costanera-a-fabrica");
+
+    // costo actual
+    if (empElab > 0 && lblActual) {
+      const cu = totalGastosFabrica / empElab;
+      lblActual.textContent = formateaPesos(cu) + " por unidad";
+    } else if (lblActual) {
+      lblActual.textContent = "—";
+    }
+
+    // recorrer porcentajes de Costanera
+    let totalCostToFab = 0;
+    document.querySelectorAll(".input-porcentaje-costanera").forEach(inp => {
+      // Ahora sí se lee data-monto correctamente
+      const monto = parseFloat(inp.dataset.monto || "0");
+      const pct   = parseFloat((inp.value || "0").replace(",", ".")) || 0;
+      const prop  = pct / 100.0;
+      const estimado = monto * prop;
+      totalCostToFab += estimado;
+
+      const td = inp.closest("tr").querySelector(".td-monto-estimado");
+      if (td) td.textContent = formateaPesos(estimado);
+    });
+
+    if (lblTotalAFab) {
+      lblTotalAFab.textContent = formateaPesos(totalCostToFab);
+    }
+
+    // costo unitario estimado (fábrica + costanera) / empElab
+    if (empElab > 0 && lblEstimado) {
+      const cuEst = (totalGastosFabrica + totalCostToFab) / empElab;
+      lblEstimado.textContent = formateaPesos(cuEst) + " por unidad";
+    } else if (lblEstimado) {
+      lblEstimado.textContent = "—";
+    }
+  }
+
+  // CORRECCION: Asociar eventos para cálculo en tiempo real
+  const inputElab = document.getElementById("emp-elaboradas");
+  if (inputElab) {
+    inputElab.addEventListener("input", recalcularCostosFabrica);
+  }
+  document.querySelectorAll(".input-porcentaje-costanera").forEach(inp => {
+    inp.addEventListener("input", recalcularCostosFabrica);
+  });
+  // Ejecutar al inicio por si ya hay valores
+  recalcularCostosFabrica();
+
+
+  // =========================
+  // Cuentas MANUAL_SUCURSAL
+  // =========================
+  let cuentaGlobalActual = null;
+  const modalCuentaEl = document.getElementById("modalProrrateoCuenta");
+  const modalCuenta = new bootstrap.Modal(modalCuentaEl);
+  const tbodyCuenta = document.getElementById("tbody-prorrateo-cuenta");
+
+  function recalcularTotalCuenta() {
+    if (!tbodyCuenta) return;
+    let total = 0;
+    tbodyCuenta.querySelectorAll(".input-porcentaje-cuenta").forEach(inp => {
+      const v = parseFloat((inp.value || "0").replace(",", ".")) || 0;
+      total += v;
+    });
+    const totalEl = document.getElementById("total-porcentaje-cuenta");
+    if (totalEl) totalEl.innerText = total.toFixed(2);
+  }
+
+  if (tbodyCuenta) {
+    tbodyCuenta.querySelectorAll(".input-porcentaje-cuenta").forEach(inp => {
+      inp.addEventListener("input", recalcularTotalCuenta);
+    });
+  }
+
+  document.querySelectorAll(".btn-configurar-cuenta").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (!tbodyCuenta) return;
+      cuentaGlobalActual = btn.dataset.cuenta;
+      document.getElementById("texto-cuenta-global").innerText =
+        `Cuenta: ${cuentaGlobalActual} – Periodo: ${periodoActual}`;
+
+      const regla = reglasCuentas[cuentaGlobalActual] || {};
+      tbodyCuenta.querySelectorAll(".input-porcentaje-cuenta").forEach(inp => {
+        const centro = inp.dataset.centro;
+        const valor = regla[centro] != null ? regla[centro] * 100 : 0;
+        inp.value = valor.toFixed(2);
+      });
+      recalcularTotalCuenta();
+      modalCuenta.show();
+    });
+  });
+
+  const btnGuardarCuenta = document.getElementById("btn-guardar-prorrateo-cuenta");
+  if (btnGuardarCuenta) {
+    btnGuardarCuenta.addEventListener("click", async () => {
+      if (!cuentaGlobalActual || !tbodyCuenta) return;
+
+      const distribucion = {};
+      tbodyCuenta.querySelectorAll(".input-porcentaje-cuenta").forEach(inp => {
+        const centro = inp.dataset.centro;
+        const v = parseFloat((inp.value || "0").replace(",", ".")) || 0;
+        distribucion[centro] = v / 100.0;
+      });
+
+      const totalPct = Object.values(distribucion).reduce((a, b) => a + b, 0);
+      if (Math.abs(totalPct - 1) > 0.001) {
+        alert("La suma de los porcentajes debe ser exactamente 100%");
+        return;
+      }
+
+      const resp = await fetch("{{ url_for('contab.api_guardar_prorrateo_cuenta_manual') }}", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          periodo: periodoActual,
+          cuenta: cuentaGlobalActual,
+          distribucion: distribucion
+        })
+      });
+
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        alert(data.error || "No se pudo guardar el prorrateo");
+        return;
+      }
+
+      window.location.reload();
+    });
+  }
+
+  // =========================
+  // Ventas del periodo
+  // =========================
+  const btnVerVentas = document.getElementById("btn-ver-ventas");
+  if (btnVerVentas) {
+    const modalVentasEl = document.getElementById("modalVentasPeriodo");
+    const modalVentas = new bootstrap.Modal(modalVentasEl);
+
+    btnVerVentas.addEventListener("click", () => {
+      const tbody = document.getElementById("tbody-ventas-periodo");
+      if (!tbody) return;
+      tbody.innerHTML = "";
+
+      const total = ventasTotales || 0;
+      const entries = Object.entries(ventasPorCC || {});
+      entries.sort((a, b) => b[1] - a[1]);
+
+      entries.forEach(([cc, monto]) => {
+        const pct = total !== 0 ? (monto / total) * 100 : 0;
+        const tr = document.createElement("tr");
+
+        const tdCC = document.createElement("td");
+        tdCC.className = "text-start";
+        tdCC.textContent = cc;
+
+        const tdMonto = document.createElement("td");
+        tdMonto.textContent = Math.round(monto).toLocaleString("es-CL");
+
+        const tdPct = document.createElement("td");
+        tdPct.textContent = pct.toFixed(2) + " %";
+
+        tr.appendChild(tdCC);
+        tr.appendChild(tdMonto);
+        tr.appendChild(tdPct);
+        tbody.appendChild(tr);
+      });
+
+      modalVentas.show();
+    });
+  }
+
+  // =========================
+  // Vista previa de distribución por cuenta
+  // =========================
+  const modalPreviewEl = document.getElementById("modalPreviewCuenta");
+  const modalPreview = new bootstrap.Modal(modalPreviewEl);
+
+  document.querySelectorAll(".nombre-cuenta-preview").forEach(td => {
+    td.addEventListener("click", () => {
+      const cuenta = td.dataset.cuenta;
+      const tipo = td.dataset.tipo;
+      const monto = parseFloat(td.dataset.monto || "0") || 0;
+
+      const tbody = document.getElementById("tbody-preview-cuenta");
+      if (!tbody) return;
+      tbody.innerHTML = "";
+
+      document.getElementById("texto-preview-cuenta").innerText =
+        `Cuenta: ${cuenta} – Periodo: ${periodoActual} – Monto: ${monto.toLocaleString("es-CL")}`;
+
+      let dist = {};
+
+      if (tipo === "VENTAS_SUCURSAL") {
+        const total = ventasTotales || 0;
+        if (total === 0) {
+          tbody.innerHTML = "<tr><td colspan='3' class='text-center'>No hay ventas para este periodo.</td></tr>";
+          modalPreview.show();
+          return;
+        }
+        for (const [cc, v] of Object.entries(ventasPorCC || {})) {
+          dist[cc] = v / total;
+        }
+      } else if (tipo === "MANUAL_SUCURSAL") {
+        const regla = reglasCuentas[cuenta] || {};
+        if (Object.keys(regla).length === 0) {
+          tbody.innerHTML = "<tr><td colspan='3' class='text-center'>No hay prorrateo definido para esta cuenta.</td></tr>";
+          modalPreview.show();
+          return;
+        }
+        dist = regla;
+      } else {
+        tbody.innerHTML = "<tr><td colspan='3' class='text-center'>Esta cuenta no tiene prorrateo configurable.</td></tr>";
+        modalPreview.show();
+        return;
+      }
+
+      const entries = Object.entries(dist);
+      entries.sort((a, b) => b[1] - a[1]);
+
+      entries.forEach(([cc, prop]) => {
+        const pct = prop * 100;
+        const montoCC = monto * prop;
+
+        const tr = document.createElement("tr");
+
+        const tdCC = document.createElement("td");
+        tdCC.className = "text-start";
+        tdCC.textContent = cc;
+
+        const tdPct = document.createElement("td");
+        tdPct.textContent = pct.toFixed(2) + " %";
+
+        const tdMonto = document.createElement("td");
+        tdMonto.textContent = Math.round(montoCC).toLocaleString("es-CL");
+
+        tr.appendChild(tdCC);
+        tr.appendChild(tdPct);
+        tr.appendChild(tdMonto);
+        tbody.appendChild(tr);
+      });
+
+      modalPreview.show();
+    });
+  });
+    // =========================
+  // Estimación Costanera -> Fábrica
+  // =========================
+  const btnGuardarCostanera = document.getElementById("btn-guardar-costanera-estimacion");
+  if (btnGuardarCostanera) {
+    btnGuardarCostanera.addEventListener("click", async () => {
+      const tbody = document.getElementById("tbody-costanera-fabrica");
+      if (!tbody) return;
+
+      const reglas = {};
+      tbody.querySelectorAll(".input-porcentaje-costanera").forEach(inp => {
+        const cuenta = inp.dataset.cuenta;
+        const v = parseFloat((inp.value || "0").replace(",", ".")) || 0;
+        // lo mandamos como proporción 0–1
+        reglas[cuenta] = v / 100.0;
+      });
+
+      const resp = await fetch("{{ url_for('contab.api_guardar_prorrateo_fabrica_costanera') }}", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          periodo: periodoActual,
+          reglas: reglas
+        })
+      });
+
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        alert(data.error || "No se pudo guardar la estimación de Costanera");
+        return;
+      }
+
+      // Recalcular totales y costo unitario estimado
+      window.location.reload();
+    });
+  }
+
+});
+</script>
+
+<div class="modal fade" id="modalAgregarCuenta" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title">Agregar Cuenta a Prorrateo</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+            <label class="form-label">Nombre de la Cuenta</label>
+            <input type="text" class="form-control bg-dark text-white border-secondary" id="input-nueva-cuenta" list="lista-cuentas-sugeridas" placeholder="Escribe para buscar...">
+            <datalist id="lista-cuentas-sugeridas">
+                {% for nombre in todas_las_cuentas %}
+                    <option value="{{ nombre }}">
+                {% endfor %}
+            </datalist>
+            <small class="text-muted">Debe coincidir exactamente con el nombre en el Mayor.</small>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Tipo de Distribución</label>
+            <select class="form-select bg-dark text-white border-secondary" id="select-tipo-nueva">
+                <option value="MANUAL_SUCURSAL">Manual (% fijo por sucursal)</option>
+                <option value="VENTAS_SUCURSAL">Automático (Según ventas del mes)</option>
+            </select>
+        </div>
+      </div>
+      <div class="modal-footer border-secondary">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-success" onclick="guardarNuevaCuenta()">Agregar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+    // Función unificada para Agregar o Eliminar
+    async function gestionarCuenta(nombre, tipo, accion) {
+        if (accion === 'eliminar' && !confirm('¿Estás seguro de quitar la cuenta "' + nombre + '" del listado de prorrateos? (No borra datos contables, solo la configuración)')) {
+            return;
+        }
+
+        try {
+            const resp = await fetch("{{ url_for('contab.api_config_cuenta_global') }}", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    nombre: nombre,
+                    tipo: tipo,
+                    accion: accion
+                })
+            });
+            const data = await resp.json();
+            
+            if (data.ok) {
+                window.location.reload();
+            } else {
+                alert("Error: " + (data.error || "Desconocido"));
+            }
+        } catch (e) {
+            alert("Error de conexión");
+        }
+    }
+
+    function guardarNuevaCuenta() {
+        const nombre = document.getElementById('input-nueva-cuenta').value;
+        const tipo = document.getElementById('select-tipo-nueva').value;
+        
+        if (!nombre.trim()) {
+            alert("Debes escribir un nombre de cuenta.");
+            return;
+        }
+        gestionarCuenta(nombre, tipo, 'agregar');
+    }
+</script>
+
+{% endblock %}

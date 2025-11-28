@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}Informe de Gestión{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h2 class="text-white m-0">Estado de Resultados de Gestión</h2>
+    
+    <form method="GET" class="d-flex align-items-center gap-3 bg-dark p-2 rounded border border-secondary">
+        <div class="d-flex align-items-center gap-2">
+            <label class="text-white small m-0">Periodo:</label>
+            <input type="month" name="periodo" class="form-control form-control-sm bg-secondary text-white border-0" 
+                   value="{{ periodo }}" onchange="this.form.submit()">
+        </div>
+
+        <div class="vr bg-secondary mx-1"></div>
+
+        <div class="form-check form-switch m-0">
+            <input class="form-check-input" type="checkbox" role="switch" id="switchSG" name="distribuir_sg" 
+                   {% if switch_sg %}checked{% endif %} onchange="this.form.submit()">
+            <label class="form-check-label text-white small" for="switchSG">Distribuir Serv. Grales</label>
+        </div>
+
+        <div class="form-check form-switch m-0">
+            <input class="form-check-input" type="checkbox" role="switch" id="switchFab" name="ajuste_fabrica" 
+                   {% if switch_fab %}checked{% endif %} onchange="this.form.submit()">
+            <label class="form-check-label text-white small" for="switchFab">Ajuste Fábrica</label>
+        </div>
+        
+        <button type="submit" class="d-none"></button>
+    </form>
+</div>
+
+<ul class="nav nav-tabs mb-3 border-secondary">
+    
+    <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('contab.dashboard_gestion') }}" style="color: #bbb; border: 1px solid transparent;">
+            Dashboard
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link active fw-bold" href="#" 
+        style="background-color: #d80000; color: white; border-color: #d80000 #d80000 #000 #d80000;">
+        Vista Mensual
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('contab.comparativo_gestion') }}" 
+        style="color: #bbb; border: 1px solid transparent;">
+        Comparativo
+        </a>
+    </li>
+
+</ul>
+
+<div class="table-responsive shadow-sm" style="max-height: 75vh; overflow-y: auto;">
+    <table class="table table-dark table-bordered table-hover align-middle table-sm" style="table-layout: fixed; width: 100%;">
+        <thead class="sticky-top bg-black" style="z-index: 10;">
+            <tr class="text-center small text-uppercase">
+                <th class="bg-black text-start" style="width: 300px; min-width: 300px;">Concepto</th>
+                {% for cc in columnas_cc %}
+                    <th class="bg-black" style="min-width: 100px;">{{ cc }}</th>
+                {% endfor %}
+                <th class="bg-danger text-white border-start border-secondary" style="min-width: 110px;">TOTAL</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for seccion in reporte %}
+                
+                {% if seccion.tipo == 'macro' %}
+                    <tr class="border-bottom border-secondary">
+                        <td class="text-start fw-bold text-uppercase ps-3 text-light" style="background-color: #222;">
+                            {{ seccion.titulo }}
+                        </td>
+                        {% set total_sec_empresa = seccion.totales_cc.values() | sum %}
+                        {% for cc in columnas_cc %}
+                            <td class="text-end fw-bold text-light" style="background-color: #222;">
+                                {{ "{:,.0f}".format(seccion.totales_cc[cc]).replace(",", ".") }}
+                            </td>
+                        {% endfor %}
+                        <td class="text-end fw-bold text-light border-start border-secondary" style="background-color: #222;">
+                            {{ "{:,.0f}".format(total_sec_empresa).replace(",", ".") }}
+                        </td>
+                    </tr>
+
+                    {% for fila in seccion.grupos %}
+                        {% set row_id = "fila_" ~ loop.index ~ "_" ~ seccion.titulo|replace(" ", "")|replace("/", "")|lower %}
+                        {% set total_fila = fila.totales_cc.values() | sum %}
+                        
+                        <tr class="grupo-row" style="cursor: pointer;" onclick="toggleFila('{{ row_id }}')">
+                            <td class="text-start ps-4 text-nowrap" style="overflow: hidden; text-overflow: ellipsis;">
+                                <span class="text-muted small me-1">▶</span>
+                                {{ fila.nombre }}
+                            </td>
+                            {% for cc in columnas_cc %}
+                                {% set valor = fila.totales_cc.get(cc, 0) %}
+                                <td class="text-end text-light {% if valor == 0 %}text-muted{% endif %}">
+                                    {% if valor != 0 %}
+                                        {{ "{:,.0f}".format(valor).replace(",", ".") }}
+                                    {% else %}-{% endif %}
+                                </td>
+                            {% endfor %}
+                            <td class="text-end fw-bold bg-dark border-start border-secondary">
+                                {{ "{:,.0f}".format(total_fila).replace(",", ".") }}
+                            </td>
+                        </tr>
+
+                        <tr id="{{ row_id }}" class="d-none">
+                            <td colspan="{{ columnas_cc|length + 2 }}" class="p-0 border-0">
+                                <table class="table table-sm table-dark table-hover mb-0" style="table-layout: fixed; width: 100%; background-color: #2c2c2c;">
+                                    <tbody>
+                                        {% for cta in fila.detalle_cuentas %}
+                                            {% set total_cta = cta.montos_cc.values() | sum %}
+                                            <tr>
+                                                <td class="text-start ps-5 text-white" style="width: 300px; min-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                                    <span class="font-monospace text-info me-2 small">{{ cta.codigo }}</span>
+                                                    <span>{{ cta.nombre }}</span>
+                                                </td>
+                                                {% for cc in columnas_cc %}
+                                                    {% set val_cta = cta.montos_cc.get(cc, 0) %}
+                                                    <td class="text-end text-white" style="min-width: 100px;">
+                                                        {% if val_cta != 0 %}{{ "{:,.0f}".format(val_cta).replace(",", ".") }}{% else %}<span class="text-muted small">.</span>{% endif %}
+                                                    </td>
+                                                {% endfor %}
+                                                <td class="text-end fw-bold text-white border-start border-secondary">
+                                                    {{ "{:,.0f}".format(total_cta).replace(",", ".") }}
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </td>
+                        </tr>
+                    {% endfor %}
+
+                {% elif seccion.tipo == 'calculo' %}
+                    <tr class="border-top border-bottom border-white">
+                        <td class="text-start fw-bold text-uppercase ps-3 bg-{{ seccion.color }} text-dark">
+                            {{ seccion.titulo }}
+                        </td>
+                        {% set total_res_empresa = seccion.totales_cc.values() | sum %}
+                        {% for cc in columnas_cc %}
+                            <td class="text-end fw-bold bg-{{ seccion.color }} text-dark">
+                                {{ "{:,.0f}".format(seccion.totales_cc[cc]).replace(",", ".") }}
+                            </td>
+                        {% endfor %}
+                        <td class="text-end fw-bold bg-{{ seccion.color }} text-dark border-start border-dark">
+                            {{ "{:,.0f}".format(total_res_empresa).replace(",", ".") }}
+                        </td>
+                    </tr>
+                    <tr><td colspan="{{ columnas_cc|length + 2 }}" class="bg-black border-0" style="height: 15px;"></td></tr>
+
+                {% endif %}
+
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+    // Al cargar la página, restauramos lo que estaba abierto
+    document.addEventListener("DOMContentLoaded", function() {
+        restoreState();
+    });
+
+    function toggleFila(id) {
+        const filaDetalle = document.getElementById(id);
+        if (filaDetalle) {
+            const isHidden = filaDetalle.classList.contains('d-none');
+            
+            if (isHidden) {
+                // Si estaba oculto, lo mostramos y guardamos el estado
+                filaDetalle.classList.remove('d-none');
+                saveState(id, true);
+            } else {
+                // Si estaba visible, lo ocultamos y borramos el estado
+                filaDetalle.classList.add('d-none');
+                saveState(id, false);
+            }
+        }
+    }
+
+    // Guardar en la memoria del navegador
+    function saveState(id, isOpen) {
+        // Obtenemos lo que ya hay guardado o creamos un objeto vacío
+        let state = JSON.parse(localStorage.getItem('reporte_estado_filas') || '{}');
+        
+        if (isOpen) {
+            state[id] = true; // Marcamos este ID como abierto
+        } else {
+            delete state[id]; // Lo quitamos de la lista
+        }
+        
+        // Guardamos de vuelta
+        localStorage.setItem('reporte_estado_filas', JSON.stringify(state));
+    }
+
+    // Leer la memoria y abrir las filas correspondientes
+    function restoreState() {
+        const state = JSON.parse(localStorage.getItem('reporte_estado_filas') || '{}');
+        
+        // Recorremos todos los IDs guardados
+        for (const id in state) {
+            const fila = document.getElementById(id);
+            // Si la fila existe en esta carga de página, le quitamos el d-none
+            if (fila) {
+                fila.classList.remove('d-none');
+            }
+        }
+    }
+</script>
+
+{% endblock %}

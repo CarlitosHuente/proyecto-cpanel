@@ -99,3 +99,26 @@ thead th {
   }
 
     
+/* Alertas adaptadas al tema oscuro */
+.alert-warning {
+    background-color: #5a3d00 !important;   /* café/amarillo oscuro */
+    color: #ffffff !important;             /* texto blanco */
+    border-color: #ffc107 !important;      /* borde amarillo tipo warning */
+}
+
+.alert-warning a,
+.alert-warning a:hover,
+.alert-warning a:focus {
+    color: #fff !important;
+    text-decoration: underline;
+}
+
+/* inputs de porcentaje en tabla oscura */
+.input-porcentaje-costanera {
+    max-width: 100px;
+}
+
+/* asegurar texto claro en cards grises */
+.card.bg-secondary {
+    color: #fff;
+}

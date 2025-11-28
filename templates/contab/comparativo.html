@@ -54,20 +54,22 @@
   </a>
 </form>
 
-
-
 <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;">
-  <table class="table table-dark table-bordered table-hover text-end align-middle">
+  <!-- table-layout:auto para que no fuerce todas las columnas iguales -->
+  <table class="table table-dark table-bordered table-hover text-end align-middle" style="table-layout:auto;">
     <thead>
       <tr>
         {% for col in columnas %}
           {% if col == "NOMBRE" %}
-              <th class="text-start col-nombre-cuenta" style="min-width:350px; max-width:350px; white-space:nowrap;">{{ col }}</th>  <!-- CAMBIO -->
+            <!-- Ancho fijo y sin cortar texto EN PRODUCCIÓN -->
+            <th class="text-start col-nombre-cuenta"
+                style="min-width:350px; max-width:350px; white-space:nowrap;">
+              {{ col }}
+            </th>
           {% else %}
-              <th>{{ col }}</th>
+            <th>{{ col }}</th>
           {% endif %}
         {% endfor %}
-
       </tr>
     </thead>
     <tbody>
@@ -76,7 +78,8 @@
         <tr class="cuenta-principal" data-nombre="{{ fila['NOMBRE'] }}">
           {% for col in columnas %}
             {% if col == "NOMBRE" %}
-              <td class="text-start col-nombre-cuenta">
+              <td class="text-start col-nombre-cuenta"
+                  style="min-width:350px; max-width:350px; white-space:nowrap;">
                 <strong>
                   <a href="#"
                      class="toggle-detalle text-decoration-none text-white"
@@ -113,12 +116,12 @@
         </tr>
 
         <!-- Fila de detalle por centro de costo (colapsable) -->
-        <tr class="detalle-row d-none" id="detalle-{{ fila['NOMBRE'] }}">
+        <tr class="detalle-row d-none" id="detalle-{{ fila['NOMBRE'] | replace(' ', '_') }}">
           <td colspan="{{ columnas|length }}">
-            <table class="table table-sm table-bordered text-end mb-0">
+            <table class="table table-sm table-bordered text-end mb-0" style="table-layout:auto;">
               <thead>
                 <tr>
-                  <th>Centro Costo</th>
+                  <th class="text-start">Centro Costo</th>
                   {% for mes in columnas[1:] %}
                     <th>{{ mes }}</th>
                   {% endfor %}
@@ -200,7 +203,8 @@ document.addEventListener("DOMContentLoaded", function () {
     el.addEventListener("click", function(e) {
       e.preventDefault();
       const nombre = this.dataset.nombre;
-      const filaDetalle = document.getElementById("detalle-" + nombre);
+      const idDetalle = "detalle-" + nombre.replace(/ /g, "_");
+      const filaDetalle = document.getElementById(idDetalle);
       if (filaDetalle) {
         filaDetalle.classList.toggle("d-none");
       }

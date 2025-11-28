@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}Dashboard Gerencial{% endblock %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<div class="mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="text-white m-0 display-6 fw-bold">Dashboard Gerencial</h2>
+        
+        <form action="{{ url_for('contab.dashboard_gestion') }}" method="get" class="d-flex align-items-center">
+            <input type="hidden" name="dash_cc" value="{{ dash_cc }}">
+            <div class="input-group">
+                <span class="input-group-text bg-danger text-white border-danger fw-bold">Periodo</span>
+                <input type="month" name="periodo" value="{{ ultimo_mes }}" 
+                       class="form-control bg-dark text-white border-danger fw-bold" 
+                       onchange="this.form.submit()">
+            </div>
+        </form>
+    </div>
+
+    <div class="d-flex gap-2 overflow-auto py-3 border-bottom border-secondary" style="white-space: nowrap;">
+        <a href="{{ url_for('contab.dashboard_gestion', dash_cc='Total Empresa', periodo=ultimo_mes) }}" 
+           class="btn {% if dash_cc == 'Total Empresa' %}btn-danger fw-bold{% else %}btn-outline-light{% endif %} rounded-pill px-4">
+           Total Empresa
+        </a>
+        {% for cc in todos_cc %}
+            <a href="{{ url_for('contab.dashboard_gestion', dash_cc=cc, periodo=ultimo_mes) }}" 
+               class="btn btn-sm {% if dash_cc == cc %}btn-danger fw-bold{% else %}btn-outline-secondary text-white{% endif %} rounded-pill px-3">
+               {{ cc }}
+            </a>
+        {% endfor %}
+    </div>
+</div>
+
+<ul class="nav nav-tabs mb-4 border-secondary">
+    <li class="nav-item">
+        <a class="nav-link active fw-bold" href="#" 
+        style="background-color: #d80000; color: white; border-color: #d80000 #d80000 #000 #d80000;">
+        Dashboard
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('contab.informe_gerencial') }}" style="color: #bbb; border: 1px solid transparent;">Vista Mensual</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('contab.comparativo_gestion') }}" style="color: #bbb; border: 1px solid transparent;">Comparativo</a>
+    </li>
+
+</ul>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card bg-dark text-white border-secondary h-100 shadow">
+            <div class="card-body">
+                <h5 class="text-white text-uppercase small opacity-75 mb-2">Ventas Mes</h5>
+                <h2 class="fw-bold mb-1 text-white">{{ "{:,.0f}".format(kpis.venta).replace(",", ".") }}</h2>
+                <div class="d-flex justify-content-between align-items-center mt-2">
+                    <small class="{% if kpis.var_venta >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
+                        {% if kpis.var_venta >= 0 %}▲{% else %}▼{% endif %} 
+                        {{ "{:.1f}%".format(kpis.var_venta) }} vs año ant.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-dark text-white border-secondary h-100 shadow">
+            <div class="card-body">
+                <h5 class="text-white text-uppercase small opacity-75 mb-2">Margen Operacional</h5>
+                <h2 class="fw-bold mb-1 text-warning">{{ "{:.1f}%".format(kpis.margen) }}</h2>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card bg-dark text-white border-secondary h-100 shadow">
+            <div class="card-body">
+                <h5 class="text-white text-uppercase small opacity-75 mb-2">Resultado Final</h5>
+                <h2 class="fw-bold mb-1 {% if kpis.resultado >= 0 %}text-success{% else %}text-danger{% endif %}">
+                    {{ "{:,.0f}".format(kpis.resultado).replace(",", ".") }}
+                </h2>
+                <small class="text-white opacity-75">
+                    Var: <span class="{% if kpis.var_resultado >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold">{{ "{:.1f}%".format(kpis.var_resultado) }}</span>
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card bg-dark text-white border-secondary h-100 shadow">
+            <div class="card-body">
+                <h5 class="text-white text-uppercase small opacity-75 mb-2">Total Gastos</h5>
+                <h3 class="fw-bold mb-0 text-danger">{{ "{:,.0f}".format(kpis.costo_total | abs).replace(",", ".") }}</h3>
+                <small class="text-white opacity-50">Acumulado mes</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card bg-dark text-white border-secondary h-100 shadow">
+            <div class="card-header border-secondary bg-black d-flex justify-content-between align-items-center">
+                <h5 class="card-title m-0 text-white">Tendencia de Ventas</h5>
+                <span class="badge bg-secondary border border-light text-white">
+                    {{ anio_actual }} vs {{ anio_anterior }}
+                </span>
+            </div>
+            <div class="card-body">
+                <canvas id="chartSeason" style="height: 350px;"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card bg-dark text-white border-secondary h-100 shadow">
+            <div class="card-header border-secondary bg-black">
+                <h5 class="card-title m-0 text-white">Top 5 Gastos ({{ ultimo_mes }})</h5>
+            </div>
+            <div class="card-body position-relative d-flex justify-content-center align-items-center">
+                <canvas id="chartMix" style="height: 300px; width: 100%;"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    Chart.defaults.color = '#ffffff';
+    Chart.defaults.borderColor = '#444';
+
+    const ctxSeason = document.getElementById('chartSeason').getContext('2d');
+    new Chart(ctxSeason, {
+        type: 'line',
+        data: {
+            labels: {{ charts.season_labels | tojson }},
+            datasets: [
+                {
+                    label: 'Ventas {{ anio_actual }}',
+                    data: {{ charts.season_actual | tojson }},
+                    borderColor: '#d80000',
+                    backgroundColor: 'rgba(216, 0, 0, 0.2)',
+                    borderWidth: 4,
+                    pointBackgroundColor: '#fff',
+                    pointRadius: 4,
+                    tension: 0.3,
+                    fill: true
+                },
+                {
+                    label: 'Ventas {{ anio_anterior }}',
+                    data: {{ charts.season_prev | tojson }},
+                    borderColor: '#aaaaaa',
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    pointRadius: 0,
+                    tension: 0.3,
+                    fill: false
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { position: 'top', labels: { color: 'white', font: { size: 14 } } },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                    titleColor: 'white',
+                    bodyColor: 'white',
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) { label += ': '; }
+                            if (context.parsed.y !== null) {
+                                label += new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(context.parsed.y);
+                            }
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: { beginAtZero: true, grid: { color: '#333' }, ticks: { color: '#ccc' } },
+                x: { grid: { display: false }, ticks: { color: 'white' } }
+            }
+        }
+    });
+
+    const ctxMix = document.getElementById('chartMix').getContext('2d');
+    new Chart(ctxMix, {
+        type: 'doughnut',
+        data: {
+            labels: {{ charts.mix_labels | tojson }},
+            datasets: [{
+                data: {{ charts.mix_data | tojson }},
+                backgroundColor: ['#d80000', '#ffc107', '#0dcaf0', '#198754', '#6c757d'],
+                borderColor: '#222',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom', labels: { color: 'white', padding: 20 } }
+            }
+        }
+    });
+</script>
+
+{% endblock %}

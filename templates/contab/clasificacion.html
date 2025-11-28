@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}Clasificación de Cuentas{% endblock %}
+
+{% block content %}
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="text-white">Maestro de Clasificación de Cuentas</h2>
+    <button class="btn btn-primary" onclick="guardarCambios()">
+        💾 Guardar Clasificación
+    </button>
+</div>
+
+<div class="row h-100">
+    <div class="col-md-4">
+        <div class="card bg-dark text-white border-secondary h-100">
+            <div class="card-header border-secondary">
+                <h5 class="card-title mb-0">Cuentas Sin Clasificar</h5>
+                <input type="text" id="buscador" class="form-control form-control-sm mt-2 bg-dark text-white border-secondary" placeholder="Buscar cuenta...">
+            </div>
+            <div class="card-body p-2" style="overflow-y: auto; max-height: 75vh;">
+                <p class="small text-muted mb-2">Arrastra las cuentas hacia la derecha &rarr;</p>
+                <div id="lista-pendientes" class="list-group list-group-flush gap-1">
+                    {% for c in cuentas_pendientes %}
+                    <div class="list-group-item bg-secondary text-white border-0 rounded p-2 d-flex justify-content-between align-items-center item-cuenta" 
+                         data-id="{{ c.CUENTA }}" data-nombre="{{ c.NOMBRE }}">
+                        <div>
+                            <strong>{{ c.CUENTA }}</strong><br>
+                            <small>{{ c.NOMBRE }}</small>
+                        </div>
+                        <span class="text-white-50">::</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="text-white m-0">Grupos de Gestión</h5>
+            <button class="btn btn-sm btn-success" onclick="crearNuevoGrupo()">
+                + Nuevo Grupo
+            </button>
+        </div>
+
+        <div id="contenedor-grupos" class="row" style="overflow-y: auto; max-height: 75vh;">
+            
+            {% for g in grupos %}
+            <div class="col-md-6 mb-3 grupo-wrapper">
+                <div class="card bg-dark text-white border-secondary h-100">
+                    <div class="card-header border-secondary d-flex flex-column gap-2">
+                        <div class="d-flex justify-content-between">
+                            <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary fw-bold input-nombre-grupo" 
+                                   value="{{ g.nombre }}" placeholder="Nombre del Grupo">
+                            <button class="btn btn-sm btn-outline-danger ms-2" onclick="eliminarGrupo(this)">✕</button>
+                        </div>
+                        
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-secondary text-white border-secondary">Macro:</span>
+                            <select class="form-select bg-dark text-white border-secondary input-macro-grupo">
+                                <option value="Ingresos Operacionales" {% if g.macro_categoria == 'Ingresos Operacionales' %}selected{% endif %}>Ingresos Operacionales</option>
+                                <option value="Costos de Explotación" {% if g.macro_categoria == 'Costos de Explotación' %}selected{% endif %}>Costos de Explotación</option>
+                                <option value="Gastos de Administración y Ventas" {% if g.macro_categoria == 'Gastos de Administración y Ventas' %}selected{% endif %}>Gastos de Adm. y Ventas</option>
+                                <option value="Ingresos No Operacionales" {% if g.macro_categoria == 'Ingresos No Operacionales' %}selected{% endif %}>Ingresos No Operacionales</option>
+                                <option value="Otros" {% if g.macro_categoria == 'Otros' %}selected{% endif %}>Otros / Sin Clasificar</option>
+                            </select>
+                        </div>
+
+                        <select class="form-select form-select-sm bg-dark text-white border-secondary input-tipo-grupo">
+                            <option value="GASTO" {% if g.tipo == 'GASTO' %}selected{% endif %}>🔴 Gastos (Resta)</option>
+                            <option value="INGRESO" {% if g.tipo == 'INGRESO' %}selected{% endif %}>🟢 Ingresos (Suma)</option>
+                        </select>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="lista-grupo list-group gap-1" style="min-height: 100px; background-color: #222; border-radius: 5px;">
+                            {% for cta in g.cuentas %}
+                                <div class="list-group-item bg-secondary text-white border-0 rounded p-2 d-flex justify-content-between align-items-center item-cuenta" 
+                                     data-id="{{ cta.id }}" data-nombre="{{ cta.nombre }}">
+                                    <div class="text-truncate" style="max-width: 90%;">
+                                        <small class="fw-bold text-info">{{ cta.id }}</small>
+                                        <span class="small">{{ cta.nombre }}</span>
+                                    </div>
+                                    <span class="text-white-50">::</span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+
+        </div>
+    </div>
+</div>
+
+<script>
+    // Referencias
+    const listaPendientes = document.getElementById('lista-pendientes');
+    const contenedorGrupos = document.getElementById('contenedor-grupos');
+
+    // Inicializar Sortable
+    new Sortable(listaPendientes, { group: 'cuentas', animation: 150, sort: false });
+
+    function initSortableGrupo(elementoLista) {
+        new Sortable(elementoLista, { group: 'cuentas', animation: 150 });
+    }
+
+    document.querySelectorAll('.lista-grupo').forEach(el => initSortableGrupo(el));
+
+    // Crear Nuevo Grupo
+    function crearNuevoGrupo() {
+        const div = document.createElement('div');
+        div.className = 'col-md-6 mb-3 grupo-wrapper';
+        div.innerHTML = `
+            <div class="card bg-dark text-white border-secondary h-100">
+                <div class="card-header border-secondary d-flex flex-column gap-2">
+                    <div class="d-flex justify-content-between">
+                        <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary fw-bold input-nombre-grupo" 
+                               value="Nuevo Grupo" placeholder="Nombre (ej. Arriendos)">
+                        <button class="btn btn-sm btn-outline-danger ms-2" onclick="eliminarGrupo(this)">✕</button>
+                    </div>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-secondary text-white border-secondary">Macro:</span>
+                        <input type="text" class="form-control bg-dark text-white border-secondary input-macro-grupo" 
+                               list="macros-datalist" value="Costos de Explotación">
+                    </div>
+                    <select class="form-select form-select-sm bg-dark text-white border-secondary input-tipo-grupo">
+                        <option value="GASTO" selected>🔴 Gastos (Resta)</option>
+                        <option value="INGRESO">🟢 Ingresos (Suma)</option>
+                    </select>
+                </div>
+                <div class="card-body p-2">
+                    <div class="lista-grupo list-group gap-1" style="min-height: 100px; background-color: #222; border-radius: 5px;"></div>
+                </div>
+            </div>
+        `;
+        contenedorGrupos.appendChild(div);
+        initSortableGrupo(div.querySelector('.lista-grupo'));
+    }
+
+    // Crear Nuevo Grupo
+    function crearNuevoGrupo() {
+        const div = document.createElement('div');
+        div.className = 'col-md-6 mb-3 grupo-wrapper';
+        div.innerHTML = `
+            <div class="card bg-dark text-white border-secondary h-100">
+                <div class="card-header border-secondary d-flex flex-column gap-2">
+                    <div class="d-flex justify-content-between">
+                        <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary fw-bold input-nombre-grupo" 
+                               value="Nuevo Grupo" placeholder="Nombre (ej. Arriendos)">
+                        <button class="btn btn-sm btn-outline-danger ms-2" onclick="eliminarGrupo(this)">✕</button>
+                    </div>
+                    
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-secondary text-white border-secondary">Macro:</span>
+                        <select class="form-select bg-dark text-white border-secondary input-macro-grupo">
+                            <option value="Ingresos Operacionales">Ingresos Operacionales</option>
+                            <option value="Costos de Explotación" selected>Costos de Explotación</option>
+                            <option value="Gastos de Administración y Ventas">Gastos de Adm. y Ventas</option>
+                            <option value="Ingresos No Operacionales">Ingresos No Operacionales</option>
+                            <option value="Otros">Otros / Sin Clasificar</option>
+                        </select>
+                    </div>
+
+                    <select class="form-select form-select-sm bg-dark text-white border-secondary input-tipo-grupo">
+                        <option value="GASTO" selected>🔴 Gastos (Resta)</option>
+                        <option value="INGRESO">🟢 Ingresos (Suma)</option>
+                    </select>
+                </div>
+                <div class="card-body p-2">
+                    <div class="lista-grupo list-group gap-1" style="min-height: 100px; background-color: #222; border-radius: 5px;"></div>
+                </div>
+            </div>
+        `;
+        contenedorGrupos.appendChild(div);
+        initSortableGrupo(div.querySelector('.lista-grupo'));
+    }
+
+    function eliminarGrupo(btn) {
+        if(!confirm('¿Eliminar grupo y devolver cuentas?')) return;
+        const card = btn.closest('.card');
+        const lista = card.querySelector('.lista-grupo');
+        while (lista.children.length > 0) {
+            listaPendientes.appendChild(lista.children[0]);
+        }
+        btn.closest('.grupo-wrapper').remove();
+    }
+
+    document.getElementById('buscador').addEventListener('keyup', function(e) {
+        const texto = e.target.value.toLowerCase();
+        document.querySelectorAll('#lista-pendientes .item-cuenta').forEach(item => {
+            const contenido = item.innerText.toLowerCase();
+            item.style.display = contenido.includes(texto) ? 'flex' : 'none';
+        });
+    });
+
+    async function guardarCambios() {
+        const gruposData = [];
+        document.querySelectorAll('.grupo-wrapper').forEach(wrapper => {
+            const nombre = wrapper.querySelector('.input-nombre-grupo').value;
+            const macro = wrapper.querySelector('.input-macro-grupo').value; // Capturamos el nuevo campo
+            const tipo = wrapper.querySelector('.input-tipo-grupo').value;
+            const cuentas = [];
+            
+            wrapper.querySelectorAll('.lista-grupo .item-cuenta').forEach(item => {
+                cuentas.push(item.dataset.id);
+            });
+
+            if(nombre.trim() !== "") {
+                gruposData.push({
+                    nombre: nombre,
+                    macro_categoria: macro.trim() || "Otros", // Guardamos el Macro
+                    tipo: tipo,
+                    cuentas: cuentas
+                });
+            }
+        });
+
+        try {
+            const resp = await fetch("{{ url_for('contab.api_guardar_clasificacion') }}", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({ grupos: gruposData })
+            });
+            const data = await resp.json();
+            if(data.ok) {
+                alert("✅ Clasificación actualizada.");
+                window.location.reload();
+            } else {
+                alert("Error: " + data.error);
+            }
+        } catch(e) {
+            alert("Error de conexión");
+        }
+    }
+
+</script>
+
+{% endblock %}
