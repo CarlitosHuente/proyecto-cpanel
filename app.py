@@ -16,7 +16,7 @@ from flask import redirect, request
 import os
 
 app = Flask(__name__)
-app.permanent_session_lifetime = timedelta(minutes=10) #Tiempo Maximo de inactividad.
+app.permanent_session_lifetime = timedelta(minutes=45) #Tiempo Maximo de inactividad.
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 UPLOAD_FOLDER_CONTAB = os.path.join(BASE_DIR, "uploads", "contab")
 # Crea la carpeta si no existe

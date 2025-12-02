@@ -819,84 +819,69 @@ def eliminar_mayor():
         flash("No se pudo eliminar el archivo.", "danger")
     return redirect(url_for("contab.archivos"))
 
-# ==============================================================================
-# INFORME GERENCIAL (MOTOR DE CÁLCULO ESTRUCTURADO)
-# ==============================================================================
-
 @contab_bp.route("/informe_gerencial")
 @login_requerido
 def informe_gerencial():
-    # 1. Cargar Datos PRIMERO (para detectar fecha máxima)
+    # 1. Cargar Datos y Periodo
     df = obtener_datos("mayor")
     data_prorrateos = cargar_prorrateos()
     data_clasif = cargar_clasificaciones()
     
-    # Preprocesar fechas para buscar el último mes con datos
     df["FECHA"] = pd.to_datetime(df["FECHA"], errors="coerce")
     
-    # 2. Definir Periodo por defecto (Último mes con datos real)
     periodo = request.args.get("periodo")
     if not periodo:
         if not df.empty:
             max_fecha = df["FECHA"].max()
-            # Validamos que no sea NaT (Not a Time)
-            if pd.notna(max_fecha):
-                periodo = max_fecha.strftime("%Y-%m")
-            else:
-                periodo = datetime.now().strftime("%Y-%m")
+            periodo = max_fecha.strftime("%Y-%m") if pd.notna(max_fecha) else datetime.now().strftime("%Y-%m")
         else:
             periodo = datetime.now().strftime("%Y-%m")
 
-    # Parámetros de Switches
     switch_sg = request.args.get("distribuir_sg") == "on"
     switch_fab = request.args.get("ajuste_fabrica") == "on"
     
-    # Cargar configuraciones (Esto se mantiene igual, solo que ahora 'periodo' ya es el correcto)
     reglas_periodo = data_prorrateos.get("reglas_mensuales", {}).get(periodo, {})
     reglas_cuentas = reglas_periodo.get("cuentas_globales", {})
     reglas_sg = reglas_periodo.get("serv_generales", {})
     config_cuentas = data_prorrateos.get("config_cuentas", {})
-    prorrateo_costanera = data_prorrateos.get("fabrica_empanadas", {}).get("costanera_prorrateos", {}).get(periodo, {})
+    
+    costanera_prorrateos_full = data_prorrateos.get("fabrica_empanadas", {}).get("costanera_prorrateos", {})
+    
+    def get_regla_fabrica(pool, per):
+        if per in pool: return pool[per]
+        ants = [p for p in pool.keys() if p < per]
+        return pool[max(ants)] if ants else {}
+
+    prorrateo_costanera = get_regla_fabrica(costanera_prorrateos_full, periodo)
 
     # 3. Filtrado Base
-    df["FECHA"] = pd.to_datetime(df["FECHA"], errors="coerce")
     year, month = map(int, periodo.split("-"))
     df = df[(df["FECHA"].dt.year == year) & (df["FECHA"].dt.month == month)].copy()
     
-    # CAMBIO CLAVE 1: SIGNO DE GESTIÓN
-    # Contabilidad: Gasto es Positivo (Debe). Gestión: Gasto es Negativo.
-    # Contabilidad: Ingreso es Negativo (Haber). Gestión: Ingreso es Positivo.
-    # Solución: Multiplicar (Debe - Haber) * -1
     df["SALDO_REAL"] = (df["DEBE"] - df["HABER"]) * -1
-
     df["CUENTA"] = df["CUENTA"].astype(str).str.strip()
     df["NOMBRE"] = df["NOMBRE"].astype(str).str.strip()
     df["CENTRO COSTO"] = df["CENTRO COSTO"].astype(str).str.strip()
     
-    mask_res = df["CUENTA"].str.startswith("3") | df["CUENTA"].str.startswith("4")
+    mask_res = df["CUENTA"].str.startswith(('3', '4'))
     df = df[mask_res]
 
-    # 4. Construcción de Matriz
+    # Construir Matriz Base
     matriz = {}
-    todos_cc = set(df["CENTRO COSTO"].unique())
-    todos_cc = sorted(list(todos_cc))
+    todos_cc = sorted(list(set(df["CENTRO COSTO"].unique())))
 
     for _, row in df.iterrows():
         cta = row["CUENTA"]
-        if cta not in matriz: 
-            matriz[cta] = {"nombre": row["NOMBRE"], "montos": {}}
-        # Sumamos
+        if cta not in matriz: matriz[cta] = {"nombre": row["NOMBRE"], "montos": {}}
         cc = row["CENTRO COSTO"]
         matriz[cta]["montos"][cc] = matriz[cta]["montos"].get(cc, 0) + row["SALDO_REAL"]
 
-    # 5. Prorrateos (Ventas Globales)
+    # 4. Prorrateos Cuentas Globales
     ventas_por_cc = {}
     total_ventas = 0
-    # Buscar cuentas 41... (Ingresos)
     for cta, data in matriz.items():
         if cta.startswith("41"):
             for cc, monto in data["montos"].items():
-                # En gestión Ingresos son positivos, usamos el valor directo si es >0
                 if monto > 0:
                     ventas_por_cc[cc] = ventas_por_cc.get(cc, 0) + monto
                     total_ventas += monto
@@ -915,13 +900,12 @@ def informe_gerencial():
                         distribucion[cc_v] = monto_v / total_ventas
             
             if distribucion:
-                # Sumamos el total (ojo con el signo, se mantiene)
                 total_cuenta = sum(data_cta["montos"].values())
-                data_cta["montos"] = {} # Limpiamos origen
+                data_cta["montos"] = {} 
                 for cc_dest, pct in distribucion.items():
                     data_cta["montos"][cc_dest] = data_cta["montos"].get(cc_dest, 0) + (total_cuenta * pct)
 
-    # 6. Switch Servicios Generales
+    # 5. Servicios Generales
     if switch_sg:
         for cta_codigo, data_cta in matriz.items():
             montos_cc = data_cta["montos"]
@@ -936,34 +920,86 @@ def informe_gerencial():
                         for cc_dest, pct in regla.items():
                             montos_cc[cc_dest] = montos_cc.get(cc_dest, 0) + (val * pct)
 
-    # 7. Switch Fábrica
+    # 6. Ajuste Fábrica (LÓGICA COMPLETA: COSTANERA + VACIADO PROPIO)
     if switch_fab:
-        cc_costanera = next((c for c in todos_cc if "costanera" in c.lower()), None)
-        cc_fabrica = next((c for c in todos_cc if "fca" in c.lower() or "fabrica" in c.lower()), None)
+        # A. Calcular Ratio Venta Empanadas (Cuenta 4101004)
+        ratios_empanada = {}
+        if "4101004" in matriz:
+            ventas_emp = matriz["4101004"]["montos"]
+            total_emp = sum(v for v in ventas_emp.values() if v > 0)
+            if total_emp > 0:
+                for cc, v in ventas_emp.items():
+                    if v > 0:
+                        ratios_empanada[cc] = v / total_emp
         
-        if cc_costanera and cc_fabrica:
-            # Nota: prorrateo_costanera viene con %, se aplica sobre gastos (que ahora son negativos)
-            # Ejemplo: Gasto Arriendo -1.000.000 * 0.30 = -300.000 a transferir
-            for cta_codigo, pct in prorrateo_costanera.items():
-                if cta_codigo in matriz:
-                    montos = matriz[cta_codigo]["montos"]
-                    val_cost = montos.get(cc_costanera, 0)
-                    if val_cost != 0:
-                        transferencia = val_cost * pct
-                        montos[cc_costanera] -= transferencia
-                        montos[cc_fabrica] = montos.get(cc_fabrica, 0) + transferencia
+        # B. Verificar Actividad Fábrica
+        actividad_fabrica = False
+        if "3101002" in matriz:
+            saldo_prod = sum(abs(v) for v in matriz["3101002"]["montos"].values())
+            if saldo_prod > 1:
+                actividad_fabrica = True
 
-    # ==========================================================================
-    # 8. ARMADO DEL REPORTE ESTRUCTURADO (ESTILO EER)
-    # ==========================================================================
-    
-    # Paso A: Agrupar todo por Macro Categoría en un diccionario temporal
-    # macros_data = { "Ingresos Operacionales": {grupos: [], totales_cc: {}}, ... }
+        # Identificar nombre exacto de la columna fábrica en estos datos
+        cc_fabrica_key = next((c for c in todos_cc if "fca" in c.lower() or "fabrica" in c.lower()), None)
+        cc_costanera = next((c for c in todos_cc if "costanera" in c.lower()), None)
+        
+        if actividad_fabrica:
+            # --- PARTE 1: Traer gastos de Costanera (Hacia sucursales) ---
+            if cc_costanera:
+                for cta_codigo, pct in prorrateo_costanera.items():
+                    if cta_codigo in matriz:
+                        montos = matriz[cta_codigo]["montos"]
+                        val_cost = montos.get(cc_costanera, 0)
+                        
+                        if val_cost != 0:
+                            transferencia = val_cost * pct
+                            montos[cc_costanera] -= transferencia
+                            
+                            # Inyectar en Sucursales (Cta 3101002)
+                            target_cta = "3101002"
+                            if target_cta not in matriz: matriz[target_cta] = {"nombre": "Costo Venta Elaboracion", "montos": {}}
+                            target_montos = matriz[target_cta]["montos"]
+                            
+                            if ratios_empanada:
+                                for cc_dest, ratio in ratios_empanada.items():
+                                    target_montos[cc_dest] = target_montos.get(cc_dest, 0) + (transferencia * ratio)
+                            else:
+                                if cc_fabrica_key:
+                                    target_montos[cc_fabrica_key] = target_montos.get(cc_fabrica_key, 0) + transferencia
+
+            # --- PARTE 2: VACIADO DE GASTOS PROPIOS DE FÁBRICA ---
+            # Recorremos TODAS las cuentas para ver si tienen saldo en la columna Fábrica
+            if cc_fabrica_key:
+                # Usamos list(matriz.items()) para poder modificar el diccionario mientras iteramos si fuera necesario
+                for cta_codigo, data_cta in matriz.items():
+                    # Solo cuentas de gasto (3...) y no la de ingreso (4...)
+                    if cta_codigo.startswith("4"): continue
+                    
+                    montos = data_cta["montos"]
+                    saldo_en_fabrica = montos.get(cc_fabrica_key, 0)
+                    
+                    if saldo_en_fabrica != 0:
+                        # 1. Vaciar la Fábrica (Restar)
+                        montos[cc_fabrica_key] -= saldo_en_fabrica # Queda en 0
+                        
+                        # 2. Inyectar en Sucursales como "Costo Venta Elaboración" (3101002)
+                        target_cta = "3101002"
+                        if target_cta not in matriz: matriz[target_cta] = {"nombre": "Costo Venta Elaboracion", "montos": {}}
+                        target_montos = matriz[target_cta]["montos"]
+                        
+                        if ratios_empanada:
+                            for cc_dest, ratio in ratios_empanada.items():
+                                target_montos[cc_dest] = target_montos.get(cc_dest, 0) + (saldo_en_fabrica * ratio)
+                        else:
+                            # Si no hay ventas, devolvemos el saldo a la fábrica (en la cuenta costo venta)
+                            # para que al menos se refleje la pérdida ahí y no desaparezca el dinero
+                            target_montos[cc_fabrica_key] = target_montos.get(cc_fabrica_key, 0) + saldo_en_fabrica
+
+    # 7. Armado del Reporte (IGUAL QUE ANTES)
     macros_data = {}
     grupos_config = data_clasif.get("grupos", [])
     cuentas_procesadas = set()
 
-    # Inicializar macros_data con los datos reales
     for grp in grupos_config:
         macro_nombre = grp.get("macro_categoria", "Otros")
         if macro_nombre not in macros_data:
@@ -988,10 +1024,9 @@ def informe_gerencial():
                 fila_grupo["detalle_cuentas"].append({
                     "codigo": cta_id, "nombre": data_cta["nombre"], "montos_cc": data_cta["montos"]
                 })
-        
         macros_data[macro_nombre]["grupos"].append(fila_grupo)
 
-    # Paso B: Recoger huérfanos ("Sin Clasificar")
+    # Huérfanos
     sin_clasif = {"nombre": "Cuentas Pendientes", "totales_cc": {cc:0.0 for cc in todos_cc}, "detalle_cuentas": []}
     hay_pendientes = False
     for cta_id, data_cta in matriz.items():
@@ -1003,411 +1038,13 @@ def informe_gerencial():
                 sin_clasif["detalle_cuentas"].append({
                     "codigo": cta_id, "nombre": data_cta["nombre"], "montos_cc": data_cta["montos"]
                 })
-    
     if hay_pendientes:
         if "Sin Clasificar" not in macros_data:
             macros_data["Sin Clasificar"] = {"grupos": [], "totales_cc": {cc:0.0 for cc in todos_cc}}
         macros_data["Sin Clasificar"]["grupos"].append(sin_clasif)
-        # Sumar al total macro
-        for cc, val in sin_clasif["totales_cc"].items():
-            macros_data["Sin Clasificar"]["totales_cc"][cc] += val
+        for cc in todos_cc:
+            macros_data["Sin Clasificar"]["totales_cc"][cc] += sin_clasif["totales_cc"][cc]
 
-
-    # Paso C: DEFINICIÓN DE LA ESTRUCTURA FIJA (Aquí ocurre la magia del orden)
-    # ids_fuente: Son los nombres EXACTOS de los "Macros" que pusiste en el configurador
-    ESTRUCTURA = [
-        {
-            "id": "ingresos_op",
-            "titulo": "INGRESOS DE EXPLOTACIÓN",
-            "tipo": "macro", # Muestra detalle
-            "fuente": ["Ingresos Operacionales", "Ingresos Venta"] 
-        },
-        {
-            "id": "costos_op",
-            "titulo": "COSTOS DE EXPLOTACIÓN",
-            "tipo": "macro",
-            "fuente": ["Costos de Explotación", "Costo Venta"]
-        },
-        {
-            "id": "margen",
-            "titulo": "MARGEN DE EXPLOTACIÓN",
-            "tipo": "calculo",
-            "color": "warning", # amarillo
-            "operacion": ["ingresos_op", "costos_op"] # Suma lineal (ya tienen signo)
-        },
-        {
-            "id": "gastos_adm",
-            "titulo": "GASTOS DE ADMINISTRACIÓN Y VENTAS",
-            "tipo": "macro",
-            "fuente": ["Gastos de Administración y Ventas", "Gastos Administración"]
-        },
-        {
-            "id": "res_op",
-            "titulo": "RESULTADO OPERACIONAL",
-            "tipo": "calculo",
-            "color": "info", # celeste
-            "operacion": ["margen", "gastos_adm"]
-        },
-        {
-            "id": "no_op",
-            "titulo": "INGRESOS Y EGRESOS NO OPERACIONALES",
-            "tipo": "macro",
-            "fuente": ["Ingresos No Operacionales", "Otros Ingresos/Egresos"]
-        },
-        {
-            "id": "res_final",
-            "titulo": "RESULTADO ANTES DE IMPTO",
-            "tipo": "calculo",
-            "color": "success", # verde
-            "operacion": ["res_op", "no_op"]
-        },
-        {
-            "id": "otros",
-            "titulo": "SIN CLASIFICAR / OTROS",
-            "tipo": "macro",
-            "fuente": ["Sin Clasificar", "Otros"]
-        }
-    ]
-
-    # Paso D: Construir Lista Final
-    reporte_final = []
-    # Diccionario temporal para guardar los totales de cada fila (para los cálculos)
-    # cache_calculos = { "ingresos_op": {cc: 100}, "costos_op": {cc: -80} }
-    cache_calculos = {}
-
-    for linea in ESTRUCTURA:
-        fila_salida = {
-            "titulo": linea["titulo"],
-            "tipo": linea["tipo"],
-            "color": linea.get("color", "secondary"),
-            "grupos": [], # Solo si es macro
-            "totales_cc": {cc: 0.0 for cc in todos_cc}
-        }
-
-        if linea["tipo"] == "macro":
-            # Buscamos en macros_data las fuentes
-            encontro_algo = False
-            for fuente in linea["fuente"]:
-                if fuente in macros_data:
-                    datos = macros_data[fuente]
-                    # Agregamos los grupos de esa macro a esta sección
-                    fila_salida["grupos"].extend(datos["grupos"])
-                    # Sumamos totales
-                    for cc, val in datos["totales_cc"].items():
-                        fila_salida["totales_cc"][cc] += val
-                    encontro_algo = True
-            
-            # Guardamos para futuros cálculos
-            cache_calculos[linea["id"]] = fila_salida["totales_cc"]
-            
-            # Solo agregamos al reporte si tiene datos o si es obligatorio
-            if encontro_algo or linea["id"] == "otros":
-                if not encontro_algo and linea["id"] != "otros": continue
-                # Si es "Otros" y está vacío, lo saltamos
-                if linea["id"] == "otros" and not encontro_algo: continue
-                reporte_final.append(fila_salida)
-
-        elif linea["tipo"] == "calculo":
-            # Operar sobre cache_calculos
-            # Por defecto es suma lineal de los IDs en "operacion"
-            operandos = linea["operacion"]
-            for op_id in operandos:
-                totales_op = cache_calculos.get(op_id, {})
-                for cc in todos_cc:
-                    fila_salida["totales_cc"][cc] += totales_op.get(cc, 0.0)
-            
-            # Guardar este resultado también por si se usa después
-            cache_calculos[linea["id"]] = fila_salida["totales_cc"]
-            reporte_final.append(fila_salida)
-
-    return render_template(
-        "contab/informe_gerencial.html",
-        periodo=periodo,
-        reporte=reporte_final,
-        columnas_cc=todos_cc,
-        switch_sg=switch_sg,
-        switch_fab=switch_fab
-    )
-    
-# ==============================================================================
-# NUEVO MÓDULO: COMPARATIVO DE GESTIÓN (FULL PRORRATEO)
-# ==============================================================================
-@contab_bp.route("/comparativo_gestion")
-@login_requerido
-def comparativo_gestion():
-    # 1. Parámetros
-    comp_cc = request.args.get("comp_cc", "Total Empresa")
-    comp_modo = request.args.get("comp_modo", "last_6") 
-    
-    # Switches
-    switch_sg = request.args.get("distribuir_sg") == "on"
-    switch_fab = request.args.get("ajuste_fabrica") == "on"
-    
-    # 2. Cargar Datos y Configuración
-    df = obtener_datos("mayor")
-    data_prorrateos = cargar_prorrateos()
-    data_clasif = cargar_clasificaciones()
-    
-    config_cuentas = data_prorrateos.get("config_cuentas", {}) # Para saber cuáles son VENTAS_SUCURSAL
-    reglas_cuentas_mensuales = data_prorrateos.get("reglas_mensuales", {}) # Para MANUAL_SUCURSAL
-
-    # Cargar reglas SG y Fábrica
-    pool_reglas_sg = {}
-    pool_reglas_fab = {}
-    for p, datos in reglas_cuentas_mensuales.items():
-        if "serv_generales" in datos: pool_reglas_sg[p] = datos["serv_generales"]
-    for p, datos in data_prorrateos.get("fabrica_empanadas", {}).get("costanera_prorrateos", {}).items():
-        pool_reglas_fab[p] = datos
-
-    def obtener_regla_vigente(pool_reglas, periodo_actual):
-        if periodo_actual in pool_reglas: return pool_reglas[periodo_actual]
-        anteriores = [p for p in pool_reglas.keys() if p < periodo_actual]
-        if not anteriores: return {} 
-        return pool_reglas[max(anteriores)]
-
-    # 3. Preparar Fechas
-    df["FECHA"] = pd.to_datetime(df["FECHA"], errors="coerce")
-    if not df.empty: fecha_fin = df["FECHA"].max()
-    else: fecha_fin = datetime.now()
-
-    columnas_periodos = []
-    if comp_modo == "last_6":
-        for i in range(5, -1, -1): columnas_periodos.append((fecha_fin - pd.DateOffset(months=i)).strftime("%Y-%m"))
-    elif comp_modo == "last_12":
-        for i in range(11, -1, -1): columnas_periodos.append((fecha_fin - pd.DateOffset(months=i)).strftime("%Y-%m"))
-    elif comp_modo == "anual":
-        for i in range(2, -1, -1): columnas_periodos.append(datetime(fecha_fin.year - i, fecha_fin.month, 1).strftime("%Y-%m"))
-
-    # 4. Pre-procesamiento
-    df["SALDO_REAL"] = (df["DEBE"] - df["HABER"]) * -1
-    df["PERIODO_STR"] = df["FECHA"].dt.strftime("%Y-%m")
-    df["CENTRO COSTO"] = df["CENTRO COSTO"].astype(str).str.strip()
-    df["CUENTA"] = df["CUENTA"].astype(str).str.strip()
-    df["NOMBRE"] = df["NOMBRE"].astype(str).str.strip()
-    
-    mask = df["CUENTA"].str.startswith(('3', '4')) & df["PERIODO_STR"].isin(columnas_periodos)
-    df = df[mask].copy()
-
-    # ==========================================================================
-    # 5. CÁLCULO DE VENTAS (Para Prorrateo Automático)
-    # ==========================================================================
-    # Necesitamos saber cuánto vendió la empresa TOTAL y cuánto la sucursal seleccionada en cada mes
-    ventas_totales_mes = {} # { "2025-01": 100000 }
-    ventas_sucursal_mes = {} # { "2025-01": 20000 } (Si comp_cc != Total Empresa)
-
-    # Cuentas 41... son ventas. En gestión son positivas.
-    df_ventas = df[df["CUENTA"].str.startswith("41")]
-    
-    # Agrupamos por mes para total empresa
-    ventas_totales_mes = df_ventas[df_ventas["SALDO_REAL"] > 0].groupby("PERIODO_STR")["SALDO_REAL"].sum().to_dict()
-
-    if comp_cc != "Total Empresa":
-        # Agrupamos por mes para la sucursal seleccionada
-        df_ventas_cc = df_ventas[(df_ventas["CENTRO COSTO"] == comp_cc) & (df_ventas["SALDO_REAL"] > 0)]
-        ventas_sucursal_mes = df_ventas_cc.groupby("PERIODO_STR")["SALDO_REAL"].sum().to_dict()
-
-    # ==========================================================================
-    # 6. DISTRIBUCIÓN Y FILTRADO
-    # ==========================================================================
-    # Aquí ocurre la magia. Iteramos todo, aplicamos reglas y decidimos si la fila entra al reporte.
-    
-    filas_trabajo = df.to_dict("records")
-    filas_finales = []
-    
-    # Cache para optimizar
-    mov_fabrica = df[ (df["CUENTA"] == "3101002") & (abs(df["SALDO_REAL"]) > 1) ]
-    meses_activos_fabrica = set(mov_fabrica["PERIODO_STR"].unique())
-    cache_reglas_sg = {}
-    cache_reglas_fab = {}
-
-    for row in filas_trabajo:
-        periodo = row["PERIODO_STR"]
-        cc_row = row["CENTRO COSTO"]
-        nombre_cta = row["NOMBRE"]
-        monto = row["SALDO_REAL"]
-        
-        # --- PASO A: CUENTAS GLOBALES (Costo Venta, Uber, etc.) ---
-        # Si la cuenta es global, debemos ver si le corresponde un pedazo a la sucursal seleccionada
-        cfg_global = config_cuentas.get(nombre_cta)
-        
-        if cfg_global and cfg_global.get("activo"):
-            tipo = cfg_global.get("tipo")
-            
-            if comp_cc == "Total Empresa":
-                # Si es total empresa, entra todo (suma directa), no hay que repartir
-                filas_finales.append(row)
-                continue
-            
-            # Si es una sucursal específica, calculamos su cuota
-            monto_asignado = 0
-            
-            if tipo == "VENTAS_SUCURSAL":
-                total_mes = ventas_totales_mes.get(periodo, 0)
-                venta_cc = ventas_sucursal_mes.get(periodo, 0)
-                if total_mes > 0:
-                    ratio = venta_cc / total_mes
-                    monto_asignado = monto * ratio # Asignamos proporción
-            
-            elif tipo == "MANUAL_SUCURSAL":
-                # Buscar regla manual histórica
-                reglas_mes = reglas_cuentas_mensuales.get(periodo, {}).get("cuentas_globales", {})
-                distribucion = reglas_mes.get(nombre_cta, {})
-                pct = distribucion.get(comp_cc, 0)
-                monto_asignado = monto * pct
-
-            # Creamos la fila virtual para esta sucursal
-            if monto_asignado != 0:
-                nueva = row.copy()
-                nueva["CENTRO COSTO"] = comp_cc # Forzamos que sea de esta sucursal para que pase el filtro
-                nueva["SALDO_REAL"] = monto_asignado
-                filas_finales.append(nueva)
-            
-            # IMPORTANTE: No agregamos la fila original "row" porque ya procesamos su asignación
-            continue 
-
-        # --- Si NO es cuenta global, sigue el flujo normal ---
-        
-        # --- PASO B: SWITCHES (SG y Fábrica) ---
-        # Solo procesamos si la fila original pertenece a los centros de origen (SG o Costanera)
-        
-        filas_generadas_switches = []
-        fila_desaparece = False
-
-        # Lógica SG
-        if switch_sg and "servicios generales" in cc_row.lower():
-            if periodo not in cache_reglas_sg: cache_reglas_sg[periodo] = obtener_regla_vigente(pool_reglas_sg, periodo)
-            regla_cta = cache_reglas_sg[periodo].get(nombre_cta)
-            
-            if regla_cta:
-                fila_desaparece = True # La original se va
-                # Si estamos viendo Total Empresa, esto da suma cero, pero visualmente se redistribuye
-                # Si estamos viendo Sucursal, solo nos importa si recibimos algo
-                for destino, pct in regla_cta.items():
-                    if comp_cc == "Total Empresa" or destino == comp_cc:
-                        nueva = row.copy()
-                        nueva["CENTRO COSTO"] = destino
-                        nueva["SALDO_REAL"] = monto * pct
-                        filas_generadas_switches.append(nueva)
-
-        # Lógica Fábrica
-        elif switch_fab and "costanera" in cc_row.lower():
-            if periodo in meses_activos_fabrica:
-                if periodo not in cache_reglas_fab: cache_reglas_fab[periodo] = obtener_regla_vigente(pool_reglas_fab, periodo)
-                pct_traslado = cache_reglas_fab[periodo].get(row["CUENTA"])
-                
-                if pct_traslado:
-                    monto_traslado = monto * pct_traslado
-                    
-                    # Costanera se reduce
-                    if comp_cc == "Total Empresa" or "costanera" in comp_cc.lower():
-                        ajuste = row.copy()
-                        ajuste["SALDO_REAL"] = -monto_traslado
-                        filas_generadas_switches.append(ajuste)
-                    
-                    # Fábrica recibe
-                    cc_fabrica = "Fca de Empanadas"
-                    if comp_cc == "Total Empresa" or comp_cc == cc_fabrica:
-                        destino = row.copy()
-                        destino["CENTRO COSTO"] = cc_fabrica
-                        destino["SALDO_REAL"] = monto_traslado
-                        filas_generadas_switches.append(destino)
-
-        # --- PASO C: FILTRADO FINAL ---
-        
-        # 1. Agregamos las filas generadas por switches
-        for f in filas_generadas_switches:
-            filas_finales.append(f)
-            
-        # 2. Agregamos la fila original SI NO desapareció Y SI corresponde al CC filtro
-        if not fila_desaparece:
-            # Si es Total Empresa, pasa todo. Si es sucursal, solo si coincide.
-            if comp_cc == "Total Empresa" or row["CENTRO COSTO"] == comp_cc:
-                filas_finales.append(row)
-
-    # ==========================================================================
-    # 7. ARMADO DE MATRIZ Y REPORTE (Igual que antes)
-    # ==========================================================================
-    # ... (El resto del código de agrupación, macros y estructura fija se mantiene IDÉNTICO)
-    # Copia desde aquí hacia abajo del código anterior, o te lo pego completo si prefieres.
-    
-    # Para ahorrar espacio en el chat, asumo que la parte de "7. Agrupar Clasificados" 
-    # hasta el final "return render_template" es la misma que la versión anterior.
-    # Solo cambió la lógica de generación de filas (Paso 5 y 6).
-    
-    # AQUI ABAJO VA LA PARTE DE MATRIZ (Repetirla del mensaje anterior)
-    
-    df_final = pd.DataFrame(filas_finales)
-    
-    if df_final.empty:
-         return render_template("contab/comparativo_gestion.html", 
-                               reporte=[], columnas=columnas_periodos, 
-                               todos_cc=[], comp_cc=comp_cc, comp_modo=comp_modo,
-                               switch_sg=switch_sg, switch_fab=switch_fab)
-
-    todos_cc = sorted(list(set(obtener_datos("mayor")["CENTRO COSTO"].dropna().unique())))
-
-    matriz = {}
-    for _, row in df_final.iterrows():
-        cta = str(row["CUENTA"]).strip()
-        per = row["PERIODO_STR"]
-        if cta not in matriz:
-            matriz[cta] = {"nombre": row["NOMBRE"], "montos": {}}
-        matriz[cta]["montos"][per] = matriz[cta]["montos"].get(per, 0) + row["SALDO_REAL"]
-
-    # 7. Agrupar Clasificados (COPIAR IGUAL)
-    macros_data = {}
-    grupos_config = data_clasif.get("grupos", [])
-    cuentas_procesadas = set()
-
-    for grp in grupos_config:
-        macro_nombre = grp.get("macro_categoria", "Otros")
-        if macro_nombre not in macros_data:
-            macros_data[macro_nombre] = {"grupos": [], "totales_col": {c: 0.0 for c in columnas_periodos}}
-        
-        fila_grupo = {
-            "nombre": grp["nombre"],
-            "tipo": grp["tipo"],
-            "totales_col": {c: 0.0 for c in columnas_periodos},
-            "detalle_cuentas": []
-        }
-        
-        for cta_id_raw in grp["cuentas"]:
-            cta_id = str(cta_id_raw)
-            if cta_id in matriz:
-                cuentas_procesadas.add(cta_id)
-                data_cta = matriz[cta_id]
-                for col in columnas_periodos:
-                    val = data_cta["montos"].get(col, 0)
-                    fila_grupo["totales_col"][col] += val
-                    macros_data[macro_nombre]["totales_col"][col] += val
-                
-                fila_grupo["detalle_cuentas"].append({
-                    "codigo": cta_id, "nombre": data_cta["nombre"], "montos_col": data_cta["montos"]
-                })
-        
-        macros_data[macro_nombre]["grupos"].append(fila_grupo)
-
-    # 8. Huérfanos (COPIAR IGUAL)
-    sin_clasif = {"nombre": "Cuentas Pendientes", "tipo": "GASTO", "totales_col": {c:0.0 for c in columnas_periodos}, "detalle_cuentas": []}
-    hay_pendientes = False
-    for cta_id, data_cta in matriz.items():
-        if cta_id not in cuentas_procesadas:
-            if sum(abs(data_cta["montos"].get(c, 0)) for c in columnas_periodos) > 1:
-                hay_pendientes = True
-                for col in columnas_periodos:
-                    val = data_cta["montos"].get(col, 0)
-                    sin_clasif["totales_col"][col] += val
-                sin_clasif["detalle_cuentas"].append({
-                    "codigo": cta_id, "nombre": data_cta["nombre"], "montos_col": data_cta["montos"]
-                })
-    if hay_pendientes:
-        if "Sin Clasificar" not in macros_data:
-            macros_data["Sin Clasificar"] = {"grupos": [], "totales_col": {c:0.0 for c in columnas_periodos}}
-        macros_data["Sin Clasificar"]["grupos"].append(sin_clasif)
-        for col in columnas_periodos:
-            macros_data["Sin Clasificar"]["totales_col"][col] += sin_clasif["totales_col"][col]
-
-    # 9. Estructura Fija (COPIAR IGUAL)
     ESTRUCTURA = [
         {"id": "ingresos_op", "titulo": "INGRESOS DE EXPLOTACIÓN", "tipo": "macro", "fuente": ["Ingresos Operacionales", "Ingresos Venta"]},
         {"id": "costos_op", "titulo": "COSTOS DE EXPLOTACIÓN", "tipo": "macro", "fuente": ["Costos de Explotación", "Costo Venta"]},
@@ -1428,41 +1065,290 @@ def comparativo_gestion():
             "tipo": linea["tipo"],
             "color": linea.get("color", "secondary"),
             "grupos": [],
-            "totales_col": {c: 0.0 for c in columnas_periodos}
+            "totales_cc": {cc: 0.0 for cc in todos_cc}
         }
 
         if linea["tipo"] == "macro":
             encontro = False
             for fuente in linea["fuente"]:
                 if fuente in macros_data:
-                    d = macros_data[fuente]
-                    fila_salida["grupos"].extend(d["grupos"])
-                    for col in columnas_periodos:
-                        fila_salida["totales_col"][col] += d["totales_col"][col]
+                    datos = macros_data[fuente]
+                    fila_salida["grupos"].extend(datos["grupos"])
+                    for cc, val in datos["totales_cc"].items():
+                        fila_salida["totales_cc"][cc] += val
                     encontro = True
-            cache_calculos[linea["id"]] = fila_salida["totales_col"]
-            if encontro or linea["id"] == "otros":
-                if not encontro and linea["id"] != "otros": continue
+            
+            cache_calculos[linea["id"]] = fila_salida["totales_cc"]
+            if encontro or (linea["id"] == "otros" and encontro):
                 reporte_final.append(fila_salida)
 
         elif linea["tipo"] == "calculo":
             for op_id in linea["operacion"]:
                 totales_op = cache_calculos.get(op_id, {})
-                for col in columnas_periodos:
-                    fila_salida["totales_col"][col] += totales_op.get(col, 0.0)
-            cache_calculos[linea["id"]] = fila_salida["totales_col"]
+                for cc in todos_cc:
+                    fila_salida["totales_cc"][cc] += totales_op.get(cc, 0.0)
+            cache_calculos[linea["id"]] = fila_salida["totales_cc"]
             reporte_final.append(fila_salida)
 
     return render_template(
-        "contab/comparativo_gestion.html",
+        "contab/informe_gerencial.html",
+        periodo=periodo,
         reporte=reporte_final,
-        columnas=columnas_periodos,
-        todos_cc=todos_cc,
-        comp_cc=comp_cc,
-        comp_modo=comp_modo,
+        columnas_cc=todos_cc,
         switch_sg=switch_sg,
         switch_fab=switch_fab
     )
+    
+# ==============================================================================
+# NUEVO MÓDULO: COMPARATIVO DE GESTIÓN (FULL PRORRATEO)
+# ==============================================================================
+# ==============================================================================
+# NUEVO MÓDULO: COMPARATIVO DE GESTIÓN (VACIADO TOTAL FÁBRICA)
+# ==============================================================================
+@contab_bp.route("/comparativo_gestion")
+@login_requerido
+def comparativo_gestion():
+    # 1. Parámetros
+    comp_cc = request.args.get("comp_cc", "Total Empresa")
+    comp_modo = request.args.get("comp_modo", "last_6") 
+    
+    switch_sg = request.args.get("distribuir_sg") == "on"
+    switch_fab = request.args.get("ajuste_fabrica") == "on"
+    
+    # 2. Cargar Datos
+    df = obtener_datos("mayor")
+    data_prorrateos = cargar_prorrateos()
+    data_clasif = cargar_clasificaciones()
+    
+    # Pools de reglas
+    pool_reglas_sg = {}
+    pool_reglas_fab = {} # Reglas de Costanera -> Fábrica
+
+    reglas_mensuales = data_prorrateos.get("reglas_mensuales", {})
+    costanera_prorrateos = data_prorrateos.get("fabrica_empanadas", {}).get("costanera_prorrateos", {})
+
+    for p, datos in reglas_mensuales.items():
+        if "serv_generales" in datos: pool_reglas_sg[p] = datos["serv_generales"]
+    for p, datos in costanera_prorrateos.items(): pool_reglas_fab[p] = datos
+
+    def obtener_regla_vigente(pool_reglas, periodo_actual):
+        if periodo_actual in pool_reglas: return pool_reglas[periodo_actual]
+        anteriores = [p for p in pool_reglas.keys() if p < periodo_actual]
+        if not anteriores: return {} 
+        return pool_reglas[max(anteriores)]
+
+    # 3. Fechas
+    df["FECHA"] = pd.to_datetime(df["FECHA"], errors="coerce")
+    if not df.empty: fecha_fin = df["FECHA"].max()
+    else: fecha_fin = datetime.now()
+
+    columnas_periodos = []
+    if comp_modo == "last_6":
+        for i in range(5, -1, -1): columnas_periodos.append((fecha_fin - pd.DateOffset(months=i)).strftime("%Y-%m"))
+    elif comp_modo == "last_12":
+        for i in range(11, -1, -1): columnas_periodos.append((fecha_fin - pd.DateOffset(months=i)).strftime("%Y-%m"))
+    elif comp_modo == "anual":
+        for i in range(2, -1, -1): columnas_periodos.append(datetime(fecha_fin.year - i, fecha_fin.month, 1).strftime("%Y-%m"))
+
+    # 4. Filtrar y Preparar
+    df["SALDO_REAL"] = (df["DEBE"] - df["HABER"]) * -1
+    df["PERIODO_STR"] = df["FECHA"].dt.strftime("%Y-%m")
+    df["CENTRO COSTO"] = df["CENTRO COSTO"].astype(str).str.strip()
+    df["CUENTA"] = df["CUENTA"].astype(str).str.strip()
+    df["NOMBRE"] = df["NOMBRE"].astype(str).str.strip()
+    
+    mask = df["CUENTA"].str.startswith(('3', '4')) & df["PERIODO_STR"].isin(columnas_periodos)
+    df = df[mask].copy()
+
+    # Distribuir Ventas Empanada (4101004) para calcular ratios
+    distribucion_empanadas = {}
+    df_empanadas = df[df["CUENTA"] == "4101004"]
+    if not df_empanadas.empty:
+        grupos_emp = df_empanadas.groupby(["PERIODO_STR", "CENTRO COSTO"])["SALDO_REAL"].sum()
+        for per in grupos_emp.index.get_level_values(0).unique():
+            ventas_mes = grupos_emp[per]
+            total_mes = ventas_mes.sum()
+            if total_mes > 0: distribucion_empanadas[per] = (ventas_mes / total_mes).to_dict()
+
+    # 5. Aplicación Switches
+    mov_fabrica = df[ (df["CUENTA"] == "3101002") & (abs(df["SALDO_REAL"]) > 1) ]
+    meses_activos_fabrica = set(mov_fabrica["PERIODO_STR"].unique())
+
+    filas_trabajo = df.to_dict("records")
+    nuevas_filas = [] 
+    indices_a_borrar = set()
+    cache_reglas_sg = {}
+    cache_reglas_fab = {}
+
+    if switch_sg or switch_fab:
+        for idx, row in enumerate(filas_trabajo):
+            periodo = row["PERIODO_STR"]
+            cc = row["CENTRO COSTO"]
+            nombre_cta = row["NOMBRE"]
+            monto = row["SALDO_REAL"]
+            if monto == 0: continue
+
+            # A. Servicios Generales
+            if switch_sg and "servicios generales" in cc.lower():
+                if periodo not in cache_reglas_sg: cache_reglas_sg[periodo] = obtener_regla_vigente(pool_reglas_sg, periodo)
+                regla = cache_reglas_sg[periodo].get(nombre_cta)
+                if regla:
+                    indices_a_borrar.add(idx) 
+                    for dst, pct in regla.items():
+                        n = row.copy()
+                        n["CENTRO COSTO"] = dst
+                        n["SALDO_REAL"] = monto * pct
+                        nuevas_filas.append(n)
+            
+            # B. Ajuste Fábrica
+            # PARTE 1: Traer gastos desde Costanera
+            elif switch_fab and "costanera" in cc.lower():
+                if periodo in meses_activos_fabrica:
+                    if periodo not in cache_reglas_fab: cache_reglas_fab[periodo] = obtener_regla_vigente(pool_reglas_fab, periodo)
+                    pct_traslado = cache_reglas_fab[periodo].get(row["CUENTA"])
+                    
+                    if pct_traslado and pct_traslado > 0:
+                        monto_traslado = monto * pct_traslado
+                        # Restar de Costanera
+                        ajuste = row.copy()
+                        ajuste["SALDO_REAL"] = -monto_traslado
+                        nuevas_filas.append(ajuste)
+                        
+                        # Sumar a Sucursales (Absorción)
+                        mapa_ventas = distribucion_empanadas.get(periodo, {})
+                        if mapa_ventas:
+                            for cc_dest, ratio in mapa_ventas.items():
+                                n = row.copy()
+                                n["CENTRO COSTO"] = cc_dest
+                                n["CUENTA"] = "3101002"
+                                n["NOMBRE"] = f"{nombre_cta} (Absorbido Fca)"
+                                n["SALDO_REAL"] = monto_traslado * ratio
+                                nuevas_filas.append(n)
+                        else:
+                            # Si nadie vendió, se carga a Fábrica (fallback)
+                            n = row.copy()
+                            n["CENTRO COSTO"] = "Fca de Empanadas"
+                            n["CUENTA"] = "3101002"
+                            n["SALDO_REAL"] = monto_traslado
+                            nuevas_filas.append(n)
+
+            # PARTE 2: Vaciar gastos propios de la Fábrica (NUEVO)
+            elif switch_fab and ("fca" in cc.lower() or "fabrica" in cc.lower()):
+                # Solo si la fábrica está activa, distribuimos sus gastos
+                if periodo in meses_activos_fabrica:
+                    mapa_ventas = distribucion_empanadas.get(periodo, {})
+                    if mapa_ventas:
+                        indices_a_borrar.add(idx) # Quitamos el gasto de la Fábrica
+                        
+                        for cc_dest, ratio in mapa_ventas.items():
+                            n = row.copy()
+                            n["CENTRO COSTO"] = cc_dest
+                            n["CUENTA"] = "3101002"
+                            n["NOMBRE"] = f"{nombre_cta} (Absorbido Fca)"
+                            n["SALDO_REAL"] = monto * ratio
+                            nuevas_filas.append(n)
+
+    # Reconstrucción
+    filas_finales = [f for i, f in enumerate(filas_trabajo) if i not in indices_a_borrar]
+    filas_finales.extend(nuevas_filas)
+    df_procesado = pd.DataFrame(filas_finales)
+
+    # 6. Filtrado Final y Matriz
+    if df_procesado.empty:
+        return render_template("contab/comparativo_gestion.html", 
+                               reporte=[], columnas=columnas_periodos, 
+                               todos_cc=[], comp_cc=comp_cc, comp_modo=comp_modo,
+                               switch_sg=switch_sg, switch_fab=switch_fab)
+
+    if comp_cc != "Total Empresa":
+        df_procesado = df_procesado[df_procesado["CENTRO COSTO"] == comp_cc]
+
+    todos_cc = sorted(list(set(obtener_datos("mayor")["CENTRO COSTO"].dropna().unique())))
+
+    matriz = {}
+    for _, row in df_procesado.iterrows():
+        cta = str(row["CUENTA"]).strip()
+        per = row["PERIODO_STR"]
+        if cta not in matriz: matriz[cta] = {"nombre": row["NOMBRE"], "montos": {}}
+        matriz[cta]["montos"][per] = matriz[cta]["montos"].get(per, 0) + row["SALDO_REAL"]
+
+    # 7. Agrupar Clasificados (Igual que antes)
+    macros_data = {}
+    grupos_config = data_clasif.get("grupos", [])
+    cuentas_procesadas = set()
+
+    for grp in grupos_config:
+        macro_nombre = grp.get("macro_categoria", "Otros")
+        if macro_nombre not in macros_data:
+            macros_data[macro_nombre] = {"grupos": [], "totales_col": {c: 0.0 for c in columnas_periodos}}
+        
+        fila_grupo = {"nombre": grp["nombre"], "tipo": grp["tipo"], "totales_col": {c: 0.0 for c in columnas_periodos}, "detalle_cuentas": []}
+        
+        for cta_id_raw in grp["cuentas"]:
+            cta_id = str(cta_id_raw)
+            if cta_id in matriz:
+                cuentas_procesadas.add(cta_id)
+                data_cta = matriz[cta_id]
+                for col in columnas_periodos:
+                    val = data_cta["montos"].get(col, 0)
+                    fila_grupo["totales_col"][col] += val
+                    macros_data[macro_nombre]["totales_col"][col] += val
+                fila_grupo["detalle_cuentas"].append({"codigo": cta_id, "nombre": data_cta["nombre"], "montos_col": data_cta["montos"]})
+        macros_data[macro_nombre]["grupos"].append(fila_grupo)
+
+    # 8. Huérfanos
+    sin_clasif = {"nombre": "Cuentas Pendientes", "tipo": "GASTO", "totales_col": {c:0.0 for c in columnas_periodos}, "detalle_cuentas": []}
+    hay_pendientes = False
+    for cta_id, data_cta in matriz.items():
+        if cta_id not in cuentas_procesadas:
+            if sum(abs(data_cta["montos"].get(c, 0)) for c in columnas_periodos) > 1:
+                hay_pendientes = True
+                for col in columnas_periodos:
+                    val = data_cta["montos"].get(col, 0)
+                    sin_clasif["totales_col"][col] += val
+                sin_clasif["detalle_cuentas"].append({"codigo": cta_id, "nombre": data_cta["nombre"], "montos_col": data_cta["montos"]})
+    if hay_pendientes:
+        if "Sin Clasificar" not in macros_data: macros_data["Sin Clasificar"] = {"grupos": [], "totales_col": {c:0.0 for c in columnas_periodos}}
+        macros_data["Sin Clasificar"]["grupos"].append(sin_clasif)
+        for col in columnas_periodos: macros_data["Sin Clasificar"]["totales_col"][col] += sin_clasif["totales_col"][col]
+
+    # 9. Estructura Fija
+    ESTRUCTURA = [
+        {"id": "ingresos_op", "titulo": "INGRESOS DE EXPLOTACIÓN", "tipo": "macro", "fuente": ["Ingresos Operacionales", "Ingresos Venta"]},
+        {"id": "costos_op", "titulo": "COSTOS DE EXPLOTACIÓN", "tipo": "macro", "fuente": ["Costos de Explotación", "Costo Venta"]},
+        {"id": "margen", "titulo": "MARGEN DE EXPLOTACIÓN", "tipo": "calculo", "color": "warning", "operacion": ["ingresos_op", "costos_op"]},
+        {"id": "gastos_adm", "titulo": "GASTOS DE ADMINISTRACIÓN Y VENTAS", "tipo": "macro", "fuente": ["Gastos de Administración y Ventas"]},
+        {"id": "res_op", "titulo": "RESULTADO OPERACIONAL", "tipo": "calculo", "color": "info", "operacion": ["margen", "gastos_adm"]},
+        {"id": "no_op", "titulo": "INGRESOS Y EGRESOS NO OPERACIONALES", "tipo": "macro", "fuente": ["Ingresos No Operacionales"]},
+        {"id": "res_final", "titulo": "RESULTADO ANTES DE IMPTO", "tipo": "calculo", "color": "success", "operacion": ["res_op", "no_op"]},
+        {"id": "otros", "titulo": "SIN CLASIFICAR / OTROS", "tipo": "macro", "fuente": ["Sin Clasificar", "Otros"]}
+    ]
+
+    reporte_final = []
+    cache_calculos = {}
+
+    for linea in ESTRUCTURA:
+        fila_salida = {"titulo": linea["titulo"], "tipo": linea["tipo"], "color": linea.get("color", "secondary"), "grupos": [], "totales_col": {c: 0.0 for c in columnas_periodos}}
+        if linea["tipo"] == "macro":
+            encontro = False
+            for fuente in linea["fuente"]:
+                if fuente in macros_data:
+                    d = macros_data[fuente]
+                    fila_salida["grupos"].extend(d["grupos"])
+                    for col in columnas_periodos: fila_salida["totales_col"][col] += d["totales_col"][col]
+                    encontro = True
+            cache_calculos[linea["id"]] = fila_salida["totales_col"]
+            if encontro or linea["id"] == "otros":
+                if not encontro and linea["id"] != "otros": continue
+                reporte_final.append(fila_salida)
+        elif linea["tipo"] == "calculo":
+            for op_id in linea["operacion"]:
+                totales_op = cache_calculos.get(op_id, {})
+                for col in columnas_periodos: fila_salida["totales_col"][col] += totales_op.get(col, 0.0)
+            cache_calculos[linea["id"]] = fila_salida["totales_col"]
+            reporte_final.append(fila_salida)
+
+    return render_template("contab/comparativo_gestion.html", reporte=reporte_final, columnas=columnas_periodos, todos_cc=todos_cc, comp_cc=comp_cc, comp_modo=comp_modo, switch_sg=switch_sg, switch_fab=switch_fab)
     
 # ==============================================================================
 # DASHBOARD DE GESTIÓN (KPIs ANUALES)
