@@ -6,23 +6,23 @@
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h2 class="text-white m-0">Comparativo de Gestión</h2>
     
-<form method="GET" class="d-flex align-items-center gap-2 bg-dark p-2 rounded border border-secondary flex-wrap">
-        <select name="comp_cc" class="form-select form-select-sm bg-secondary text-white border-0" onchange="this.form.submit()">
+    <form method="GET" class="d-flex align-items-center gap-2 bg-dark p-2 rounded border border-secondary flex-wrap">
+        <select name="comp_cc" class="form-select form-select-sm bg-secondary text-white border-0" style="min-width: 150px;" onchange="this.form.submit()">
             <option value="Total Empresa" {% if comp_cc == 'Total Empresa' %}selected{% endif %}>Total Empresa</option>
             {% for cc in todos_cc %}
                 <option value="{{ cc }}" {% if comp_cc == cc %}selected{% endif %}>{{ cc }}</option>
             {% endfor %}
         </select>
 
-        <div class="vr bg-secondary mx-1"></div>
+        <div class="vr bg-secondary mx-1 d-none d-md-block"></div>
 
-        <select name="comp_modo" class="form-select form-select-sm bg-secondary text-white border-0" onchange="this.form.submit()">
+        <select name="comp_modo" class="form-select form-select-sm bg-secondary text-white border-0" style="min-width: 140px;" onchange="this.form.submit()">
             <option value="last_6" {% if comp_modo == 'last_6' %}selected{% endif %}>Últimos 6 Meses</option>
             <option value="last_12" {% if comp_modo == 'last_12' %}selected{% endif %}>Últimos 12 Meses</option>
-            <option value="anual" {% if comp_modo == 'anual' %}selected{% endif %}>Comparativo Anual (Mismo mes)</option>
+            <option value="anual" {% if comp_modo == 'anual' %}selected{% endif %}>Comp. Anual</option>
         </select>
 
-        <div class="vr bg-secondary mx-1"></div>
+        <div class="vr bg-secondary mx-1 d-none d-md-block"></div>
 
         <div class="form-check form-switch m-0">
             <input class="form-check-input" type="checkbox" role="switch" id="switchSG" name="distribuir_sg" 

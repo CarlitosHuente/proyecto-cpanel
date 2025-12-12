@@ -27,7 +27,7 @@ def obtener_ruta_inicio(rol):
         # admin, superusuario o rol desconocido van al dashboard principal
         return url_for("dashboard.dashboard")
 
-@auth_bp.route("/")
+@auth_bp.route("/", methods=["GET", "POST"])
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     # Si ya hay sesión activa, redirigir según su rol actual
