@@ -13,6 +13,7 @@ from datetime import timedelta
 from routes.contab_routes import contab_bp
 from utils.sheet_cache import refrescar_todo_el_cache, obtener_fecha_actualizacion
 from flask import redirect, request
+from utils.auth import tiene_permiso
 import os
 
 app = Flask(__name__)
@@ -48,7 +49,10 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app.config['UPLOAD_FOLDER_CONTAB'] = UPLOAD_FOLDER
 
-
+@app.context_processor
+def utility_processor():
+    """Esto permite usar la función tiene_permiso dentro de los HTML"""
+    return dict(tiene_permiso=tiene_permiso)
 
 @app.route("/refresh")
 def refresh_global():
@@ -56,6 +60,7 @@ def refresh_global():
     refrescar_todo_el_cache()
     flash("✅ Datos actualizados con éxito", "success")
     return redirect(request.referrer or "/")
+
 
 
 

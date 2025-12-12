@@ -117,11 +117,17 @@
             Última actualización: {{ fecha_actualizacion.strftime("%d/%m/%Y %H:%M") }}
         </div>
         {% endif %}
-
+ <!-- RUTAS LIMITADAS A ROL -->
+  
+        {% if tiene_permiso(session.get('rol'), 'dashboard') %}
         <a href="{{ url_for('dashboard.dashboard') }}"><span class="texto-menu">Dashboard</span></a>
-        <a href="{{ url_for('ventas.ventas') }}"><span class="texto-menu">Ventas</span></a>
+        {% endif %}
 
-        <!-- Menú SEREMI -->
+        {% if tiene_permiso(session.get('rol'), 'ventas') %}
+        <a href="{{ url_for('ventas.ventas') }}"><span class="texto-menu">Ventas</span></a>
+        {% endif %}
+
+        {% if tiene_permiso(session.get('rol'), 'seremi') %}
         <div class="dropdown">
             <a class="dropdown-toggle d-block px-3 py-2 text-white" href="#" role="button" id="seremiDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                 <span class="texto-menu">Seremi</span>
@@ -134,28 +140,36 @@
                 <li><a class="dropdown-item text-white" href="{{ url_for('seremi.personal') }}">Registro del Personal</a></li>
             </ul>
         </div>
+        {% endif %}
 
-        <!-- Menú Contabilidad -->
+        {% if tiene_permiso(session.get('rol'), 'contab') or tiene_permiso(session.get('rol'), 'reporte') %}
         <div class="dropdown">
             <a class="dropdown-toggle d-block px-3 py-2 text-white" href="#" role="button" id="contabDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                <span class="texto-menu">Contabilidad</span>
+                <span class="texto-menu">Gestión / Contab</span>
             </a>
             <ul class="dropdown-menu bg-dark border-0" aria-labelledby="contabDropdown">
+                
+                {% if tiene_permiso(session.get('rol'), 'contab') %}
                 <li><a class="dropdown-item text-white" href="{{ url_for('contab.comparativo') }}">Comparativo</a></li>
                 <li><a class="dropdown-item text-white" href="{{ url_for('contab.archivos') }}">Archivos</a></li>
                 <li><a class="dropdown-item text-white" href="{{ url_for('contab.prorrateos') }}">Prorrateos</a></li>
+                {% endif %}
+
                 <li><a class="dropdown-item text-white" href="{{ url_for('contab.dashboard_gestion') }}">Informe Gerencial</a></li>
+
+                {% if tiene_permiso(session.get('rol'), 'contab') %}
                 <li><hr class="dropdown-divider bg-secondary"></li>
                 <li><a class="dropdown-item text-white" href="{{ url_for('contab.clasificacion_cuentas') }}">Clasificación Cuentas</a></li>
+                {% endif %}
 
             </ul>
         </div>
+        {% endif %}
 
-        <a href="#"><span class="texto-menu">Clientes</span></a>
-        <a href="#"><span class="texto-menu">Quesería</span></a>
-        <a href="#"><span class="texto-menu">Lechería</span></a>
-        <a href="#"><span class="texto-menu">Fca Papaya</span></a>
-        <a href="#"><span class="texto-menu">Fca Empanada</span></a>
+        {% if tiene_permiso(session.get('rol'), 'ventas') %} <a href="#"><span class="texto-menu">Clientes</span></a>
+        {% endif %}
+
+
         {% if session.get('rol') in ['superusuario'] %}
             <a href="/config/usuarios"><span class="texto-menu">Configuración</span></a>
         {% endif %}

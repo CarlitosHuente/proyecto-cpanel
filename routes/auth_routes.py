@@ -4,7 +4,6 @@ import os
 from utils.auth import autenticar_huente, crear_sesion_para_email
 from utils.logger import registrar_acceso
 
-
 # --- Configuración del Cliente Supabase ---
 url: str = os.environ.get("SUPABASE_URL")
 key: str = os.environ.get("SUPABASE_KEY")
@@ -12,15 +11,28 @@ supabase: Client = create_client(url, key)
 
 auth_bp = Blueprint('auth', __name__)
 
-# La ruta /login AHORA muestra la página de inicio de sesión
+# --- Función Helper para decidir a dónde ir ---
+def obtener_ruta_inicio(rol):
+    """Devuelve la URL de destino según el rol del usuario."""
+    if rol == "gerencia":
+        return url_for("contab.dashboard_gestion")
+    elif rol == "contab":
+        return url_for("contab.dashboard_gestion")
+    elif rol == "seremi":
+        # Ajusta esto a la ruta principal de seremi que prefieras
+        return url_for("seremi.temperatura_equipos") 
+    elif rol == "ventas":
+        return url_for("ventas.ventas")
+    else:
+        # admin, superusuario o rol desconocido van al dashboard principal
+        return url_for("dashboard.dashboard")
+
 @auth_bp.route("/")
-@auth_bp.route("/login")
-@auth_bp.route("/", methods=["GET", "POST"])
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
-    # Si ya hay sesión activa, manda directo al dashboard
+    # Si ya hay sesión activa, redirigir según su rol actual
     if "usuario" in session:
-        return redirect(url_for("dashboard.dashboard"))
+        return redirect(obtener_ruta_inicio(session.get("rol")))
 
     if request.method == "POST":
         email = request.form.get("email", "").strip()
@@ -28,22 +40,23 @@ def login():
 
         user = autenticar_huente(email, password)
         if user:
-            crear_sesion_para_email(email)
+            # Cargar datos en sesión
+            usuario_data = crear_sesion_para_email(email)
+            rol = usuario_data.get("rol", "invitado")
+            
             registrar_acceso(email, "OK", "Login Huente")
-            return redirect(url_for("dashboard.dashboard"))
+            
+            # Redirección inteligente
+            return redirect(obtener_ruta_inicio(rol))
         else:
             registrar_acceso(email or "desconocido", "ERROR", "Login Huente fallido")
-            # Volvemos a mostrar el login con mensaje de error simple
             return render_template("login.html", error="Correo o contraseña incorrectos o usuario inactivo.")
 
-    # GET → solo mostramos la página de login
     return render_template("login.html")
 
 
-# NUEVA RUTA /google-login para iniciar el proceso con Google
 @auth_bp.route("/google-login")
 def google_login():
-    # Esta es la lógica que antes estaba en /login
     data = supabase.auth.sign_in_with_oauth({
         "provider": "google",
         "options": {
@@ -52,7 +65,7 @@ def google_login():
     })
     return redirect(data.url)
 
-# La ruta /callback no necesita cambios
+
 @auth_bp.route("/callback")
 def callback():
     try:
@@ -62,33 +75,28 @@ def callback():
         user = supabase.auth.get_user().user
         user_email = user.email
 
-        # Usamos la misma lógica que Login Huente:
-        # leer usuario y rol desde usuarios_huente
         usuario_local = crear_sesion_para_email(user_email)
 
         if not usuario_local:
             supabase.auth.sign_out()
-            registrar_acceso(
-                user_email,
-                "DENEGADO",
-                "Login Google OK pero correo no existe en usuarios_huente"
-            )
+            registrar_acceso(user_email, "DENEGADO", "Login Google OK pero correo no existe en usuarios_huente")
             return (
                 "Acceso denegado. Tu correo no está autorizado para usar esta aplicación. "
-                "Contactar con soporte: carlos.carvajal@huentelauquen.cl",
+                "Contactar con soporte.",
                 403,
             )
 
-        # Si llegó aquí, ya dejó en session["usuario"] y session["rol"]
+        rol = usuario_local.get("rol", "invitado")
         registrar_acceso(user_email, "OK", "Login Google")
-        return redirect(url_for("dashboard.dashboard"))
+        
+        # Redirección inteligente
+        return redirect(obtener_ruta_inicio(rol))
 
     except Exception as e:
         registrar_acceso("desconocido", "ERROR", f"Error en callback Google: {e}")
         return f"Ha ocurrido un error durante el inicio de sesión: {e}", 500
 
 
-# La ruta /logout no necesita cambios
 @auth_bp.route("/logout")
 def logout():
     supabase.auth.sign_out()

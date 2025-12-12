@@ -76,7 +76,7 @@ def enviar_archivo_a_script(path_archivo):
 
 @contab_bp.route("/archivos", methods=["GET", "POST"])
 @login_requerido
-@permiso_modulo("admin")
+@permiso_modulo("contab")
 def archivos():
     ruta = current_app.config['UPLOAD_FOLDER_CONTAB']
     nombre_mayor = "mayor.xlsx"
@@ -99,14 +99,14 @@ def archivos():
 
 @contab_bp.route("/descargar_mayor")
 @login_requerido
-@permiso_modulo("admin")
+@permiso_modulo("contab")
 def descargar_mayor():
     ruta = current_app.config['UPLOAD_FOLDER_CONTAB']
     return send_from_directory(ruta, "mayor.xlsx", as_attachment=True)
 
 @contab_bp.route("/eliminar_mayor")
 @login_requerido
-@permiso_modulo("admin")
+@permiso_modulo("contab")
 def eliminar_mayor():
     ruta = current_app.config['UPLOAD_FOLDER_CONTAB']
     try:
@@ -118,7 +118,7 @@ def eliminar_mayor():
 
 @contab_bp.route("/descargar_detalle")
 @login_requerido
-@permiso_modulo("admin")
+@permiso_modulo("contab")
 def descargar_detalle():
     fecha_corte = request.args.get("fecha_corte")
     centro_costo = request.args.get("centro_costo", "Todos")
@@ -150,6 +150,7 @@ def descargar_detalle():
 
 @contab_bp.route("/prorrateos")
 @login_requerido
+@permiso_modulo("contab")
 def prorrateos():
     periodo = request.args.get("periodo") or datetime.now().strftime("%Y-%m")
     pestaña = request.args.get("tab", "cc")
@@ -268,6 +269,7 @@ def prorrateos():
 
 @contab_bp.route("/clasificacion_cuentas")
 @login_requerido
+@permiso_modulo("contab")
 def clasificacion_cuentas():
     df = obtener_datos("mayor")
     cuentas_en_mayor = []
@@ -300,6 +302,7 @@ def clasificacion_cuentas():
 
 @contab_bp.route("/api/config_cuenta_global", methods=["POST"])
 @login_requerido
+@permiso_modulo("contab")
 def api_config_cuenta_global():
     data = request.get_json()
     nombre, tipo, accion = data.get("nombre"), data.get("tipo", "MANUAL_SUCURSAL"), data.get("accion")
@@ -314,6 +317,7 @@ def api_config_cuenta_global():
 
 @contab_bp.route("/api/guardar_clasificacion", methods=["POST"])
 @login_requerido
+@permiso_modulo("contab")
 def api_guardar_clasificacion():
     data = request.get_json()
     if not data or "grupos" not in data: return {"ok": False}, 400
@@ -322,6 +326,7 @@ def api_guardar_clasificacion():
 
 @contab_bp.route("/api/prorrateos/serv_generales", methods=["POST"])
 @login_requerido
+@permiso_modulo("contab")
 def api_guardar_prorrateo_serv_generales():
     payload = request.get_json(force=True)
     periodo, cuenta, dist = payload.get("periodo"), payload.get("cuenta"), payload.get("distribucion")
@@ -333,6 +338,7 @@ def api_guardar_prorrateo_serv_generales():
 
 @contab_bp.route("/api/prorrateos/cuenta_manual", methods=["POST"])
 @login_requerido
+@permiso_modulo("contab")
 def api_guardar_prorrateo_cuenta_manual():
     payload = request.get_json(force=True)
     periodo, cuenta, dist = payload.get("periodo"), payload.get("cuenta"), payload.get("distribucion")
@@ -344,6 +350,7 @@ def api_guardar_prorrateo_cuenta_manual():
 
 @contab_bp.route("/api/prorrateos/fabrica_costeo", methods=["POST"])
 @login_requerido
+@permiso_modulo("contab")
 def api_guardar_prorrateo_fabrica():
     payload = request.get_json(force=True)
     periodo = payload.get("periodo")
@@ -358,6 +365,7 @@ def api_guardar_prorrateo_fabrica():
 
 @contab_bp.route("/api/prorrateos/fabrica_costanera", methods=["POST"])
 @login_requerido
+@permiso_modulo("contab")
 def api_guardar_prorrateo_fabrica_costanera():
     payload = request.get_json(force=True)
     periodo, reglas = payload.get("periodo"), payload.get("reglas", {})
@@ -370,6 +378,7 @@ def api_guardar_prorrateo_fabrica_costanera():
 
 @contab_bp.route("/guardar_comentario", methods=["POST"])
 @login_requerido
+@permiso_modulo("contab")
 def guardar_comentario_api():
     data = request.get_json()
     nombre, periodo, centro = data.get("nombre"), data.get("periodo"), data.get("centro_costo")
@@ -549,6 +558,7 @@ def calcular_matriz_gestion(df, periodo, switch_sg, switch_fab, data_config):
 
 @contab_bp.route("/informe_gerencial")
 @login_requerido
+@permiso_modulo("reporte")
 def informe_gerencial():
     df = obtener_datos("mayor")
     data_config = {"config_cuentas": cargar_prorrateos().get("config_cuentas", {}),
@@ -647,6 +657,7 @@ def informe_gerencial():
 
 @contab_bp.route("/comparativo_gestion")
 @login_requerido
+@permiso_modulo("reporte")
 def comparativo_gestion():
     df = obtener_datos("mayor")
     data_config = {"config_cuentas": cargar_prorrateos().get("config_cuentas", {}),
@@ -761,6 +772,7 @@ def comparativo_gestion():
 
 @contab_bp.route("/dashboard_gestion")
 @login_requerido
+@permiso_modulo("reporte")
 def dashboard_gestion():
     df = obtener_datos("mayor")
     data_config = {"config_cuentas": cargar_prorrateos().get("config_cuentas", {}),
@@ -853,7 +865,7 @@ def dashboard_gestion():
 
 @contab_bp.route("/comparativo")
 @login_requerido
-@permiso_modulo("admin")
+@permiso_modulo("contab")
 def comparativo():
     fecha_corte = request.args.get("fecha_corte")
     clasif = request.args.get("clasificacion", "Todas")

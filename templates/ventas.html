@@ -87,7 +87,6 @@
   </div>
 </form>
 
-<!-- PESTAÑAS -->
 <ul class="nav nav-tabs" id="ventasTabs">
   <li class="nav-item">
     <a class="nav-link {% if filtros.tab != 'resumen' %}active{% endif %}" data-bs-toggle="tab" href="#detalle">Detalle</a>
@@ -101,7 +100,6 @@
 </ul>
 
 <div class="tab-content mt-3">
-  <!-- TAB DETALLE -->
   <div class="tab-pane fade {% if filtros.tab != 'resumen' %}show active{% endif %}" id="detalle">
     {% if detalle %}
       <h3 class="mt-4 text-white">Detalle de Ventas</h3>
@@ -122,8 +120,8 @@
                 <td>{{ "%.0f"|format(fila["CANTIDAD"]) if fila["PRODUCTO"] != "TOTAL" else fila["CANTIDAD"] }}</td>
                 <td>${{ "{:,.0f}".format(fila["NETO"]).replace(",", ".") }}</td>
                 <td>
-                  {% if fila["PRECIO UNITARIO"] %}
-                    ${{ "{:,.0f}".format(fila["PRECIO UNITARIO"]).replace(",", ".") }}
+                  {% if fila["PRECIO_UNITARIO"] %}
+                    ${{ "{:,.0f}".format(fila["PRECIO_UNITARIO"]).replace(",", ".") }}
                   {% else %}
                     -
                   {% endif %}
@@ -138,7 +136,6 @@
     {% endif %}
   </div>
 
-  <!-- TAB RESUMEN -->
   <div class="tab-pane fade {% if filtros.tab == 'resumen' %}show active{% endif %}" id="resumen">
     <h3 class="mt-4 text-white">Resumen Mensual</h3>
 
@@ -181,7 +178,6 @@
               </tr>
             {% endfor %}
 
-            <!-- Totales -->
             <tr class="table-secondary text-dark fw-bold">
               <td colspan="2">TOTAL</td>
               {% for val in resumen_mensual.total.neto %}
@@ -196,7 +192,6 @@
       <p class="text-warning">No hay datos para mostrar en el resumen mensual.</p>
     {% endif %}
   </div>
-  <!-- Detalle por Dia -->
   <div class="tab-pane fade" id="detalle_dia">
     
     {% if detalle_dia_data and detalle_dia_data.tabla %}
@@ -238,7 +233,6 @@
   </div>
 </div>
 
-<!-- Scripts -->
 <script>
   function actualizarLinkDescarga() {
     const form = document.querySelector("form");
@@ -285,10 +279,12 @@
     const params = new URLSearchParams(new FormData(form));
 
     // Identifica la pestaña activa (href="#detalle" o href="#resumen")
-    const activeTabHref = document.querySelector(".nav-link.active").getAttribute("href");
-    const activeTab = activeTabHref.replace("#", ""); // "detalle" o "resumen"
-
-    params.set("tab", activeTab);  // Agrega el parámetro tab
+    const activeTabElement = document.querySelector(".nav-link.active");
+    if (activeTabElement) {
+        const activeTabHref = activeTabElement.getAttribute("href");
+        const activeTab = activeTabHref.replace("#", ""); // "detalle" o "resumen"
+        params.set("tab", activeTab);  // Agrega el parámetro tab
+    }
 
     // Aplica los parámetros al href del botón de descarga
     document.getElementById("descargar-link").href = `/descargar_excel?${params.toString()}`;
@@ -307,7 +303,5 @@
     tab.addEventListener('shown.bs.tab', actualizarLinkDescarga);
   });
 </script>
-
-
 
 {% endblock %}
