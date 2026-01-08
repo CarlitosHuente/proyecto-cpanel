@@ -158,7 +158,7 @@ def api_detalle_solicitud(solicitud_id):
             p.unidad_medida,
             p.sku
         FROM solicitudes_detalle d
-        JOIN productos p ON d.producto_id = p.producto_id 
+        JOIN Productos p ON d.producto_id = p.producto_id 
         WHERE d.solicitud_id = %s
     """
     cursor.execute(query, (solicitud_id,))
@@ -299,6 +299,7 @@ def vista_nueva_solicitud():
     cursor = conn.cursor()
 
     # Query Dinámica para Sucursales (Solo trae las permitidas)
+    #Se modifico codigo
     query_suc = "SELECT sucursal_id, nombre_sucursal FROM Sucursales"
     params_suc = []
 
@@ -339,7 +340,7 @@ def vista_nueva_solicitud():
                 "sku": p[3], "categoria_id": p[4]
             })
     else:
-        lista_productos = productos
+        lista_productos = productos 
 
     lista_categorias = []
     if categorias and isinstance(categorias[0], (list, tuple)):

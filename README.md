@@ -8,6 +8,9 @@ git push origin main
 git push --set-upstream origin prueba-cambios //Rama
 git push origin main --force
 
+Se modifico y necesita nuevos cambios
+
+
 
 # Crear CArpeta Local
 
