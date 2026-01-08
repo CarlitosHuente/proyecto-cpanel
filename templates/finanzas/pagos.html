@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+
+{% block title %}Registrar Movimiento - Huentelauquén{% endblock %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 800px;">
+    
+    <div class="card bg-dark text-white border-secondary shadow">
+        <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">💸 Registrar Pago / Ingreso</h4>
+            <a href="{{ url_for('finanzas.flujo') }}" class="btn btn-outline-light btn-sm">Volver al Flujo</a>
+        </div>
+        
+        <div class="card-body">
+            <form action="{{ url_for('finanzas.pagos') }}" method="POST">
+                
+                <div class="row mb-4">
+                    <div class="col-12 text-center">
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="tipo" id="tipoEgreso" value="egreso" checked onchange="actualizarCategorias()">
+                            <label class="btn btn-outline-warning py-3 fw-bold" for="tipoEgreso">➖ EGRESO (Gasto)</label>
+
+                            <input type="radio" class="btn-check" name="tipo" id="tipoIngreso" value="ingreso" onchange="actualizarCategorias()">
+                            <label class="btn btn-outline-success py-3 fw-bold" for="tipoIngreso">➕ INGRESO (Venta)</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Fecha del Movimiento</label>
+                        <input type="date" name="fecha" class="form-control bg-secondary text-white border-0" value="{{ hoy }}" required>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Monto ($)</label>
+                        <input type="number" name="monto" class="form-control bg-secondary text-white border-0" placeholder="Ej: 50000" min="1" required>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Categoría</label>
+                        <select name="categoria_id" id="selectCategoria" class="form-select bg-secondary text-white border-0" required>
+                            </select>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Entidad / Proveedor / Cliente</label>
+                        <select name="entidad_id" class="form-select bg-secondary text-white border-0" required>
+                            <option value="">Seleccione...</option>
+                            {% for ent in entidades %}
+                                <option value="{{ ent.id }}">{{ ent.nombre }} ({{ ent.tipo|upper }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label">Descripción / Detalle</label>
+                    <textarea name="descripcion" class="form-control bg-secondary text-white border-0" rows="2" placeholder="Ej: Pago factura 123, Compra de insumos..."></textarea>
+                </div>
+
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-danger btn-lg">💾 Guardar Movimiento</button>
+                </div>
+
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Pasamos los datos de Python a variables JS
+    const catsIngreso = [
+        {% for c in cats_ingreso %} {id: {{c.id}}, nombre: "{{c.nombre}}"}, {% endfor %}
+    ];
+    
+    const catsEgreso = [
+        {% for c in cats_egreso %} {id: {{c.id}}, nombre: "{{c.nombre}}"}, {% endfor %}
+    ];
+
+    function actualizarCategorias() {
+        const esIngreso = document.getElementById('tipoIngreso').checked;
+        const select = document.getElementById('selectCategoria');
+        const lista = esIngreso ? catsIngreso : catsEgreso;
+
+        // Limpiar select
+        select.innerHTML = '<option value="">Seleccione Categoría...</option>';
+
+        // Llenar select
+        lista.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat.id;
+            option.textContent = cat.nombre;
+            select.appendChild(option);
+        });
+    }
+
+    // Ejecutar al inicio para cargar los egresos por defecto
+    document.addEventListener("DOMContentLoaded", actualizarCategorias);
+</script>
+
+{% endblock %}

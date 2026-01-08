@@ -9,12 +9,15 @@ from flask import session, redirect, url_for, render_template
 
 PERMISOS = {
     "superusuario": ["*"], 
-    "admin": ["dashboard", "ventas", "clientes", "seremi", "contab", "reporte"],
+    "admin": ["dashboard", "ventas", "clientes", "seremi", "contab", "reporte","sucursales"],
     "ventas": ["dashboard", "ventas", "clientes"],
-    "seremi": ["seremi"],
+    "seremi2":["seremi"],
+    "seremi": ["sucursales"],
     "contab": ["contab"],
     "gerencia": ["reporte", "ventas"],
+    "logistica":["sucursales"],
     "invitado": []
+    
 }
 
 def tiene_permiso(rol, modulo):

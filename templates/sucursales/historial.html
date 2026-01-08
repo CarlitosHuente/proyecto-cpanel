@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+
+{% block title %}Historial de Pedidos{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-white">📜 Historial de Pedidos</h2>
+        <a href="{{ url_for('sucursales.pizarra') }}" class="btn btn-outline-light">⬅ Volver a Pizarra</a>
+    </div>
+
+    <div class="card bg-dark border-secondary">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0 align-middle">
+                    <thead class="table-secondary">
+                        <tr>
+                            <th>ID</th>
+                            <th>Fecha</th>
+                            <th>Sucursal</th>
+                            <th>Solicitante</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for h in historial %}
+                        <tr>
+                            <td>#{{ h.id }}</td>
+                            <td>{{ h.fecha.strftime('%d/%m/%Y') }}</td>
+                            <td class="fw-bold">{{ h.sucursal }}</td>
+                            <td><small>{{ h.usuario }}</small></td>
+                            <td>
+                                {% if h.estado == 'Completado' %} <span class="badge bg-success">Completado</span>
+                                {% elif h.estado == 'Anulado' %} <span class="badge bg-secondary">Anulado</span>
+                                {% elif h.estado == 'Pendiente' %} <span class="badge bg-danger">Pendiente</span>
+                                {% else %} <span class="badge bg-warning text-dark">{{ h.estado }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-info" 
+                                    onclick="verDetalle({{ h.id }}, '{{ h.sucursal }}', '{{ h.fecha.strftime('%d/%m/%Y') }}')">
+                                    Ver 👁️
+                                </button>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center py-4">No hay registros en el historial.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalHistorial" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title" id="modalTitulo">Cargando...</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="loadingSpinner" class="text-center py-3">
+            <div class="spinner-border text-info" role="status"></div>
+        </div>
+        
+        <table class="table table-dark table-striped d-none" id="tablaDetalle">
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Solicitado</th>
+                    <th>Entregado</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody id="cuerpoTabla"></tbody>
+        </table>
+      </div>
+      <div class="modal-footer border-secondary">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function verDetalle(id, sucursal, fecha) {
+    // 1. Configurar Modal
+    document.getElementById('modalTitulo').innerText = "Pedido #" + id + " - " + sucursal + " (" + fecha + ")";
+    document.getElementById('loadingSpinner').classList.remove('d-none');
+    document.getElementById('tablaDetalle').classList.add('d-none');
+    
+    var myModal = new bootstrap.Modal(document.getElementById('modalHistorial'));
+    myModal.show();
+
+    // 2. Pedir datos a la API (Reutilizamos la misma API que la pizarra)
+    fetch(`/sucursales/api/detalle/${id}`)
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.getElementById('cuerpoTabla');
+            tbody.innerHTML = ""; 
+
+            data.forEach(item => {
+                let badgeColor = 'bg-secondary';
+                if(item.estado_linea === 'Completo') badgeColor = 'bg-success';
+                else if(item.estado_linea === 'Pendiente') badgeColor = 'bg-danger';
+                else if(item.estado_linea === 'Parcial') badgeColor = 'bg-warning text-dark';
+
+                let row = `
+                    <tr>
+                        <td>
+                            <div class="fw-bold">${item.nombre_producto}</div>
+                            <small class="text-muted">${item.sku}</small>
+                        </td>
+                        <td>${item.cantidad_solicitada} ${item.unidad_medida}</td>
+                        <td>${item.cantidad_despachada}</td>
+                        <td><span class="badge ${badgeColor}">${item.estado_linea}</span></td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+
+            document.getElementById('loadingSpinner').classList.add('d-none');
+            document.getElementById('tablaDetalle').classList.remove('d-none');
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('cuerpoTabla').innerHTML = "<tr><td colspan='4' class='text-danger'>Error al cargar datos</td></tr>";
+        });
+}
+</script>
+{% endblock %}

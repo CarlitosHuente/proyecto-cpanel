@@ -1,0 +1,82 @@
+/* static/css/pizarra.css */
+
+/* Contenedor Grid Responsivo */
+
+.pizarra-container {
+    display: grid;
+    /* CAMBIO AQUÍ: Cambia 280px por 200px o 220px */
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); 
+    gap: 20px;
+    padding: 20px 0;
+}
+
+
+
+/* Diseño base del Post-it */
+.post-it {
+    position: relative;
+    padding: 20px;
+    box-shadow: 3px 3px 10px rgba(0,0,0,0.2);
+    transition: transform 0.2s;
+    min-height: 200px;
+    cursor: pointer;
+    border: none; /* Quitamos borde default de bootstrap */
+}
+
+.post-it:hover {
+    transform: scale(1.02) rotate(-1deg);
+    z-index: 10;
+}
+
+/* static/css/pizarra.css */
+
+/* ... (Mantén .pizarra-container y .post-it igual que antes) ... */
+
+/* COLORES POR SUCURSAL (Pasteles suaves para no cansar la vista) */
+.sucursal-color-1 { background-color: #E3F2FD; color: #333; } /* Azul suave */
+.sucursal-color-2 { background-color: #F3E5F5; color: #333; } /* Lila suave */
+.sucursal-color-3 { background-color: #E8F5E9; color: #333; } /* Verde menta */
+.sucursal-color-4 { background-color: #FFF3E0; color: #333; } /* Naranjo suave */
+.sucursal-color-5 { background-color: #FAFAFA; color: #333; } /* Gris muy claro */
+/* Si tienes más sucursales, se repetirán cíclicamente */
+
+/* SEMÁFORO DE URGENCIA (El Led en la esquina) */
+.semaforo {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    box-shadow: 0 0 10px rgba(0,0,0,0.3);
+    border: 2px solid rgba(255,255,255,0.8);
+}
+
+.semaforo-rojo {
+    background-color: #ff3333;
+    animation: pulse-red 2s infinite;
+}
+
+.semaforo-verde {
+    background-color: #00e676;
+}
+
+/* Animación para lo urgente (late como un corazón) */
+@keyframes pulse-red {
+    0% { box-shadow: 0 0 0 0 rgba(255, 51, 51, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(255, 51, 51, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 51, 51, 0); }
+}
+
+/* El Pin sigue igual, pero lo movemos un poco para que no choque */
+.pin {
+    position: absolute;
+    top: -12px;
+    left: 45%;
+    width: 24px;
+    height: 24px;
+    background: #d32f2f;
+    border-radius: 50%;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+    z-index: 5;
+}

@@ -1,0 +1,199 @@
+{% extends 'base.html' %}
+
+{% block title %}Nueva Solicitud{% endblock %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 800px;">
+    <div class="card bg-dark text-white border-secondary">
+        <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">📝 Nueva Solicitud de Insumos</h4>
+            <a href="{{ url_for('sucursales.pizarra') }}" class="btn btn-outline-light btn-sm">Volver a Pizarra</a>
+        </div>
+        <div class="card-body">
+            
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <label class="form-label text-muted">Sucursal</label>
+                    <select class="form-select bg-dark text-white border-secondary" id="selectSucursal">
+                        <option value="" selected disabled>Seleccione Sucursal...</option>
+                        {% for s in sucursales %}
+                        <option value="{{ s.sucursal_id }}">{{ s.nombre_sucursal }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label text-muted">Prioridad</label>
+                    <select class="form-select bg-dark text-white border-secondary" id="selectPrioridad">
+                        <option value="Normal" selected>🟢 Normal</option>
+                        <option value="Alta">🔴 Alta / Urgente</option>
+                    </select>
+                </div>
+            </div>
+
+            <hr class="border-secondary">
+
+            <label class="form-label text-muted mb-2">Detalle del Pedido</label>
+            <div class="table-responsive mb-3">
+                <table class="table table-dark table-striped align-middle" id="tablaItems">
+                    <thead>
+                        <tr>
+                            <th width="60%">Producto</th>
+                            <th width="25%">Cantidad</th>
+                            <th width="15%"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="cuerpoTabla">
+                        </tbody>
+                </table>
+            </div>
+
+            <button class="btn btn-outline-info w-100 mb-4" onclick="agregarFila()">
+                + Agregar Producto
+            </button>
+
+            <div class="d-grid gap-2">
+                <button class="btn btn-primary btn-lg" onclick="guardarSolicitud()">🚀 Enviar Solicitud</button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<select id="masterSelectProductos" style="display: none;">
+    <option value="" disabled selected>Seleccionar...</option>
+    {% for p in productos %}
+    <option value="{{ p.producto_id }}" 
+            data-medida="{{ p.unidad_medida }}" 
+            data-cat="{{ p.categoria_id }}">
+        {{ p.nombre }}
+    </option>
+    {% endfor %}
+</select>
+
+<select id="masterSelectCategorias" style="display: none;">
+    <option value="" selected>Todas</option>
+    {% for c in categorias %}
+    <option value="{{ c.categoria_id }}">{{ c.nombre_categoria }}</option>
+    {% endfor %}
+</select>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        agregarFila();
+    });
+
+    function agregarFila() {
+        const tbody = document.getElementById("cuerpoTabla");
+        const row = document.createElement("tr");
+
+        // Obtenemos HTML base de los selects
+        const opcionesCat = document.getElementById("masterSelectCategorias").innerHTML;
+        const opcionesProd = document.getElementById("masterSelectProductos").innerHTML;
+
+        row.innerHTML = `
+            <td>
+                <select class="form-select form-select-sm bg-secondary text-white border-0 mb-1 input-categoria" onchange="filtrarProductos(this)">
+                    ${opcionesCat}
+                </select>
+                
+                <select class="form-select form-select-sm bg-dark text-white border-secondary input-producto" onchange="actualizarUnidad(this)">
+                    ${opcionesProd}
+                </select>
+            </td>
+            <td>
+                <div class="input-group input-group-sm">
+                    <input type="number" class="form-control bg-dark text-white border-secondary input-cantidad" placeholder="0" min="0.1" step="0.1">
+                    <span class="input-group-text bg-secondary text-white border-secondary span-unidad">-</span>
+                </div>
+            </td>
+            <td class="text-center align-middle">
+                <button class="btn btn-sm btn-outline-danger" onclick="eliminarFila(this)">✕</button>
+            </td>
+        `;
+        tbody.appendChild(row);
+    }
+
+    // Función mágica para filtrar
+    function filtrarProductos(selectCat) {
+        const row = selectCat.closest("tr");
+        const selectProd = row.querySelector(".input-producto");
+        const catId = selectCat.value;
+        
+        // 1. Guardar selección actual si existe (para intentar mantenerla si coincide)
+        const valorActual = selectProd.value;
+
+        // 2. Traer todas las opciones originales
+        const todasLasOpciones = document.getElementById("masterSelectProductos").querySelectorAll("option");
+        
+        // 3. Limpiar el select de productos
+        selectProd.innerHTML = '<option value="" disabled selected>Seleccionar...</option>';
+
+        // 4. Insertar solo las que coinciden con la categoría
+        todasLasOpciones.forEach(op => {
+            // Si la categoría es "" (Todas) o coincide con el data-cat
+            if (catId === "" || op.getAttribute("data-cat") === catId) {
+                // Clonamos la opción para meterla en el select visible
+                selectProd.appendChild(op.cloneNode(true));
+            }
+        });
+    }
+
+    function actualizarUnidad(selectProd) {
+        const row = selectProd.closest("tr");
+        const option = selectProd.options[selectProd.selectedIndex];
+        const medida = option.getAttribute("data-medida") || "-";
+        row.querySelector(".span-unidad").innerText = medida;
+    }
+
+    function eliminarFila(btn) {
+        const row = btn.closest("tr");
+        if (document.getElementById("cuerpoTabla").rows.length > 1) {
+            row.remove();
+        } else {
+            row.querySelector('.input-producto').value = "";
+            row.querySelector('.input-cantidad').value = "";
+        }
+    }
+
+    // La función guardarSolicitud() SE MANTIENE IGUAL QUE ANTES
+    function guardarSolicitud() {
+        // ... (Copia tu función guardarSolicitud anterior aquí) ...
+        const sucursal = document.getElementById("selectSucursal").value;
+        const prioridad = document.getElementById("selectPrioridad").value;
+        
+        if (!sucursal) return alert("⚠️ Seleccione una sucursal.");
+
+        const filas = document.querySelectorAll("#cuerpoTabla tr");
+        let items = [];
+
+        filas.forEach(row => {
+            const prodId = row.querySelector(".input-producto").value;
+            const cant = row.querySelector(".input-cantidad").value;
+
+            if (prodId && cant > 0) {
+                items.push({ id: prodId, cantidad: cant });
+            }
+        });
+
+        if (items.length === 0) return alert("⚠️ Agregue items válidos.");
+
+        if (!confirm("¿Confirmar envío?")) return;
+
+        fetch("{{ url_for('sucursales.crear_solicitud_api') }}", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sucursal_id: sucursal, prioridad: prioridad, items: items })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert("✅ Enviado!");
+                window.location.href = "{{ url_for('sucursales.pizarra') }}";
+            } else {
+                alert("❌ Error: " + data.error);
+            }
+        })
+        .catch(err => alert("Error de conexión"));
+    }
+</script>
+{% endblock %}

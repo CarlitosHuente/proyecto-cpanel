@@ -14,6 +14,8 @@ from routes.contab_routes import contab_bp
 from utils.sheet_cache import refrescar_todo_el_cache, obtener_fecha_actualizacion
 from flask import redirect, request
 from utils.auth import tiene_permiso
+from routes.finanzas_routes import finanzas_bp
+from routes.sucursales_routes import sucursales_bp
 import os
 
 app = Flask(__name__)
@@ -40,6 +42,8 @@ app.register_blueprint(dashboard_bp)
 app.register_blueprint(seremi_bp)
 app.register_blueprint(contab_bp)
 app.register_blueprint(config_bp)
+app.register_blueprint(finanzas_bp)
+app.register_blueprint(sucursales_bp)
 
 
 
