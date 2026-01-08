@@ -12,7 +12,7 @@ PERMISOS = {
     "admin": ["dashboard", "ventas", "clientes", "seremi", "contab", "reporte","sucursales"],
     "ventas": ["dashboard", "ventas", "clientes"],
     "seremi2":["seremi"],
-    "seremi": ["sucursales"],
+    "seremi": ["sucursales","seremi"],
     "contab": ["contab"],
     "gerencia": ["reporte", "ventas"],
     "logistica":["sucursales"],

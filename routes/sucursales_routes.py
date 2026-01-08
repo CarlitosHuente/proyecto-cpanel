@@ -14,9 +14,14 @@ sucursales_bp = Blueprint('sucursales', __name__, url_prefix='/sucursales')
 # [ID, ID]: Lista de IDs de sucursales permitidas
 ACCESO_SUCURSALES = {
     "carloscarvajal2.0@gmail.com": "TODAS",       # <--- CAMBIAR POR TU CORREO REAL
-    "logistica1@huente.com": "TODAS",
-    "sucursal1@huente.com": [1],          # Ejemplo: Solo ve sucursal ID 1
-    "sucursal2@huente.com": [2]
+    "jessicanoemiherrera@gmail.com": "TODAS",
+    "becar.cristobal@gmail.com":"TODAS",
+    "foodtrucklascondes@gmail.com": [1],          # Ejemplo: Solo ve sucursal ID 1
+    "huentelauquenmut@gmail.com": [2],
+    "huentelauquenplazaegana@gmail.com": [3],  
+    "huentecostanera@gmail.com": [4],
+    "conchali@gmail.com": [5]  
+    
 }
 
 @sucursales_bp.route("/pizarra")
