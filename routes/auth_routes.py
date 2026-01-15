@@ -23,6 +23,10 @@ def obtener_ruta_inicio(rol):
         return url_for("seremi.temperatura_equipos") 
     elif rol == "ventas":
         return url_for("ventas.ventas")
+    elif rol == "sucursales":
+        return url_for("sucursales.pizarra")
+    elif rol == "logistica":
+        return url_for("sucursales.pizarra")
     else:
         # admin, superusuario o rol desconocido van al dashboard principal
         return url_for("dashboard.dashboard")

@@ -82,13 +82,7 @@ def ventas():
         filtros["hasta"]
     )
 ###
-    import pprint
-    print("=== FILTROS APLICADOS ===")
-    pprint.pprint(filtros)
 
-    # Antes de aplicar el filtro
-    print("=== DATAFRAME ORIGINAL ===")
-    print(df.head())
 
 
     # Aplicar filtros con debug

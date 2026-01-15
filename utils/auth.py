@@ -14,6 +14,7 @@ PERMISOS = {
     "seremi2":["seremi"],
     "seremi": ["sucursales","seremi"],
     "contab": ["contab"],
+    "sucursales":["sucursales","seremi"],
     "gerencia": ["reporte", "ventas"],
     "logistica":["sucursales"],
     "invitado": []
@@ -131,5 +132,7 @@ def crear_sesion_para_email(email: str):
     session.clear()
     session["usuario"] = user["email"]
     session["rol"] = user["rol"]
+    # Guardamos el ID de la sucursal (será un número o None)
+    session["sucursal_id"] = user.get("sucursal_id")
 
     return user

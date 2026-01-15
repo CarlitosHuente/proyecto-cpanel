@@ -20,7 +20,8 @@ ACCESO_SUCURSALES = {
     "huentelauquenmut@gmail.com": [2],
     "huentelauquenplazaegana@gmail.com": [3],  
     "huentecostanera@gmail.com": [4],
-    "conchali@gmail.com": [5]  
+    "conchali@gmail.com": [5],
+    "sucursal1@huente.com":[1]  
     
 }
 
@@ -32,11 +33,23 @@ def pizarra():
     
     usuario_actual = session["usuario"]
     rol = session.get("rol", "invitado")
-
-    permiso_sucursales = ACCESO_SUCURSALES.get(usuario_actual, [])
     
-    if rol in ['superusuario', 'gerencia', 'admin', 'logistica'] and not permiso_sucursales:
-        permiso_sucursales = "TODAS"
+    # --- NUEVA LÓGICA AUTOMÁTICA ---
+    # 1. ¿Tiene sucursal asignada en BD? (Viene en la sesión desde el login)
+    sucursal_asignada = session.get("sucursal_id")
+    
+    permiso_sucursales = []
+
+    if sucursal_asignada:
+        # SI TIENE ID: Lo forzamos a ver solo esa
+        permiso_sucursales = [int(sucursal_asignada)]
+    else:
+        # NO TIENE ID (Es NULL): Depende de su Rol
+        if rol in ['superusuario', 'gerencia', 'admin', 'logistica']:
+            permiso_sucursales = "TODAS"
+        else:
+            permiso_sucursales = [] # Si no es jefe y no tiene sucursal, no ve nada
+    # -------------------------------
 
     if not permiso_sucursales:
         flash("No tienes sucursales asignadas.", "warning")

@@ -146,7 +146,7 @@ def api_latest_date_info():
             semana = fecha_mas_reciente.isocalendar().week
             return jsonify({"año": año, "semana": semana})
     except Exception as e:
-        print(f"Error obteniendo la última fecha: {e}")
+        #print(f"Error obteniendo la última fecha: {e}")
         # Devolver valores por defecto en caso de error
         from datetime import datetime
         hoy = datetime.now()
