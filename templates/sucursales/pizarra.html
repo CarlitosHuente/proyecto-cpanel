@@ -38,7 +38,7 @@
             </div>
             {% endif %}
 
-            {% if session.get('rol') in ['superusuario', 'admin', 'logistica'] %}
+            {% if session.get('rol') in ['superusuario', 'admin', 'logistica','seremi'] %}
                 <button class="btn btn-warning text-dark fw-bold" data-bs-toggle="modal" data-bs-target="#modalNuevaAlerta">
                     📢 Enviar Alerta
                 </button>
