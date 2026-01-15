@@ -45,7 +45,7 @@ def pizarra():
         permiso_sucursales = [int(sucursal_asignada)]
     else:
         # NO TIENE ID (Es NULL): Depende de su Rol
-        if rol in ['superusuario', 'gerencia', 'admin', 'logistica']:
+        if rol in ['superusuario', 'gerencia', 'admin', 'logistica',"seremi"]:
             permiso_sucursales = "TODAS"
         else:
             permiso_sucursales = [] # Si no es jefe y no tiene sucursal, no ve nada
@@ -569,7 +569,7 @@ def recepcionar_pedido():
 @permiso_modulo("sucursales")
 def crear_tarea():
     # Solo Jefes pueden crear
-    if session.get("rol") not in ['superusuario', 'admin', 'logistica']:
+    if session.get("rol") not in ['superusuario', 'admin', 'logistica',"seremi"]:
         return jsonify({"success": False, "error": "No tienes permiso para enviar alertas"}), 403
 
     data = request.get_json()
