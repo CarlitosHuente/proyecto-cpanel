@@ -137,7 +137,7 @@ def pizarra():
 
     # 3. LISTA SUCURSALES (Para que los Jefes puedan elegir destino)
     sucursales_lista = []
-    if rol in ['superusuario', 'admin', 'logistica']:
+    if rol in ['superusuario', 'admin', 'logistica',"seremi"]:
         cursor.execute("SELECT sucursal_id, nombre_sucursal FROM Sucursales ORDER BY nombre_sucursal")
         suc_rows = cursor.fetchall()
         
@@ -310,7 +310,7 @@ def vista_nueva_solicitud():
     
     # --- CAMBIO: FILTRO DE SUCURSALES EN EL SELECTOR ---
     permiso_sucursales = ACCESO_SUCURSALES.get(usuario_actual, [])
-    if rol in ['superusuario', 'gerencia'] and not permiso_sucursales:
+    if rol in ['superusuario', 'adm',"seremi"] and not permiso_sucursales:
         permiso_sucursales = "TODAS"
 
     conn = get_db_connection()
@@ -391,7 +391,7 @@ def crear_solicitud_api():
     permiso_sucursales = ACCESO_SUCURSALES.get(usuario_actual, [])
     
     # Si no es superusuario ni gerencia, validamos el permiso explícito
-    if session.get("rol") not in ['superusuario', 'gerencia']:
+    if session.get("rol") not in ['superusuario', 'adm', "seremi"]:
          if permiso_sucursales != "TODAS":
              # Convertimos a int para comparar seguro
              try:
@@ -452,7 +452,7 @@ def historial():
     # (Asegúrate de que ACCESO_SUCURSALES esté definido al inicio del archivo py)
     permiso_sucursales = ACCESO_SUCURSALES.get(usuario_actual, [])
     
-    if rol in ['superusuario', 'gerencia', 'admin'] and not permiso_sucursales:
+    if rol in ['superusuario', 'gerencia', 'admin',"seremi"] and not permiso_sucursales:
         permiso_sucursales = "TODAS"
 
     if not permiso_sucursales:
