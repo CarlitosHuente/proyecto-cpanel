@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-white">
+            <i class="bi bi-box-seam me-2"></i>Gestión de Productos
+        </h2>
+        <a href="{{ url_for('config.nuevo_producto') }}" class="btn btn-success">
+            <i class="bi bi-plus-lg"></i> Nuevo Producto
+        </a>
+    </div>
+
+    <div class="card bg-dark border-secondary shadow">
+        <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+            <span class="text-white">Inventario Actual</span>
+            <input type="text" id="buscadorProductos" class="form-control form-control-sm w-25 bg-secondary text-white border-0" placeholder="Buscar en la tabla...">
+        </div>
+        
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-striped table-hover mb-0 align-middle">
+                    <thead class="table-light text-dark">
+                        <tr>
+                            <th>SKU</th>
+                            <th>Nombre</th>
+                            <th>Categoría</th>
+                            <th class="text-center">Unidad</th>
+                            <th class="text-center">Stock Min</th>
+                            <th class="text-end" style="min-width: 150px;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaCuerpo">
+                        {% for p in productos %}
+                        <tr>
+                            <td class="fw-bold text-info">{{ p.sku }}</td>
+                            <td>{{ p.nombre }}</td>
+                            <td>
+                                <span class="badge bg-secondary border border-light text-white">
+                                    {{ p.nombre_categoria or 'Sin Categoría' }}
+                                </span>
+                            </td>
+                            <td class="text-center">{{ p.unidad_medida }}</td>
+                            <td class="text-center">
+                                {% if p.stock_minimo > 0 %}
+                                    {{ p.stock_minimo }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <a href="{{ url_for('config.editar_producto', id=p.producto_id) }}" 
+                                   class="btn btn-sm btn-outline-info me-1" title="Editar">
+                                   ✏️
+                                </a>
+                                <a href="{{ url_for('config.eliminar_producto', id=p.producto_id) }}" 
+                                   class="btn btn-sm btn-outline-danger" 
+                                   onclick="return confirm('¿Estás seguro de eliminar el producto {{ p.nombre }}?')"
+                                   title="Eliminar">
+                                   🗑️
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const input = document.getElementById("buscadorProductos");
+        const tableBody = document.getElementById("tablaCuerpo");
+        const rows = tableBody.getElementsByTagName("tr");
+
+        input.addEventListener("keyup", function() {
+            const filter = input.value.toLowerCase();
+            for (let i = 0; i < rows.length; i++) {
+                const text = rows[i].textContent.toLowerCase();
+                if (text.includes(filter)) {
+                    rows[i].style.display = "";
+                } else {
+                    rows[i].style.display = "none";
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

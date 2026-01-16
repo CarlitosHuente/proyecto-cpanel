@@ -244,9 +244,37 @@
         {% endif %}
 
         {% if tiene_permiso(session.get('rol'), 'ventas') %} <a href="#"><span class="texto-menu">Clientes</span></a> {% endif %}
-        {% if session.get('rol') in ['superusuario'] %}
-            <a href="/config/usuarios"><span class="texto-menu">Configuración</span></a>
+        
+        
+        {% if session['rol'] in ['superusuario', 'admin', 'logistica', "seremi"] %}
+        <li class="nav-item">
+            <a class="nav-link collapsed text-white" href="#" data-bs-toggle="collapse" data-bs-target="#submenuConfig" aria-expanded="false">
+                <i class="bi bi-gear-fill me-2"></i> Configuración 
+                <i class="bi bi-caret-down-fill ms-auto" style="font-size: 0.8em;"></i>
+            </a>
+            <div class="collapse" id="submenuConfig">
+                <ul class="btn-toggle-nav list-unstyled fw-normal pb-1 small ms-4">
+                    
+                    {% if session['rol'] in ['superusuario', 'admin'] %}
+                    <li><a href="{{ url_for('config.usuarios') }}" class="text-white text-decoration-none rounded p-1 d-block">
+                        <i class="bi bi-people me-2"></i> Usuarios
+                    </a></li>
+                    {% endif %}
+
+                    <li><a href="{{ url_for('config.productos') }}" class="text-white text-decoration-none rounded p-1 d-block">
+                        <i class="bi bi-box-seam me-2"></i> Productos
+                    </a></li>
+
+                    <li><a href="{{ url_for('config.categorias') }}" class="text-white text-decoration-none rounded p-1 d-block">
+                        <i class="bi bi-tags me-2"></i> Categorías
+                    </a></li>
+                    
+                </ul>
+            </div>
+        </li>
         {% endif %}
+
+        
         <a href="{{ url_for('auth.logout') }}"><span class="texto-menu">Cerrar sesión</span></a>
     </div>
 

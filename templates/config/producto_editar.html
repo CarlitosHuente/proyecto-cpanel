@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4 text-white">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header border-secondary">
+                    <h3 class="mb-0">Editar Producto #{{ producto.producto_id }}</h3>
+                </div>
+                <div class="card-body">
+                    
+                    <form method="POST">
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Nombre del Producto</label>
+                            <input type="text" name="nombre" 
+                                   class="form-control" 
+                                   value="{{ producto.nombre }}" 
+                                   list="listaProductosExistentes" 
+                                   placeholder="Escribe para buscar duplicados..." 
+                                   autocomplete="off" required>
+                            
+                            <datalist id="listaProductosExistentes">
+                                {% for nombre in todos_los_productos %}
+                                    <option value="{{ nombre }}">
+                                {% endfor %}
+                            </datalist>
+                            <div class="form-text text-light opacity-50">
+                                * Si escribes algo que ya existe, aparecerá en la lista.
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">SKU (Código)</label>
+                                <input type="text" name="sku" class="form-control" value="{{ producto.sku }}" required>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Categoría</label>
+                                
+                                <input type="text" id="inputCategoria" 
+                                       class="form-control" 
+                                       list="listaCategorias" 
+                                       placeholder="Buscar categoría..." 
+                                       autocomplete="off" required>
+                                
+                                <input type="hidden" name="categoria_id" id="hiddenCategoriaId" value="{{ producto.categoria_id }}">
+
+                                <datalist id="listaCategorias">
+                                    {% for c in categorias %}
+                                        <option data-id="{{ c[0] }}" value="{{ c[1] }}"></option>
+                                    {% endfor %}
+                                </datalist>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Unidad Medida</label>
+                                <select name="unidad_medida" class="form-select">
+                                    <option value="unidad" {% if producto.unidad_medida == 'unidad' %}selected{% endif %}>Unidad</option>
+                                    <option value="kg" {% if producto.unidad_medida == 'kg' %}selected{% endif %}>Kg</option>
+                                    <option value="lt" {% if producto.unidad_medida == 'lt' %}selected{% endif %}>Litro</option>
+                                    <option value="paquete" {% if producto.unidad_medida == 'paquete' %}selected{% endif %}>Paquete</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Stock Mínimo</label>
+                                <input type="number" step="0.01" name="stock_minimo" class="form-control" value="{{ producto.stock_minimo }}">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Descripción</label>
+                            <textarea name="descripcion" class="form-control" rows="2">{{ producto.descripcion }}</textarea>
+                        </div>
+
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="{{ url_for('config.productos') }}" class="btn btn-secondary">Cancelar</a>
+                            <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                        </div>
+                    </form>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // SCRIPT PARA VINCULAR EL NOMBRE DE CATEGORÍA CON SU ID
+    document.addEventListener('DOMContentLoaded', function() {
+        const inputCat = document.getElementById('inputCategoria');
+        const hiddenId = document.getElementById('hiddenCategoriaId');
+        const dataList = document.getElementById('listaCategorias');
+        
+        // 1. Pre-cargar el nombre de la categoría actual si existe
+        const currentId = hiddenId.value;
+        if (currentId) {
+            // Buscamos en las opciones cuál tiene este ID
+            const options = dataList.options;
+            for (let i = 0; i < options.length; i++) {
+                if (options[i].getAttribute('data-id') == currentId) {
+                    inputCat.value = options[i].value;
+                    break;
+                }
+            }
+        }
+
+        // 2. Detectar cambios en el input para actualizar el ID oculto
+        inputCat.addEventListener('input', function() {
+            const val = this.value;
+            const options = dataList.options;
+            let foundId = '';
+
+            for (let i = 0; i < options.length; i++) {
+                if (options[i].value === val) {
+                    foundId = options[i].getAttribute('data-id');
+                    break;
+                }
+            }
+            hiddenId.value = foundId;
+        });
+
+        // (Opcional) Validación antes de enviar: obligar a elegir una de la lista
+        document.querySelector('form').addEventListener('submit', function(e) {
+            if (!hiddenId.value) {
+                e.preventDefault();
+                alert('Por favor, selecciona una categoría válida de la lista.');
+                inputCat.focus();
+            }
+        });
+    });
+</script>
+
+{% endblock %}

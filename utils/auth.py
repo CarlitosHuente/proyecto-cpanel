@@ -9,14 +9,14 @@ from flask import session, redirect, url_for, render_template
 
 PERMISOS = {
     "superusuario": ["*"], 
-    "admin": ["dashboard", "ventas", "clientes", "seremi", "contab", "reporte","sucursales"],
+    "admin": ["dashboard", "ventas", "clientes", "seremi", "contab", "reporte","sucursales","productos","categorias"],
     "ventas": ["dashboard", "ventas", "clientes"],
     "seremi2":["seremi"],
-    "seremi": ["sucursales","seremi"],
+    "seremi": ["sucursales","seremi","productos","categorias"],
     "contab": ["contab"],
     "sucursales":["sucursales","seremi"],
     "gerencia": ["reporte", "ventas"],
-    "logistica":["sucursales"],
+    "logistica":["sucursales","productos","categorias"],
     "invitado": []
     
 }

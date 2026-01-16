@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, abort
 from utils.auth import login_requerido, permiso_modulo, PERMISOS
 from utils.db import get_db_connection
 from werkzeug.security import generate_password_hash
+from collections import defaultdict
 
 config_bp = Blueprint('config', __name__, url_prefix='/config')
 
@@ -148,3 +149,197 @@ def nuevo_usuario():
 
     conn.close()
     return redirect(url_for("config.usuarios"))
+
+# routes/config_routes.py (AGREGAR AL FINAL)
+
+# ==========================================
+# GESTIÓN DE CATEGORÍAS
+# ==========================================
+
+# En routes/config_routes.py
+
+ # <--- Asegúrate de importar esto arriba si no está
+
+@config_bp.route('/categorias')
+@login_requerido
+@permiso_modulo("categorias")
+def categorias():
+    conn = get_db_connection()
+    with conn.cursor() as cur:
+        # 1. Categorías
+        cur.execute("SELECT categoria_id, nombre_categoria FROM Categorias ORDER BY nombre_categoria ASC")
+        cats = cur.fetchall()
+
+        # 2. Productos (AHORA TRAEMOS TAMBIÉN EL ID)
+        cur.execute("SELECT producto_id, nombre, categoria_id FROM Productos WHERE categoria_id IS NOT NULL ORDER BY nombre ASC")
+        prods = cur.fetchall()
+    conn.close()
+
+    # 3. Agrupar guardando ID y NOMBRE
+    productos_map = defaultdict(list)
+    
+    for p in prods:
+        # Manejo seguro de Tupla vs Diccionario
+        if isinstance(p, dict):
+            pid, nom, cid = p['producto_id'], p['nombre'], p['categoria_id']
+        else:
+            pid, nom, cid = p[0], p[1], p[2]
+        
+        # Guardamos el objeto completo
+        productos_map[cid].append({'id': pid, 'nombre': nom})
+
+    return render_template('config/categorias.html', categorias=cats, productos_map=productos_map)
+
+@config_bp.route('/categorias/nueva', methods=['POST'])
+@login_requerido
+@permiso_modulo("categorias")
+def nueva_categoria():
+    nombre = request.form.get('nombre_categoria')
+    if nombre:
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("INSERT INTO Categorias (nombre_categoria) VALUES (%s)", (nombre,))
+            conn.commit()
+        except Exception as e:
+            # Aquí podrías usar flash para mostrar error
+            print(f"Error: {e}")
+        finally:
+            conn.close()
+    return redirect(url_for('config.categorias'))
+
+@config_bp.route('/categorias/eliminar/<int:id>')
+@login_requerido
+@permiso_modulo("categorias")
+def eliminar_categoria(id):
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM Categorias WHERE categoria_id = %s", (id,))
+        conn.commit()
+    except Exception as e:
+        # Esto pasará si hay productos usando esta categoría
+        print(f"No se puede eliminar: {e}") 
+    finally:
+        conn.close()
+    return redirect(url_for('config.categorias'))
+
+
+# ==========================================
+# GESTIÓN DE PRODUCTOS
+# ==========================================
+
+@config_bp.route('/productos')
+@login_requerido
+@permiso_modulo("productos")
+def productos():
+    conn = get_db_connection()
+    with conn.cursor() as cur:
+        # Traemos productos + nombre de su categoría
+        query = """
+            SELECT p.producto_id, p.sku, p.nombre, p.unidad_medida, p.stock_minimo, c.nombre_categoria
+            FROM Productos p
+            LEFT JOIN Categorias c ON p.categoria_id = c.categoria_id
+            ORDER BY p.nombre ASC
+        """
+        cur.execute(query)
+        prods = cur.fetchall()
+    conn.close()
+    return render_template('config/productos.html', productos=prods)
+
+# En routes/config_routes.py
+
+# routes/config_routes.py
+
+@config_bp.route('/productos/nuevo', methods=['GET', 'POST'])
+@login_requerido
+@permiso_modulo("productos")
+def nuevo_producto():
+    conn = get_db_connection()
+    
+    if request.method == 'POST':
+        sku = request.form.get('sku')
+        nombre = request.form.get('nombre')
+        descripcion = request.form.get('descripcion')
+        categoria_id = request.form.get('categoria_id') # Ojo: vendrá del input hidden
+        stock_minimo = request.form.get('stock_minimo')
+        unidad = request.form.get('unidad_medida')
+
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO Productos (sku, nombre, descripcion, categoria_id, stock_minimo, unidad_medida)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (sku, nombre, descripcion, categoria_id, stock_minimo, unidad))
+            conn.commit()
+            conn.close()
+            return redirect(url_for('config.productos'))
+        except Exception as e:
+            conn.close()
+            return f"Error al guardar: {e}" 
+
+    # GET: Mostrar formulario
+    with conn.cursor() as cur:
+        # 1. Traemos categorías (ID y Nombre) para el buscador
+        cur.execute("SELECT categoria_id, nombre_categoria FROM Categorias ORDER BY nombre_categoria")
+        cats = cur.fetchall()
+        
+        # 2. Traemos TODOS los nombres para evitar duplicados
+        cur.execute("SELECT nombre FROM Productos")
+        all_prods = [row[0] if isinstance(row, tuple) else row['nombre'] for row in cur.fetchall()]
+        
+    conn.close()
+    
+    return render_template('config/producto_nuevo.html', 
+                           categorias=cats,
+                           todos_los_productos=all_prods)
+
+# En routes/config_routes.py
+
+@config_bp.route('/productos/editar/<int:id>', methods=['GET', 'POST'])
+@login_requerido
+@permiso_modulo("productos")
+def editar_producto(id):
+    conn = get_db_connection()
+
+    if request.method == 'POST':
+        # ... (Tu lógica de POST para guardar sigue igual) ...
+        # Solo asegúrate de capturar 'categoria_id' que ahora vendrá de un input oculto o select
+        pass
+
+    # Lógica GET (Cargar datos)
+    with conn.cursor() as cur:
+        # 1. Datos del producto actual
+        cur.execute("SELECT * FROM Productos WHERE producto_id=%s", (id,))
+        prod = cur.fetchone()
+        
+        # 2. Lista de Categorías (ID y Nombre)
+        cur.execute("SELECT categoria_id, nombre_categoria FROM Categorias ORDER BY nombre_categoria")
+        cats = cur.fetchall()
+
+        # 3. NUEVO: Lista de TODOS los productos (para el autocompletado de duplicados)
+        cur.execute("SELECT nombre FROM Productos WHERE producto_id != %s", (id,))
+        all_prods = [row[0] if isinstance(row, tuple) else row['nombre'] for row in cur.fetchall()]
+
+    conn.close()
+
+    return render_template('config/producto_editar.html', 
+                           producto=prod, 
+                           categorias=cats, 
+                           todos_los_productos=all_prods) # <--- Enviamos esto nuevo
+    
+    
+@config_bp.route('/productos/eliminar/<int:id>')
+@login_requerido
+@permiso_modulo("productos")
+def eliminar_producto(id):
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM Productos WHERE producto_id=%s", (id,))
+        conn.commit()
+    except Exception as e:
+        print(f"Error al eliminar: {e}")
+    finally:
+        conn.close()
+    return redirect(url_for('config.productos'))
