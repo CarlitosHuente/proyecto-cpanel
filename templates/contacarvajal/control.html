@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+    
+    <div class="row mb-4 align-items-center"> <div class="col-md-5">
+            <h2 class="text-white">✅ Control de Honorarios</h2>
+            <p class="text-muted m-0">Gestión de Boletas de Honorarios Electrónicas (BHE)</p>
+        </div>
+        
+        <div class="col-md-7 d-flex justify-content-end align-items-center gap-3">
+            
+            {% if valor_uf > 0 %}
+            <div class="bg-black border border-info rounded px-3 py-1 text-info d-flex align-items-center shadow-sm">
+                <i class="bi bi-currency-exchange me-2"></i>
+                <div>
+                    <small class="d-block text-secondary" style="font-size: 0.7rem; line-height: 1;">
+                        UF AL CIERRE
+                    </small>
+                    <span class="fw-bold" style="font-size: 1.1rem;">
+                        $ {{ "{:,.2f}".format(valor_uf).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                    </span>
+                    <input type="hidden" id="valor_uf_actual" value="{{ valor_uf }}">
+                </div>
+            </div>
+            {% else %}
+            <div class="badge bg-danger">! Error API UF</div>
+            {% endif %}
+
+            <form action="{{ url_for('contacarvajal.control') }}" method="GET" class="d-flex gap-2 bg-dark p-2 rounded border border-secondary mb-0">
+                <select name="mes" class="form-select form-select-sm bg-secondary text-white border-0" style="width: 120px;">
+                    {% set meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'] %}
+                    {% for m in meses %}
+                        <option value="{{ loop.index }}" {% if loop.index == mes|int %}selected{% endif %}>{{ m }}</option>
+                    {% endfor %}
+                </select>
+                <input type="number" name="anio" value="{{ anio }}" class="form-control form-control-sm bg-secondary text-white border-0" style="width: 80px;">
+                <button type="submit" class="btn btn-sm btn-danger">Filtrar</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary shadow">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0 align-middle">
+                    <thead class="bg-black">
+                        <tr>
+                            <th style="width: 25%;">Cliente</th>
+                            <th style="width: 15%;">Pactado (CLP o UF)</th>
+                            <th style="width: 20%;">N° Boleta</th>
+                            <th style="width: 20%;">Monto Boleta</th>
+                            <th style="width: 20%;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in registros %}
+                        <tr class="{% if r.boleta_emitida %}table-success{% endif %}" style="--bs-table-bg-type: {% if r.boleta_emitida %}rgba(25, 135, 84, 0.15){% else %}transparent{% endif %}">
+                            
+                            <form action="{{ url_for('contacarvajal.actualizar_boleta') }}" method="POST">
+                                <input type="hidden" name="cliente_id" value="{{ r.id }}">
+                                <input type="hidden" name="mes" value="{{ mes }}">
+                                <input type="hidden" name="anio" value="{{ anio }}">
+
+                                <td>
+                                    <div class="fw-bold">{{ r.razon_social }}</div>
+                                    {% if r.boleta_emitida %}
+                                        <span class="badge bg-success" style="font-size: 0.65rem;">EMITIDA</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary" style="font-size: 0.65rem;">PENDIENTE</span>
+                                    {% endif %}
+                                </td>
+                                
+                                <td class="text-info">
+                                    {% if r.honorario_pactado < 1000 %}
+                                        {{ r.honorario_pactado }} UF
+                                    {% else %}
+                                        $ {{ "{:,.0f}".format(r.honorario_pactado).replace(',', '.') }}
+                                    {% endif %}
+                                    <input type="hidden" id="pactado_{{ r.id }}" value="{{ r.honorario_pactado }}">
+                                </td>
+
+                                <td>
+                                    <input type="number" name="nro_boleta" 
+                                           class="form-control form-control-sm bg-dark text-white border-secondary" 
+                                           value="{{ r.nro_boleta if r.nro_boleta else '' }}">
+                                </td>
+
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text bg-secondary border-secondary text-white">$</span>
+                                        <input type="number" name="monto" id="input_monto_{{ r.id }}"
+                                               class="form-control bg-dark text-white border-secondary" 
+                                               value="{{ r.monto_boleta if r.monto_boleta else '' }}">
+                                        
+                                        <button type="button" class="btn btn-outline-warning" 
+                                                title="Calcular/Copiar Monto"
+                                                onclick="calcularMonto('{{ r.id }}')">
+                                            🪄
+                                        </button>
+                                    </div>
+                                </td>
+
+                                <td>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger w-100 d-flex align-items-center justify-content-center gap-2">
+                                        <i class="bi bi-save"></i> <span>Guardar</span>
+                                    </button>
+                                </td>
+                            </form>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function calcularMonto(id) {
+        const pactado = parseFloat(document.getElementById('pactado_' + id).value);
+        const input = document.getElementById('input_monto_' + id);
+        const ufValor = parseFloat(document.getElementById('valor_uf_actual').value || 0);
+
+        if(!pactado) return;
+
+        // LÓGICA DE DETECCIÓN INTELIGENTE
+        // Si el valor pactado es pequeño (ej: menor a 1000), asumimos que son UFs
+        if (pactado < 1000 && ufValor > 0) {
+            // Es UF -> Convertir a Pesos
+            const totalPesos = Math.round(pactado * ufValor);
+            input.value = totalPesos;
+            
+            // Efecto visual para confirmar conversión
+            input.style.borderColor = "#ffc107"; // Amarillo warning
+            setTimeout(() => input.style.borderColor = "", 1000);
+            
+        } else {
+            // Son Pesos -> Solo copiar
+            input.value = pactado;
+        }
+    }
+</script>
+{% endblock %}

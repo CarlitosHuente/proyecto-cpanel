@@ -274,6 +274,18 @@
         </li>
         {% endif %}
 
+        {% if tiene_permiso(session.get('rol'), 'contacarvajal') %}
+        <div class="dropdown">
+            <a class="dropdown-toggle d-block px-3 py-2 text-white" href="#" role="button" id="contaCarvajalDrop" data-bs-toggle="dropdown" aria-expanded="false">
+                <span class="texto-menu" style="color: #ff9999;">⚖️ ContaCarvajal</span>
+            </a>
+            <ul class="dropdown-menu bg-dark border-0" aria-labelledby="contaCarvajalDrop">
+                <li><a class="dropdown-item text-white" href="{{ url_for('contacarvajal.clientes') }}">Maestro Clientes</a></li>
+                <li><a class="dropdown-item text-white" href="{{ url_for('contacarvajal.control') }}">Control Mensual (BHE)</a></li>
+            </ul>
+        </div>
+        {% endif %}
+
         
         <a href="{{ url_for('auth.logout') }}"><span class="texto-menu">Cerrar sesión</span></a>
     </div>

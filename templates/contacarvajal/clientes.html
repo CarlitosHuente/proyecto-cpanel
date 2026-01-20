@@ -1,0 +1,180 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>📂 Clientes ContaCarvajal</h2>
+        <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#modalNuevoCliente">
+            + Nuevo Cliente
+        </button>
+    </div>
+
+    <div class="card bg-dark border-secondary shadow">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-striped table-hover align-middle mb-0">
+                    <thead class="bg-black border-bottom border-secondary">
+                        <tr class="text-white">
+                            <th class="ps-3 text-start">Razón Social / Contacto</th>
+                            <th class="text-start">RUT</th>
+                            <th class="text-center">Claves</th>
+                            <th class="text-start">Representante</th>
+                            <th class="text-end">Honorario</th>
+                            <th class="text-center">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in clientes %}
+                        <tr>
+                            <td class="ps-3 text-start">
+                                <div class="fw-bold text-white">{{ c.razon_social }}</div>
+                                <small class="text-muted">{{ c.email_contacto if c.email_contacto else 'Sin correo' }}</small>
+                            </td>
+                            
+                            <td class="text-start font-monospace">{{ c.rut }}</td>
+                            
+                            <td class="text-center">
+                                <span class="badge bg-secondary border border-secondary text-light" title="{{ c.clave_sii }}">SII: ****</span>
+                                <span class="badge bg-secondary border border-secondary text-light" title="{{ c.clave_previred }}">PRE: ****</span>
+                            </td>
+                            
+                            <td class="text-start">
+                                <div class="text-white">{{ c.nombre_rep }}</div>
+                                <small class="text-muted font-monospace">{{ c.rut_rep }}</small>
+                            </td>
+                            
+                            <td class="text-end text-info fw-bold">
+                                ${{ "{:,.0f}".format(c.honorario_pactado).replace(',', '.') }}
+                            </td>
+                            
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-outline-light border-0">
+                                    <i class="bi bi-pencil-square"></i> Editar
+                                </button>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">No hay clientes registrados.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalNuevoCliente" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark text-white border border-secondary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title">Registrar Nuevo Cliente</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('contacarvajal.clientes') }}" method="POST">
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label text-secondary small">Tipo Contribuyente</label>
+                            <select name="tipo" id="inputTipo" class="form-select bg-secondary text-white border-0">
+                                <option value="Empresa">Empresa Jurídica</option>
+                                <option value="Persona">Persona Natural</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label text-secondary small">RUT Cliente (Empresa/Persona)</label>
+                            <input type="text" name="rut" id="inputRut" class="form-control bg-dark text-white border-secondary" required placeholder="12.345.678-9">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label text-secondary small">Honorario Pactado ($)</label>
+                            <input type="number" name="honorario" class="form-control bg-dark text-white border-secondary" placeholder="0">
+                        </div>
+                        
+                        <div class="col-12">
+                            <label class="form-label text-secondary small">Razón Social / Nombre Completo</label>
+                            <input type="text" name="nombre" id="inputNombre" class="form-control bg-dark text-white border-secondary" required>
+                        </div>
+
+                        <hr class="border-secondary my-4">
+                        <h6 class="text-info mb-3">Datos del Representante Legal</h6>
+
+                        <div class="col-md-6">
+                            <label class="form-label text-secondary small">Nombre Representante</label>
+                            <input type="text" name="nombre_rep" id="inputNombreRep" class="form-control bg-dark text-white border-secondary">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-secondary small">RUT Representante</label>
+                            <input type="text" name="rut_rep" id="inputRutRep" class="form-control bg-dark text-white border-secondary">
+                        </div>
+
+                        <hr class="border-secondary my-4">
+                        <h6 class="text-danger mb-3">Credenciales y Contacto</h6>
+
+                        <div class="col-md-4">
+                            <label class="form-label text-secondary small">Clave SII</label>
+                            <input type="text" name="clave_sii" class="form-control bg-dark text-white border-secondary">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label text-secondary small">Clave Previred</label>
+                            <input type="text" name="clave_previred" class="form-control bg-dark text-white border-secondary">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label text-secondary small">Email Contacto</label>
+                            <input type="text" name="email" class="form-control bg-dark text-white border-secondary" placeholder="ejemplo@correo.com o NA">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">Guardar Cliente</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const inputTipo = document.getElementById('inputTipo');
+        const inputNombre = document.getElementById('inputNombre'); // Razón Social
+        const inputRut = document.getElementById('inputRut');       // RUT Cliente
+        
+        const inputNombreRep = document.getElementById('inputNombreRep');
+        const inputRutRep = document.getElementById('inputRutRep');
+
+        // Función para copiar datos si es Persona
+        function autoCompletarRepresentante() {
+            if (inputTipo.value === 'Persona') {
+                inputNombreRep.value = inputNombre.value;
+                inputRutRep.value = inputRut.value;
+                
+                // Opcional: Hacer los campos de rep solo lectura para evitar confusión visual
+                inputNombreRep.readOnly = true;
+                inputRutRep.readOnly = true;
+                inputNombreRep.classList.add('text-muted'); // Efecto visual
+                inputRutRep.classList.add('text-muted');
+            } else {
+                // Si vuelve a empresa, permitir edición
+                inputNombreRep.readOnly = false;
+                inputRutRep.readOnly = false;
+                inputNombreRep.classList.remove('text-muted');
+                inputRutRep.classList.remove('text-muted');
+            }
+        }
+
+        // Escuchar cambios
+        inputTipo.addEventListener('change', function() {
+            // Si cambia a empresa, limpiamos los campos rep si son iguales a los de arriba
+            if (this.value === 'Empresa' && inputNombreRep.value === inputNombre.value) {
+                inputNombreRep.value = '';
+                inputRutRep.value = '';
+            }
+            autoCompletarRepresentante();
+        });
+
+        inputNombre.addEventListener('input', autoCompletarRepresentante);
+        inputRut.addEventListener('input', autoCompletarRepresentante);
+    });
+</script>
+{% endblock %}
