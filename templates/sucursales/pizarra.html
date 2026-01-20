@@ -5,48 +5,56 @@
 {% block content %}
 <link href="{{ url_for('static', filename='css/pizarra.css') }}" rel="stylesheet">
 
-        <div class="d-flex gap-2 align-items-center">
-            
-            {% if tareas_campana %}
-            <div class="dropdown me-2">
-                <button class="btn btn-dark position-relative dropdown-toggle" type="button" id="campanaBtn" data-bs-toggle="dropdown" aria-expanded="false">
-                    🔔
-                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-                        {{ tareas_campana|length }}
-                    </span>
-                </button>
-                <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end p-0" aria-labelledby="campanaBtn" style="width: 350px; max-height: 400px; overflow-y: auto;">
-                    <li class="dropdown-header bg-secondary text-white fw-bold">Últimas Instrucciones</li>
-                    {% for t in tareas_campana %}
-                        <li class="p-2 border-bottom border-secondary">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    {% if t.prioridad == 'Urgente' %}<span class="badge bg-danger mb-1">URGENTE</span>{% endif %}
-                                    <span class="fw-bold d-block text-wrap">{{ t.mensaje }}</span>
-                                    <small class="text-light opacity-75" style="font-size: 0.75rem;">
-                                        {{ t.fecha.strftime('%d/%m %H:%M') }} 
-                                        {% if t.postergaciones > 0 %} | Pos: {{ t.postergaciones }}/3{% endif %}
-                                    </small>
-                                </div>
-                                <button class="btn btn-sm btn-success align-self-center ms-2" onclick="completarTarea({{ t.id }}, this)">
-                                    ✅
-                                </button>
+<div class="container-fluid mt-4">
+    <div class="d-flex gap-2 align-items-center mb-4 flex-wrap">
+        
+        {% if tareas_campana %}
+        <div class="dropdown me-2">
+            <button class="btn btn-dark position-relative dropdown-toggle" type="button" id="campanaBtn" data-bs-toggle="dropdown" aria-expanded="false">
+                🔔
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                    {{ tareas_campana|length }}
+                </span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end p-0" aria-labelledby="campanaBtn" style="width: 350px; max-height: 400px; overflow-y: auto;">
+                <li class="dropdown-header bg-secondary text-white fw-bold">Últimas Instrucciones</li>
+                {% for t in tareas_campana %}
+                    <li class="p-2 border-bottom border-secondary">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                {% if t.prioridad == 'Urgente' %}<span class="badge bg-danger mb-1">URGENTE</span>{% endif %}
+                                <span class="fw-bold d-block text-wrap">{{ t.mensaje }}</span>
+                                <small class="text-light opacity-75" style="font-size: 0.75rem;">
+                                    {{ t.fecha.strftime('%d/%m %H:%M') }} 
+                                    {% if t.postergaciones > 0 %} | Pos: {{ t.postergaciones }}/3{% endif %}
+                                </small>
                             </div>
-                        </li>
-                    {% endfor %}
-                </ul>
-            </div>
-            {% endif %}
-
-            {% if session.get('rol') in ['superusuario', 'admin', 'logistica','seremi'] %}
-                <button class="btn btn-warning text-dark fw-bold" data-bs-toggle="modal" data-bs-target="#modalNuevaAlerta">
-                    📢 Enviar Alerta
-                </button>
-            {% endif %}
-
-            <a href="{{ url_for('sucursales.historial') }}" class="btn btn-outline-info">📜 Historial</a>
-            <a href="{{ url_for('sucursales.vista_nueva_solicitud') }}" class="btn btn-success">+ Nueva Solicitud</a>
+                            <button class="btn btn-sm btn-success align-self-center ms-2" onclick="completarTarea({{ t.id }}, this)">
+                                ✅
+                            </button>
+                        </div>
+                    </li>
+                {% endfor %}
+            </ul>
         </div>
+        {% endif %}
+
+        {% if session.get('rol') in ['superusuario', 'admin', 'logistica', 'seremi'] %}
+            <button class="btn btn-warning text-dark fw-bold" data-bs-toggle="modal" data-bs-target="#modalNuevaAlerta">
+                📢 Enviar Alerta
+            </button>
+        {% endif %}
+
+        <a href="{{ url_for('sucursales.historial') }}" class="btn btn-outline-info">📜 Historial</a>
+        
+        <a href="{{ url_for('sucursales.vista_nueva_solicitud') }}" class="btn btn-success">
+            <i class="bi bi-cart-plus"></i> Pedir Productos
+        </a>
+
+        <button type="button" class="btn btn-warning text-dark" data-bs-toggle="modal" data-bs-target="#modalServicio">
+            <i class="bi bi-tools"></i> Solicitar Mantención/Otros
+        </button>
+    </div>
 
     {% if not solicitudes %}
         <div class="alert alert-dark text-center">
@@ -57,11 +65,8 @@
         <div class="pizarra-container">
             {% for sol in solicitudes %}
                 {% set color_index = (sol.sucursal_id % 5) + 1 %}
-                
                 {% set dias_atraso = (datetime.now() - sol.fecha_solicitud).days %}
-                
                 {% set es_urgente = (sol.prioridad == 'Alta') or (dias_atraso >= 4) %}
-                
                 {% set clase_semaforo = 'semaforo-rojo' if es_urgente else 'semaforo-verde' %}
                 {% set tooltip_semaforo = 'URGENTE: Atrasado' if dias_atraso >= 4 else ('Prioridad Alta' if sol.prioridad == 'Alta' else 'A tiempo') %}
 
@@ -95,8 +100,19 @@
                     </div>
 
                     <div class="mt-3">
-                        <p class="mb-0 fw-bold" style="font-size: 1.2rem; color: #000 !important;">{{ sol.items_count }} Items</p>
-                        <small style="color: #444 !important;">Click para ver detalle 👁️</small>
+                        {% if sol.tipo_solicitud == 'Servicio' %}
+                            <div class="p-2 rounded bg-light bg-opacity-50 border border-dark border-opacity-25">
+                                <small class="text-dark fw-bold text-uppercase" style="font-size: 0.75rem;">
+                                    <i class="bi bi-tools"></i> Requerimiento:
+                                </small>
+                                <p class="mb-0 mt-1 fst-italic text-dark text-truncate" style="font-size: 0.95rem; max-height: 3rem; white-space: normal;">
+                                    "{{ sol.descripcion_servicio }}"
+                                </p>
+                            </div>
+                        {% else %}
+                            <p class="mb-0 fw-bold" style="font-size: 1.2rem; color: #000 !important;">{{ sol.items_count }} Items</p>
+                            <small style="color: #444 !important;">Click para ver detalle 👁️</small>
+                        {% endif %}
                     </div>
                 </div>
             {% endfor %}
@@ -125,7 +141,7 @@
                 </tr>
             </thead>
             <tbody id="cuerpoTabla">
-                </tbody>
+            </tbody>
         </table>
       </div>
       <div class="modal-footer border-secondary d-flex justify-content-between">
@@ -194,7 +210,48 @@
     </div>
 </div>
 
-{% if tareas_activas %} <div class="modal fade" id="modalTareasPendientes" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+<div class="modal fade" id="modalServicio" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title">Solicitar Reparación o Servicio</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formServicio">
+            
+            <div class="mb-3">
+                <label>Sucursal</label>
+                <select id="servSucursal" class="form-select bg-secondary text-white border-0">
+                    {% for s in sucursales_select %}
+                        <option value="{{ s.id }}">{{ s.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label>Prioridad</label>
+                <select id="servPrioridad" class="form-select bg-secondary text-white border-0">
+                    <option value="Normal">Normal</option>
+                    <option value="Alta">Alta 🔥</option>
+                    <option value="Critica">Crítica 🚨</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label>¿Qué necesitas?</label>
+                <textarea id="servDescripcion" class="form-control bg-secondary text-white border-0" rows="4" placeholder="Ej: La congeladora hace un ruido extraño..."></textarea>
+            </div>
+
+            <button type="submit" class="btn btn-warning w-100 text-dark fw-bold">Enviar Solicitud</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if tareas_activas %} 
+<div class="modal fade" id="modalTareasPendientes" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-lg">
         <div class="modal-content bg-dark text-white border-danger">
             <div class="modal-header bg-danger text-white">
@@ -226,37 +283,8 @@
 </div>
 {% endif %}
 
-<div class="modal fade" id="modalCampanita" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content bg-dark text-white border-secondary">
-            <div class="modal-header border-secondary">
-                <h5 class="modal-title">🔔 Tareas en Espera</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p class="small text-muted">Estas tareas volverán a aparecer automáticamente en unos minutos.</p>
-                <div class="list-group">
-                    {% for t in tareas_postergadas %}
-                    <div class="list-group-item bg-dark text-white border-secondary d-flex justify-content-between align-items-center">
-                        <div>
-                            <span class="text-warning fw-bold">{{ t.mensaje }}</span>
-                            <br>
-                            <small class="text-muted">Postergado hasta: {{ t.postergado_hasta.strftime('%H:%M') }}</small>
-                        </div>
-                        <button class="btn btn-success btn-sm" onclick="completarTarea({{ t.id }}, this)">
-                            ✅ Hacer Ahora
-                        </button>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-
 {% if tareas_popup %} 
-<div class="modal fade" id="modalTareasPendientes" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+<div class="modal fade" id="modalTareasPendientesPopup" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-lg">
         <div class="modal-content bg-dark text-white border-danger">
             <div class="modal-header bg-danger text-white">
@@ -310,7 +338,6 @@
         document.getElementById('btnGestionar').style.display = 'inline-block';
         document.getElementById('btnConfirmar').style.display = 'none';
         
-        // El botón recepcionar lo mostramos si hay items, y si el usuario tiene permiso (Jinja)
         const btnRec = document.getElementById('btnRecepcionar');
         if(btnRec) btnRec.style.display = 'inline-block'; 
 
@@ -327,7 +354,9 @@
             })
             .catch(error => {
                 console.error("Error:", error);
-                alert("Error cargando datos.");
+                // Si falla (ej: es un servicio sin items), manejamos el error visualmente
+                document.getElementById('loadingSpinner').classList.add('d-none');
+                // Podríamos mostrar la descripción aquí si tuviéramos acceso a ella en JS
             });
     }
 
@@ -341,16 +370,19 @@
         const tbody = document.getElementById('cuerpoTabla');
         tbody.innerHTML = ""; 
 
+        if(!data || data.length === 0) {
+            tbody.innerHTML = "<tr><td colspan='3' class='text-center text-muted'>Este pedido es una solicitud de servicio (sin productos).</td></tr>";
+            return;
+        }
+
         let hayPendienteConfirmar = false;
 
         data.forEach(item => {
-            // Ocultar lo terminado (igual que antes)
             const envioCompleto = item.cantidad_despachada >= item.cantidad_solicitada;
             const recepcionCompleta = item.cantidad_recepcionada >= item.cantidad_despachada;
             
             if (envioCompleto && recepcionCompleta && !modoEdicion) return;
 
-            // Cálculos
             let enTransito = item.cantidad_despachada - item.cantidad_recepcionada; 
             if (enTransito < 0) enTransito = 0;
             
@@ -363,7 +395,6 @@
             let columnaCantidad = `<div class="fs-5">${item.cantidad_solicitada}</div>`;
 
             if (modoEdicion) {
-                // --- MODO LOGÍSTICA (Igual que antes) ---
                 if (faltantePorEnviar > 0) {
                     columnaAccion = `
                         <input type="number" class="form-control input-despacho bg-dark text-white border-secondary" 
@@ -376,9 +407,6 @@
                     columnaAccion = `<span class="badge bg-success">Listo ✅</span>`;
                 }
             } else {
-                // --- MODO LECTURA / SUCURSAL (CORREGIDO) ---
-                
-                // 1. Preparamos la etiqueta de Estado (Badge)
                 let badge = "";
                 if (item.estado_linea === 'Completo') {
                     badge = `<span class="badge bg-success mb-1">Completo</span>`;
@@ -388,15 +416,12 @@
                     badge = `<span class="badge bg-danger mb-1">Pendiente</span>`;
                 }
 
-                // 2. Preparamos el aviso de "Faltan"
                 let infoFaltante = "";
                 if (faltantePorEnviar > 0) {
                     infoFaltante = `<div class="text-danger fw-bold small">Faltan: ${faltantePorEnviar}</div>`;
                 }
 
-                // 3. Decidimos qué mostrar
                 if (enTransito > 0) {
-                    // CASO A: Hay mercadería llegando -> Input + Estado + Faltante
                     columnaAccion = `
                         <div class="d-flex justify-content-between align-items-center mb-1">
                             ${badge}
@@ -412,7 +437,6 @@
                         ${infoFaltante} 
                     `;
                 } else {
-                    // CASO B: Nada llegando -> Solo Estado + Faltante
                     columnaAccion = `
                         ${badge}
                         ${infoFaltante}
@@ -430,7 +454,6 @@
             tbody.innerHTML += row;
         });
 
-        // Botón Recepcionar
         const btnRec = document.getElementById('btnRecepcionar');
         if(btnRec) {
             btnRec.style.display = (hayPendienteConfirmar && !modoEdicion) ? 'inline-block' : 'none';
@@ -454,9 +477,8 @@
             else alert("❌ Error: " + resp.error);
         });
     }
-    //Tareas
+
     function confirmarRecepcion() {
-        // Recolectamos lo que la sucursal dice que llegó
         const inputs = document.querySelectorAll('.input-recepcion');
         if(inputs.length === 0) return alert("Nada por confirmar.");
 
@@ -495,17 +517,40 @@
             });
     }
 
+    // --- SCRIPT NUEVO: ENVÍO DE SOLICITUD DE SERVICIO ---
+    const formServicio = document.getElementById('formServicio');
+    if(formServicio){
+        formServicio.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            fetch('/sucursales/crear_servicio', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    sucursal_id: document.getElementById('servSucursal').value,
+                    prioridad: document.getElementById('servPrioridad').value,
+                    descripcion: document.getElementById('servDescripcion').value
+                })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if(data.success) {
+                    location.reload();
+                } else {
+                    alert("Error: " + data.error);
+                }
+            });
+        });
+    }
 
     // AUTO-APERTURA SI HAY TAREAS
     document.addEventListener("DOMContentLoaded", function() {
-        // La variable 'tareas' viene de Jinja. Si hay items, abrimos el modal.
-        {% if tareas %}
-            var modalTareas = new bootstrap.Modal(document.getElementById('modalTareasPendientes'));
+        {% if tareas_popup %}
+            var modalTareas = new bootstrap.Modal(document.getElementById('modalTareasPendientesPopup'));
             modalTareas.show();
         {% endif %}
     });
 
-    // FUNCIÓN PARA ENVIAR (Logística/Admin)
     function enviarAlerta() {
         const destino = document.getElementById('alertaDestino').value;
         const mensaje = document.getElementById('alertaMensaje').value;
@@ -525,7 +570,6 @@
         });
     }
 
-    // FUNCIÓN PARA COMPLETAR (Sucursal)
     function completarTarea(id, btn) {
         if(!confirm("¿Confirmas que realizaste esta tarea?")) return;
 
@@ -535,24 +579,15 @@
             body: JSON.stringify({tarea_id: id})
         }).then(r => r.json()).then(d => {
             if(d.success) {
-                // Borramos la línea visualmente
                 btn.closest('.list-group-item').remove();
-                // Si no quedan tareas, cerramos el modal y recargamos
                 const quedan = document.querySelectorAll('#modalTareasPendientes .list-group-item');
-                if(quedan.length === 0) {
+                const quedanPopup = document.querySelectorAll('#modalTareasPendientesPopup .list-group-item');
+                if(quedan.length === 0 && quedanPopup.length === 0) {
                     location.reload();
                 }
             } else { alert("Error"); }
         });
     }
-
-    // ABRIR AUTOMÁTICAMENTE EL POPUP
-    document.addEventListener("DOMContentLoaded", function() {
-        {% if tareas_popup %}
-            var modalTareas = new bootstrap.Modal(document.getElementById('modalTareasPendientes'));
-            modalTareas.show();
-        {% endif %}
-    });
 
     function postergarTarea(id) {
         fetch('/sucursales/tarea/postergar', {
@@ -561,14 +596,9 @@
             body: JSON.stringify({tarea_id: id})
         }).then(r => r.json()).then(d => {
             if(d.success) {
-                // Al recargar:
-                // 1. La tarea ya tiene fecha futura (+20 min), así que NO saldrá en el popup.
-                // 2. Seguirá saliendo en la campana (historial).
-                // 3. Se habrá restado una vida.
                 location.reload(); 
             } else { alert("Error al postergar"); }
         });
     }
-
 </script>
 {% endblock %}

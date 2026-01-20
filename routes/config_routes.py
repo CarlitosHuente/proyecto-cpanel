@@ -253,7 +253,7 @@ def productos():
 
 @config_bp.route('/productos/nuevo', methods=['GET', 'POST'])
 @login_requerido
-@permiso_modulo("productos")
+@permiso_modulo("config")
 def nuevo_producto():
     conn = get_db_connection()
     
@@ -261,7 +261,8 @@ def nuevo_producto():
         sku = request.form.get('sku')
         nombre = request.form.get('nombre')
         descripcion = request.form.get('descripcion')
-        categoria_id = request.form.get('categoria_id') # Ojo: vendrá del input hidden
+        # Ahora categoria_id viene directo del <select>, no de un input hidden
+        categoria_id = request.form.get('categoria_id') 
         stock_minimo = request.form.get('stock_minimo')
         unidad = request.form.get('unidad_medida')
 
@@ -280,53 +281,78 @@ def nuevo_producto():
 
     # GET: Mostrar formulario
     with conn.cursor() as cur:
-        # 1. Traemos categorías (ID y Nombre) para el buscador
+        # 1. Categorías para el SELECT
         cur.execute("SELECT categoria_id, nombre_categoria FROM Categorias ORDER BY nombre_categoria")
         cats = cur.fetchall()
         
-        # 2. Traemos TODOS los nombres para evitar duplicados
+        # 2. Nombres para evitar duplicados
         cur.execute("SELECT nombre FROM Productos")
-        all_prods = [row[0] if isinstance(row, tuple) else row['nombre'] for row in cur.fetchall()]
+        all_prods = [row['nombre'] for row in cur.fetchall()]
+
+        # 3. NUEVO: SKUs para sugerir (Autocomplete)
+        cur.execute("SELECT sku FROM Productos")
+        all_skus = [row['sku'] for row in cur.fetchall()]
         
     conn.close()
     
     return render_template('config/producto_nuevo.html', 
                            categorias=cats,
-                           todos_los_productos=all_prods)
+                           todos_los_productos=all_prods,
+                           todos_los_skus=all_skus) # <--- Enviamos la lista de SKUs
 
 # En routes/config_routes.py
 
 @config_bp.route('/productos/editar/<int:id>', methods=['GET', 'POST'])
 @login_requerido
-@permiso_modulo("productos")
+@permiso_modulo("config")
 def editar_producto(id):
     conn = get_db_connection()
 
     if request.method == 'POST':
-        # ... (Tu lógica de POST para guardar sigue igual) ...
-        # Solo asegúrate de capturar 'categoria_id' que ahora vendrá de un input oculto o select
-        pass
+        sku = request.form.get('sku')
+        nombre = request.form.get('nombre')
+        descripcion = request.form.get('descripcion')
+        categoria_id = request.form.get('categoria_id')
+        stock_minimo = request.form.get('stock_minimo')
+        unidad = request.form.get('unidad_medida')
 
-    # Lógica GET (Cargar datos)
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE Productos 
+                SET sku=%s, nombre=%s, descripcion=%s, categoria_id=%s, stock_minimo=%s, unidad_medida=%s
+                WHERE producto_id=%s
+            """, (sku, nombre, descripcion, categoria_id, stock_minimo, unidad, id))
+        conn.commit()
+        conn.close()
+        return redirect(url_for('config.productos'))
+
+    # GET: Cargar datos para el formulario
     with conn.cursor() as cur:
-        # 1. Datos del producto actual
+        # 1. El Producto a editar
         cur.execute("SELECT * FROM Productos WHERE producto_id=%s", (id,))
         prod = cur.fetchone()
         
-        # 2. Lista de Categorías (ID y Nombre)
+        # 2. Categorías (Para el selector)
         cur.execute("SELECT categoria_id, nombre_categoria FROM Categorias ORDER BY nombre_categoria")
         cats = cur.fetchall()
 
-        # 3. NUEVO: Lista de TODOS los productos (para el autocompletado de duplicados)
+        # 3. Listas para validar duplicados (excluyendo el actual)
         cur.execute("SELECT nombre FROM Productos WHERE producto_id != %s", (id,))
-        all_prods = [row[0] if isinstance(row, tuple) else row['nombre'] for row in cur.fetchall()]
+        all_prods = [row['nombre'] if isinstance(row, dict) else row[0] for row in cur.fetchall()]
+
+        cur.execute("SELECT sku FROM Productos WHERE producto_id != %s", (id,))
+        all_skus = [row['sku'] if isinstance(row, dict) else row[0] for row in cur.fetchall()]
 
     conn.close()
 
+    if not prod:
+        return redirect(url_for('config.productos'))
+
     return render_template('config/producto_editar.html', 
                            producto=prod, 
-                           categorias=cats, 
-                           todos_los_productos=all_prods) # <--- Enviamos esto nuevo
+                           categorias=cats,
+                           todos_los_productos=all_prods,
+                           todos_los_skus=all_skus)
     
     
 @config_bp.route('/productos/eliminar/<int:id>')

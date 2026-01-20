@@ -10,6 +10,16 @@ git push origin main --force
 
 Se modifico y necesita nuevos cambios
 
+Rama Principal
+
+git checkout main
+
+Secundaria
+
+git checkout feature/contacarvajal
+
+
+
 
 
 # Crear CArpeta Local
