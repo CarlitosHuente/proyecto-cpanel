@@ -253,7 +253,7 @@ def productos():
 
 @config_bp.route('/productos/nuevo', methods=['GET', 'POST'])
 @login_requerido
-@permiso_modulo("config")
+@permiso_modulo("productos")
 def nuevo_producto():
     conn = get_db_connection()
     
@@ -304,7 +304,7 @@ def nuevo_producto():
 
 @config_bp.route('/productos/editar/<int:id>', methods=['GET', 'POST'])
 @login_requerido
-@permiso_modulo("config")
+@permiso_modulo("productos")
 def editar_producto(id):
     conn = get_db_connection()
 
