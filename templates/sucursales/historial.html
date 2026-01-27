@@ -20,7 +20,7 @@
                             <th>Sucursal</th>
                             <th>Solicitante</th>
                             <th>Estado</th>
-                            <th>Acción</th>
+                            <th>Obs. Entrega</th> <th>Acción</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -37,16 +37,21 @@
                                 {% else %} <span class="badge bg-warning text-dark">{{ h.estado }}</span>
                                 {% endif %}
                             </td>
+                            
+                            <td class="text-warning fst-italic">
+                                {{ h.obs_despacho if h.obs_despacho else '-' }}
+                            </td>
+
                             <td>
                                 <button class="btn btn-sm btn-info" 
-                                    onclick="verDetalle({{ h.id }}, '{{ h.sucursal }}', '{{ h.fecha.strftime('%d/%m/%Y') }}')">
+                                    onclick="verDetalle({{ h.id }}, '{{ h.sucursal }}', '{{ h.fecha.strftime('%d/%m/%Y') }}', '{{ h.descripcion | default('', true) | replace('\n', ' ') | replace('\'', '') }}')">
                                     Ver 👁️
                                 </button>
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="6" class="text-center py-4">No hay registros en el historial.</td>
+                            <td colspan="7" class="text-center py-4">No hay registros en el historial.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -88,8 +93,9 @@
 </div>
 
 <script>
-function verDetalle(id, sucursal, fecha) {
-    // 1. Configurar Modal
+// Agregamos el 4to parámetro: descripcionServicio
+function verDetalle(id, sucursal, fecha, descripcionServicio) {
+    
     document.getElementById('modalTitulo').innerText = "Pedido #" + id + " - " + sucursal + " (" + fecha + ")";
     document.getElementById('loadingSpinner').classList.remove('d-none');
     document.getElementById('tablaDetalle').classList.add('d-none');
@@ -97,32 +103,46 @@ function verDetalle(id, sucursal, fecha) {
     var myModal = new bootstrap.Modal(document.getElementById('modalHistorial'));
     myModal.show();
 
-    // 2. Pedir datos a la API (Reutilizamos la misma API que la pizarra)
     fetch(`/sucursales/api/detalle/${id}`)
         .then(response => response.json())
         .then(data => {
             const tbody = document.getElementById('cuerpoTabla');
             tbody.innerHTML = ""; 
 
-            data.forEach(item => {
-                let badgeColor = 'bg-secondary';
-                if(item.estado_linea === 'Completo') badgeColor = 'bg-success';
-                else if(item.estado_linea === 'Pendiente') badgeColor = 'bg-danger';
-                else if(item.estado_linea === 'Parcial') badgeColor = 'bg-warning text-dark';
-
-                let row = `
+            // CASO SERVICIO (Data vacía)
+            if(!data || data.length === 0) {
+                 // Mostramos la descripción que trajimos del botón
+                 let mensaje = descripcionServicio ? `"${descripcionServicio}"` : "Sin detalles.";
+                 
+                 tbody.innerHTML = `
                     <tr>
-                        <td>
-                            <div class="fw-bold">${item.nombre_producto}</div>
-                            <small class="text-muted">${item.sku}</small>
+                        <td colspan='4' class='text-center p-4'>
+                            <h5 class='text-warning'>🛠️ Solicitud de Servicio</h5>
+                            <p class='text-white fst-italic mt-2'>${mensaje}</p>
                         </td>
-                        <td>${item.cantidad_solicitada} ${item.unidad_medida}</td>
-                        <td>${item.cantidad_despachada}</td>
-                        <td><span class="badge ${badgeColor}">${item.estado_linea}</span></td>
-                    </tr>
-                `;
-                tbody.innerHTML += row;
-            });
+                    </tr>`;
+            } else {
+                // CASO PRODUCTOS (Bucle normal)
+                data.forEach(item => {
+                    let badgeColor = 'bg-secondary';
+                    if(item.estado_linea === 'Completo') badgeColor = 'bg-success';
+                    else if(item.estado_linea === 'Pendiente') badgeColor = 'bg-danger';
+                    else if(item.estado_linea === 'Parcial') badgeColor = 'bg-warning text-dark';
+
+                    let row = `
+                        <tr>
+                            <td>
+                                <div class="fw-bold">${item.nombre_producto}</div>
+                                <small class="text-muted">${item.sku}</small>
+                            </td>
+                            <td>${item.cantidad_solicitada} ${item.unidad_medida}</td>
+                            <td>${item.cantidad_despachada}</td>
+                            <td><span class="badge ${badgeColor}">${item.estado_linea}</span></td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += row;
+                });
+            }
 
             document.getElementById('loadingSpinner').classList.add('d-none');
             document.getElementById('tablaDetalle').classList.remove('d-none');

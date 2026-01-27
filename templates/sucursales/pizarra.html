@@ -144,32 +144,43 @@
             </tbody>
         </table>
       </div>
-      <div class="modal-footer border-secondary d-flex justify-content-between">
-        <div>
-            <button type="button" class="btn btn-outline-danger" onclick="eliminarSolicitud()"
-                {% if session.get('rol') != 'superusuario' %} disabled title="Solo Superusuario" {% endif %}>
-                🗑️ Eliminar
-            </button>
+      <div class="modal-footer border-secondary d-flex flex-column align-items-stretch">
+        
+        <div id="divInputLogistica" class="mb-2 w-100" style="display: none;">
+            <label class="text-warning fw-bold small">📝 Observación de Entrega (Lote/Fecha):</label>
+            <input type="text" id="obsDespachoInput" class="form-control bg-secondary text-white border-warning" placeholder="Ej: Empanadas fecha 15/01...">
         </div>
 
-        <div class="d-flex gap-2">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-            
-            <button type="button" class="btn btn-primary" id="btnGestionar" onclick="activarEdicion()"
-                {% if session.get('rol')|lower not in ['superusuario', 'logistica', 'admin', 'gerencia', 'contab'] %} 
-                    disabled style="opacity: 0.5; cursor: not-allowed;" title="Rol: Logística" 
-                {% endif %}>
-                Gestionar / Despachar
-            </button>
+        <div class="d-flex justify-content-between w-100">
+            <div>
+                <button type="button" class="btn btn-outline-danger" onclick="eliminarSolicitud()"
+                    {% if session.get('rol') != 'superusuario' %} disabled title="Solo Superusuario" {% endif %}>
+                    🗑️ Eliminar
+                </button>
+            </div>
 
-            <button type="button" class="btn btn-success" id="btnConfirmar" onclick="confirmarDespacho()" style="display: none;">
-                ✅ Confirmar Envío
-            </button>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                
+                <button type="button" class="btn btn-primary" id="btnGestionar" onclick="activarEdicion()"
+                    {% if session.get('rol')|lower not in ['superusuario', 'logistica', 'admin', 'gerencia', 'contab'] %} 
+                        disabled style="opacity: 0.5; cursor: not-allowed;" title="Rol: Logística" 
+                    {% endif %}>
+                    Gestionar / Despachar
+                </button>
 
-            <button type="button" class="btn btn-info text-white" id="btnRecepcionar" onclick="confirmarRecepcion()"
-                {% if session.get('rol') in ['logistica', 'admin'] and session.get('rol') != 'superusuario' %} disabled style="opacity: 0.5; cursor: not-allowed;" title="Rol: Sucursal" {% endif %}>
-                📥 Confirmar Recepción
-            </button>
+                <button type="button" class="btn btn-success" id="btnConfirmar" onclick="confirmarDespacho()" style="display: none;">
+                    ✅ Confirmar Envío
+                </button>
+
+                <button type="button" class="btn btn-success fw-bold" id="btnTerminarServicio" onclick="terminarServicio()" style="display: none;">
+                    ✅ Dar por Solucionado
+                </button>
+
+                <button type="button" class="btn btn-info text-white" id="btnRecepcionar" onclick="confirmarRecepcion()" style="display: none;">
+                    📥 Confirmar Recepción
+                </button>
+            </div>
         </div>
     </div>
     </div>
@@ -334,12 +345,14 @@
         document.getElementById('loadingSpinner').classList.remove('d-none');
         document.getElementById('tablaDetalle').classList.add('d-none');
         
-        // Reset Botones
-        document.getElementById('btnGestionar').style.display = 'inline-block';
-        document.getElementById('btnConfirmar').style.display = 'none';
+        // --- RESET VISUAL ---
+        document.getElementById('divInputLogistica').style.display = 'none';
+        document.getElementById('obsDespachoInput').value = ''; 
         
-        const btnRec = document.getElementById('btnRecepcionar');
-        if(btnRec) btnRec.style.display = 'inline-block'; 
+        document.getElementById('btnGestionar').style.display = 'none';
+        document.getElementById('btnConfirmar').style.display = 'none';
+        document.getElementById('btnTerminarServicio').style.display = 'none'; // Nuevo botón
+        document.getElementById('btnRecepcionar').style.display = 'none';
 
         var myModal = new bootstrap.Modal(document.getElementById('modalDetalle'));
         myModal.show();
@@ -348,21 +361,37 @@
             .then(response => response.json())
             .then(data => {
                 window.dataDetalleActual = data; 
-                dibujarTabla(data, false);
                 document.getElementById('loadingSpinner').classList.add('d-none');
                 document.getElementById('tablaDetalle').classList.remove('d-none');
+
+                // LÓGICA: ¿Es Producto o Servicio?
+                if(!data || data.length === 0) {
+                    // ES SERVICIO
+                    document.getElementById('cuerpoTabla').innerHTML = "<tr><td colspan='3' class='text-center text-warning p-4'>🛠️ Esta es una solicitud de servicio/mantención.<br>No requiere despacho de productos.</td></tr>";
+                    
+                    // Solo Superusuario ve el botón de cerrar
+                    {% if session.get('rol') == 'superusuario' %}
+                        document.getElementById('btnTerminarServicio').style.display = 'inline-block';
+                    {% endif %}
+                } else {
+                    // ES PRODUCTO
+                    document.getElementById('btnGestionar').style.display = 'inline-block';
+                    dibujarTabla(data, false);
+                }
             })
             .catch(error => {
                 console.error("Error:", error);
-                // Si falla (ej: es un servicio sin items), manejamos el error visualmente
                 document.getElementById('loadingSpinner').classList.add('d-none');
-                // Podríamos mostrar la descripción aquí si tuviéramos acceso a ella en JS
             });
     }
 
     function activarEdicion() {
         document.getElementById('btnGestionar').style.display = 'none';
         document.getElementById('btnConfirmar').style.display = 'inline-block';
+        
+        // Mostrar Input de Observación para Logística
+        document.getElementById('divInputLogistica').style.display = 'block';
+        
         dibujarTabla(window.dataDetalleActual, true);
     }
 
@@ -370,10 +399,7 @@
         const tbody = document.getElementById('cuerpoTabla');
         tbody.innerHTML = ""; 
 
-        if(!data || data.length === 0) {
-            tbody.innerHTML = "<tr><td colspan='3' class='text-center text-muted'>Este pedido es una solicitud de servicio (sin productos).</td></tr>";
-            return;
-        }
+        if(!data || data.length === 0) return;
 
         let hayPendienteConfirmar = false;
 
@@ -461,15 +487,22 @@
     }
 
     function confirmarDespacho() {
-        if(!confirm("¿Confirmar despacho?")) return;
+        if(!confirm("¿Confirmar despacho y enviar observación?")) return;
         const inputs = document.querySelectorAll('.input-despacho');
         let items = [];
         inputs.forEach(input => items.push({ detalle_id: input.getAttribute('data-id'), cantidad: input.value }));
 
+        // CAPTURAR OBSERVACIÓN
+        const obs = document.getElementById('obsDespachoInput').value;
+
         fetch('/sucursales/despachar', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ solicitud_id: solicitudActualId, items: items })
+            body: JSON.stringify({ 
+                solicitud_id: solicitudActualId, 
+                items: items,
+                observacion_despacho: obs 
+            })
         })
         .then(res => res.json())
         .then(resp => {
@@ -515,6 +548,22 @@
             .then(resp => {
                 if(resp.success) { alert("🗑️ Eliminado"); location.reload(); }
             });
+    }
+
+    // NUEVA FUNCIÓN PARA CERRAR SERVICIOS
+    function terminarServicio() {
+        if(!confirm("¿Dar por solucionado este requerimiento y archivarlo?")) return;
+
+        fetch('/sucursales/terminar_servicio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ solicitud_id: solicitudActualId })
+        })
+        .then(res => res.json())
+        .then(resp => {
+            if(resp.success) { alert("✅ Servicio Cerrado"); location.reload(); }
+            else alert("❌ Error: " + resp.error);
+        });
     }
 
     // --- SCRIPT NUEVO: ENVÍO DE SOLICITUD DE SERVICIO ---

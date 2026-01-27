@@ -224,59 +224,28 @@ def api_detalle_solicitud(solicitud_id):
     
     return jsonify(items_list)
 
-@sucursales_bp.route("/despachar", methods=["POST"])
+@sucursales_bp.route("/terminar_servicio", methods=["POST"])
 @login_requerido
 @permiso_modulo("sucursales")
-def guardar_despacho():
-    if "usuario" not in session:
-        return jsonify({"success": False, "error": "No autorizado"}), 401
+def terminar_servicio():
+    # 1. CANDADO DE SEGURIDAD: Solo Superusuario
+    if session.get("rol") != "superusuario":
+        return jsonify({"success": False, "error": "⛔ Solo el Superusuario puede cerrar servicios."}), 403
 
     data = request.get_json()
     solicitud_id = data.get("solicitud_id")
-    items_despacho = data.get("items") 
-    comentario = data.get("comentario", "")
-
-    if not solicitud_id or not items_despacho:
-        return jsonify({"success": False, "error": "Datos incompletos"})
 
     conn = get_db_connection()
     cursor = conn.cursor()
-
     try:
-        for item in items_despacho:
-            detalle_id = item["detalle_id"]
-            cantidad_enviada_ahora = float(item["cantidad"])
-            
-            if cantidad_enviada_ahora > 0:
-                # --- CORRECCIÓN CRÍTICA ---
-                # Invertimos el orden: 
-                # 1. Definimos el estado (usando el valor original + lo nuevo)
-                # 2. Actualizamos la cantidad (sumando lo nuevo)
-                update_query = """
-                    UPDATE solicitudes_detalle 
-                    SET 
-                        estado_linea = CASE 
-                            WHEN (cantidad_despachada + %s) >= cantidad_solicitada THEN 'Completo'
-                            WHEN (cantidad_despachada + %s) > 0 THEN 'Parcial'
-                            ELSE 'Pendiente'
-                        END,
-                        cantidad_despachada = cantidad_despachada + %s
-                    WHERE detalle_id = %s
-                """
-                cursor.execute(update_query, (cantidad_enviada_ahora, cantidad_enviada_ahora, cantidad_enviada_ahora, detalle_id))
-
-        cabecera_query = """
+        # Pasamos directo a Completado y lo sacamos de la pizarra (requiere_confirmacion=0)
+        cursor.execute("""
             UPDATE solicitudes 
-            SET estado = 'Por Confirmar', 
-                requiere_confirmacion = 1,
-                comentario_logistica = %s
+            SET estado = 'Completado', requiere_confirmacion = 0
             WHERE solicitud_id = %s
-        """
-        cursor.execute(cabecera_query, (comentario, solicitud_id))
-
+        """, (solicitud_id,))
         conn.commit()
-        return jsonify({"success": True, "message": "Despacho registrado correctamente"})
-
+        return jsonify({"success": True, "message": "Servicio cerrado correctamente"})
     except Exception as e:
         conn.rollback()
         return jsonify({"success": False, "error": str(e)})
@@ -453,18 +422,13 @@ def crear_solicitud_api():
 @login_requerido
 @permiso_modulo("sucursales")
 def historial():
-    if "usuario" not in session:
-        return redirect(url_for("auth.login"))
+    if "usuario" not in session: return redirect(url_for("auth.login"))
     
     usuario_actual = session["usuario"]
     rol = session.get("rol", "invitado")
 
-    # 1. RECUPERAR LÓGICA DE PERMISOS (Igual que en Pizarra)
-    # Definir aquí o importar ACCESO_SUCURSALES si está arriba en el archivo
-    # (Asegúrate de que ACCESO_SUCURSALES esté definido al inicio del archivo py)
     permiso_sucursales = ACCESO_SUCURSALES.get(usuario_actual, [])
-    
-    if rol in ['superusuario', 'gerencia', 'admin',"seremi"] and not permiso_sucursales:
+    if rol in ['superusuario', 'gerencia', 'admin', "seremi"] and not permiso_sucursales:
         permiso_sucursales = "TODAS"
 
     if not permiso_sucursales:
@@ -474,48 +438,114 @@ def historial():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # 2. CONSTRUIR QUERY CON FILTRO
+    # 1. Agregamos 's.descripcion_servicio' a la consulta
     query = """
         SELECT s.solicitud_id, s.fecha_solicitud, suc.nombre_sucursal, 
-               s.usuario_solicitante, s.estado, s.prioridad
+               s.usuario_solicitante, s.estado, s.prioridad, 
+               s.observacion_despacho, s.descripcion_servicio
         FROM solicitudes s
         JOIN Sucursales suc ON s.sucursal_id = suc.sucursal_id
     """
     params = []
 
-    # Si NO es "TODAS", filtramos por los IDs permitidos
     if permiso_sucursales != "TODAS":
-        # Truco para crear string "1, 2" para el IN de SQL
         format_strings = ','.join(['%s'] * len(permiso_sucursales))
         query += f" WHERE s.sucursal_id IN ({format_strings})"
         params.extend(permiso_sucursales)
 
-    # Ordenar y Limitar
     query += " ORDER BY s.solicitud_id DESC LIMIT 100"
 
     cursor.execute(query, tuple(params))
     rows = cursor.fetchall()
     conn.close()
     
-    # 3. NORMALIZAR DATOS (Lista de diccionarios)
     historial_data = []
-    # Detectamos si es lista (tupla) o dict para ser compatibles
+    
+    # Adaptador universal (funciona si la BD devuelve diccionario o tupla)
     if rows and isinstance(rows[0], (list, tuple)):
         for r in rows:
             historial_data.append({
                 "id": r[0], "fecha": r[1], "sucursal": r[2], 
-                "usuario": r[3], "estado": r[4], "prioridad": r[5]
+                "usuario": r[3], "estado": r[4], "prioridad": r[5],
+                "obs_despacho": r[6],
+                "descripcion": r[7] # <--- Capturamos la descripción
             })
     else:
-        # Si ya son diccionarios
         for r in rows:
             historial_data.append({
                  "id": r['solicitud_id'], "fecha": r['fecha_solicitud'], 
                  "sucursal": r['nombre_sucursal'], "usuario": r['usuario_solicitante'], 
-                 "estado": r['estado'], "prioridad": r['prioridad']
+                 "estado": r['estado'], "prioridad": r['prioridad'],
+                 "obs_despacho": r['observacion_despacho'],
+                 "descripcion": r['descripcion_servicio'] # <--- Capturamos la descripción
             })
 
     return render_template("sucursales/historial.html", historial=historial_data)
+
+@sucursales_bp.route("/despachar", methods=["POST"])
+@login_requerido
+@permiso_modulo("sucursales")
+def guardar_despacho():
+    if "usuario" not in session:
+        return jsonify({"success": False, "error": "No autorizado"}), 401
+
+    data = request.get_json()
+    solicitud_id = data.get("solicitud_id")
+    items_despacho = data.get("items") 
+    
+    # 1. CAPTURAR LA OBSERVACIÓN (Aquí estaba el problema, faltaba leer esto)
+    observacion_despacho = data.get("observacion_despacho", "") 
+    comentario = data.get("comentario", "") # Mantenemos esto por compatibilidad
+
+    if not solicitud_id or not items_despacho:
+        return jsonify({"success": False, "error": "Datos incompletos"})
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # A. Actualizar Items (Igual que antes)
+        for item in items_despacho:
+            detalle_id = item["detalle_id"]
+            # Convertimos a float, si viene vacío asumimos 0
+            val = item.get("cantidad")
+            cantidad_enviada_ahora = float(val) if val else 0
+            
+            if cantidad_enviada_ahora > 0:
+                update_query = """
+                    UPDATE solicitudes_detalle 
+                    SET 
+                        estado_linea = CASE 
+                            WHEN (cantidad_despachada + %s) >= cantidad_solicitada THEN 'Completo'
+                            WHEN (cantidad_despachada + %s) > 0 THEN 'Parcial'
+                            ELSE 'Pendiente'
+                        END,
+                        cantidad_despachada = cantidad_despachada + %s
+                    WHERE detalle_id = %s
+                """
+                cursor.execute(update_query, (cantidad_enviada_ahora, cantidad_enviada_ahora, cantidad_enviada_ahora, detalle_id))
+
+        # B. Actualizar Cabecera GUARDANDO LA OBSERVACIÓN
+        cabecera_query = """
+            UPDATE solicitudes 
+            SET estado = 'Por Confirmar', 
+                requiere_confirmacion = 1,
+                comentario_logistica = %s,
+                observacion_despacho = %s   -- <--- ESTO FALTABA
+            WHERE solicitud_id = %s
+        """
+        cursor.execute(cabecera_query, (comentario, observacion_despacho, solicitud_id))
+
+        conn.commit()
+        return jsonify({"success": True, "message": "Despacho registrado correctamente"})
+
+    except Exception as e:
+        conn.rollback()
+        # Esto te dirá exactamente qué pasó si falla (ej: si falta la columna en BD)
+        print(f"ERROR EN DESPACHO: {str(e)}") 
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        conn.close()
 
 @sucursales_bp.route("/recepcionar", methods=["POST"])
 @login_requerido
