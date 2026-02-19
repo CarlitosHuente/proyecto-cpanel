@@ -55,8 +55,8 @@
                                     {# Produccion en Blanco Resaltado #}
                                     <div class="val-principal text-white fw-bold" style="font-size: 1.3rem; line-height: 1;">{{ datos[dia].cant_producida }}</div>
                                     
-                                    {# Promedio Queso en Amarillo #}
-                                    {% set prom_queso = (datos[dia].queso_inicial_gr / datos[dia].cant_producida) | round(1) %}
+                                    {# Promedio Queso corregido: (Inicial - Merma) / Cantidad #}
+                                    {% set prom_queso = ((datos[dia].queso_inicial_gr - datos[dia].queso_merma_gr) / datos[dia].cant_producida) | round(1) %}
                                     <div class="val-secundario text-warning fw-bold" style="font-size: 0.85rem;">{{ prom_queso }}gr</div>
                                     
                                     {# Rendimiento en Cyan/Info #}
