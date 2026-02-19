@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block title %}Calendario de Producción - Huente{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+{# CABECERA Y NAVEGACION #}
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
+        <div class="d-flex align-items-center">
+            <a href="{{ url_for('fabrica.calendario_produccion', mes=mes-1, anio=anio) }}" class="btn btn-outline-danger btn-sm me-3">◀</a>
+            <div class="text-center">
+                <h2 class="text-white mb-0" style="min-width: 180px;">{{ mes_nombre }}</h2>
+                <p class="text-secondary mb-0">{{ anio }}</p>
+            </div>
+            <a href="{{ url_for('fabrica.calendario_produccion', mes=mes+1, anio=anio) }}" class="btn btn-outline-danger btn-sm ms-3">▶</a>
+        </div>
+        
+        <div class="mt-2 text-end">
+            <a href="{{ url_for('fabrica.calendario_produccion') }}" class="btn btn-outline-light btn-sm me-2">Hoy</a>
+            {% if session['rol'] in ['admin', 'superusuario', 'logistica'] %}
+            <button class="btn btn-danger btn-sm shadow" data-bs-toggle="modal" data-bs-target="#modalRegistro">➕ Nuevo Registro</button>
+            {% endif %}
+        </div>
+    </div>
+{# FIN CABECERA #}
+
+{# CUADRICULA DEL CALENDARIO #}
+    <div class="card bg-black border-secondary shadow">
+        <div class="card-body p-1">
+            <div class="row row-cols-7 g-1">
+                
+                {# Cabecera de Dias #}
+                {% for dia_nom in ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'] %}
+                <div class="col text-center py-2 bg-dark text-white fw-bold border-bottom border-secondary small">{{ dia_nom }}</div>
+                {% endfor %}
+
+                {# Celdas #}
+                {% for semana in calendario %}
+                    {% for dia in semana %}
+                    <div class="col position-relative celda-calendario" 
+                         style="background-color: {{ '#151515' if dia != 0 else '#000' }}; min-height: 110px; border: 1px solid #333;">
+                        
+                        {% if dia != 0 %}
+                            <span class="position-absolute top-0 start-0 m-1 texto-dia fw-bold {{ 'text-danger' if dia in datos else 'text-secondary' }}" style="font-size: 0.8rem; z-index: 10;">
+                                {{ dia }}
+                            </span>
+
+                            {% if dia in datos %}
+                            <button type="button" 
+                                    class="btn btn-link p-0 w-100 h-100 text-decoration-none shadow-none border-0 position-absolute top-0 start-0" 
+                                    onclick='verDetalle({{ datos[dia] | tojson | safe }})'
+                                    style="z-index: 5;">
+                                <div class="contenedor-datos-dia d-flex flex-column align-items-center justify-content-center h-100 pt-2">
+                                    {# Produccion en Blanco Resaltado #}
+                                    <div class="val-principal text-white fw-bold" style="font-size: 1.3rem; line-height: 1;">{{ datos[dia].cant_producida }}</div>
+                                    
+                                    {# Promedio Queso en Amarillo #}
+                                    {% set prom_queso = (datos[dia].queso_inicial_gr / datos[dia].cant_producida) | round(1) %}
+                                    <div class="val-secundario text-warning fw-bold" style="font-size: 0.85rem;">{{ prom_queso }}gr</div>
+                                    
+                                    {# Rendimiento en Cyan/Info #}
+                                    <div class="val-rendimiento text-info fw-bold" style="font-size: 0.75rem;">{{ datos[dia].rendimiento }}%</div>
+                                </div>
+                            </button>
+                            {% endif %}
+                        {% endif %}
+
+                    </div>
+                    {% endfor %}
+                {% endfor %}
+            </div> 
+        </div> 
+    </div>
+{# FIN CUADRICULA #}
+
+</div>
+
+{# MODAL DE DETALLE #}
+<div class="modal fade" id="modalDetalle" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0">
+            <div class="modal-header bg-black text-white border-bottom border-danger">
+                <h5 class="modal-title" id="modalTitulo">Detalle de Producción</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body bg-light" id="modalCuerpo">
+                {# El contenido con colores se inyecta aqui #}
+            </div>
+            <div class="modal-footer bg-light border-0">
+                <button type="button" class="btn btn-secondary w-100" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{# FIN MODAL DETALLE #}
+
+{# SCRIPTS #}
+<script>
+function verDetalle(info) {
+    const modalElement = document.getElementById('modalDetalle');
+    const modal = new bootstrap.Modal(modalElement);
+    
+    document.getElementById('modalTitulo').innerText = "Producción: " + info.fecha;
+    
+    const urlImagen = info.drive_id 
+        ? `https://drive.google.com/uc?export=view&id=${info.drive_id}`
+        : '';
+
+    document.getElementById('modalCuerpo').innerHTML = `
+        <div class="container-fluid text-dark">
+            {# FILA DE INDICADORES PRINCIPALES #}
+            <div class="row g-2 mb-3 text-center border-bottom pb-3">
+                <div class="col-3 border-end">
+                    <h3 class="mb-0 fw-bold text-danger">${info.cant_producida}</h3>
+                    <small class="text-muted fw-bold" style="font-size: 0.65rem;">UNIDADES</small>
+                </div>
+                <div class="col-3 border-end text-warning">
+                    <h3 class="mb-0 fw-bold" style="color: #d39e00;">${(info.queso_inicial_gr / info.cant_producida).toFixed(1)}g</h3>
+                    <small class="text-muted fw-bold" style="font-size: 0.65rem;">PROM. QUESO</small>
+                </div>
+                <div class="col-3 border-end">
+                    <h3 class="mb-0 fw-bold text-dark">${info.queso_inicial_gr}g</h3>
+                    <small class="text-muted fw-bold" style="font-size: 0.65rem;">Q. INICIAL</small>
+                </div>
+                <div class="col-3 text-secondary">
+                    <h3 class="mb-0 fw-bold">${info.queso_merma_gr}g</h3>
+                    <small class="text-muted fw-bold" style="font-size: 0.65rem;">Q. MERMA</small>
+                </div>
+            </div>
+
+            {# SECCION INVENTARIO CRITICO (COLOR VERDE) #}
+            <div class="p-3 mb-3" style="background-color: #e8f5e9; border-left: 5px solid #2e7d32; border-radius: 4px;">
+                <h6 class="fw-bold text-success mb-2 border-bottom border-success pb-1">📦 Inventario Disponible (Día Siguiente)</h6>
+                <div class="row text-center">
+                    <div class="col">
+                        <span class="d-block fw-bold fs-5 text-dark">${info.queso_unidad_stock}</span>
+                        <small class="text-muted">Quesos</small>
+                    </div>
+                    <div class="col">
+                        <span class="d-block fw-bold fs-5 text-dark">${info.queso_trozos_gr_stock}g</span>
+                        <small class="text-muted">Trozos</small>
+                    </div>
+                    <div class="col">
+                        <span class="d-block fw-bold fs-5 text-dark">${info.harina_sacos_stock}</span>
+                        <small class="text-muted">Harina</small>
+                    </div>
+                    <div class="col">
+                        <span class="d-block fw-bold fs-5 text-dark">${info.sal_kg_stock}kg</span>
+                        <small class="text-muted">Sal</small>
+                    </div>
+                    <div class="col">
+                        <span class="d-block fw-bold fs-5 text-dark">${info.manteca_und_stock}</span>
+                        <small class="text-muted">Manteca</small>
+                    </div>
+                </div>
+            </div>
+
+            {# RESPONSABLE Y OBSERVACIONES #}
+            <div class="row mb-3 bg-white p-2 rounded shadow-sm border">
+                <div class="col-6 border-end text-start">
+                    <p class="mb-0 small text-muted fw-bold">Responsable:</p>
+                    <p class="mb-0 fw-bold text-dark">${info.encargada}</p>
+                </div>
+                <div class="col-6 text-start">
+                    <p class="mb-0 small text-muted fw-bold">Observaciones:</p>
+                    <p class="mb-0 small text-dark">${info.observaciones || 'Sin comentarios.'}</p>
+                </div>
+            </div>
+
+            {# IMAGEN DE RESPALDO #}
+            <div class="text-center">
+                <label class="text-muted small d-block mb-1 fw-bold">EVIDENCIA CÁSCARA (FOTO DRIVE):</label>
+                <div class="bg-dark rounded d-flex align-items-center justify-content-center overflow-hidden border" style="height: 250px;">
+                    <img src="${urlImagen}" class="img-fluid" style="max-height: 250px;" 
+                         onerror="this.style.display='none'; document.getElementById('imgError').style.display='block';">
+                    <div id="imgError" style="display: none;" class="text-secondary small">
+                        <i class="bi bi-camera-off fs-1 d-block mb-2"></i>
+                        Imagen no encontrada o privada
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    modal.show();
+}
+</script>
+{# FIN SCRIPTS #}
+
+{% endblock %}

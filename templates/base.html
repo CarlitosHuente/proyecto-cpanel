@@ -244,6 +244,12 @@
         {% endif %}
 
         {% if tiene_permiso(session.get('rol'), 'ventas') %} <a href="#"><span class="texto-menu">Clientes</span></a> {% endif %}
+
+        {% if tiene_permiso(session.get('rol'), 'fabrica') %}
+        <a href="{{ url_for('fabrica.calendario_produccion') }}">
+            <span class="texto-menu">Fábrica Empanadas</span>
+        </a>
+        {% endif %}
         
         
         {% if session['rol'] in ['superusuario', 'admin', 'logistica', "seremi"] %}
