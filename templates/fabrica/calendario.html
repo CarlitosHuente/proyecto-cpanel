@@ -116,7 +116,7 @@ function verDetalle(info) {
                     <small class="text-muted fw-bold" style="font-size: 0.65rem;">UNIDADES</small>
                 </div>
                 <div class="col-3 border-end text-warning">
-                    <h3 class="mb-0 fw-bold" style="color: #d39e00;">${(info.queso_inicial_gr / info.cant_producida).toFixed(1)}g</h3>
+                    <h3 class="mb-0 fw-bold" style="color: #d39e00;">${((info.queso_inicial_gr - info.queso_merma_gr) / info.cant_producida).toFixed(1)}g</h3>
                     <small class="text-muted fw-bold" style="font-size: 0.65rem;">PROM. QUESO</small>
                 </div>
                 <div class="col-3 border-end">
