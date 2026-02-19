@@ -5,6 +5,10 @@
 {% block content %}
 <link href="{{ url_for('static', filename='css/pizarra.css') }}" rel="stylesheet">
 
+<script>
+    const ROL_USUARIO = "{{ session.get('rol') }}";
+</script>
+
 <div class="container-fluid mt-4">
     <div class="d-flex gap-2 align-items-center mb-4 flex-wrap">
         
@@ -45,6 +49,12 @@
             </button>
         {% endif %}
 
+        {% if session.get('rol') in ['superusuario', 'admin', 'logistica', 'seremi'] %}
+            <button class="btn btn-dark border-secondary text-white" onclick="abrirHistorialAlertas()">
+                📜 Ver Historial Alertas
+            </button>
+        {% endif %}
+
         <a href="{{ url_for('sucursales.historial') }}" class="btn btn-outline-info">📜 Historial</a>
         
         <a href="{{ url_for('sucursales.vista_nueva_solicitud') }}" class="btn btn-success">
@@ -69,6 +79,8 @@
                 {% set es_urgente = (sol.prioridad == 'Alta') or (dias_atraso >= 4) %}
                 {% set clase_semaforo = 'semaforo-rojo' if es_urgente else 'semaforo-verde' %}
                 {% set tooltip_semaforo = 'URGENTE: Atrasado' if dias_atraso >= 4 else ('Prioridad Alta' if sol.prioridad == 'Alta' else 'A tiempo') %}
+
+                <textarea id="desc-{{ sol.solicitud_id }}" style="display:none;">{{ sol.descripcion_servicio }}</textarea>
 
                 <div class="card post-it sucursal-color-{{ color_index }}" 
                      style="color: #333 !important;"
@@ -132,12 +144,19 @@
             <div class="spinner-border text-danger" role="status"></div>
         </div>
         
-        <table class="table table-dark table-hover d-none" id="tablaDetalle">
+        <div id="divDescripcionServicio" class="d-none p-3 bg-secondary bg-opacity-25 rounded border border-warning">
+            <h5 class="text-warning"><i class="bi bi-tools"></i> Detalle del Servicio:</h5>
+            <div id="textoDescripcionFull" class="text-white mt-2" style="white-space: pre-wrap; max-height: 300px; overflow-y: auto;">
+                </div>
+        </div>
+
+        <table class="table table-dark table-hover d-none mt-2 align-middle" id="tablaDetalle">
             <thead>
                 <tr>
                     <th>Producto</th>
                     <th>Cant. Solicitada</th>
                     <th>Estado</th>
+                    {% if session.get('rol') == 'superusuario' %}<th class="text-end">Admin</th>{% endif %}
                 </tr>
             </thead>
             <tbody id="cuerpoTabla">
@@ -261,6 +280,38 @@
   </div>
 </div>
 
+<div class="modal fade" id="modalHistorialAlertas" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark text-white border-secondary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title">📜 Historial de Alertas Enviadas</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-dark table-striped table-hover mb-0 small align-middle">
+                        <thead class="table-secondary text-dark sticky-top">
+                            <tr>
+                                <th>Fecha Envío</th>
+                                <th>Sucursal</th>
+                                <th>Mensaje</th>
+                                <th>Prioridad</th>
+                                <th>Estado</th>
+                                <th>Fecha Realizado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyHistorialAlertas">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% if tareas_activas %} 
 <div class="modal fade" id="modalTareasPendientes" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-lg">
@@ -348,10 +399,11 @@
         // --- RESET VISUAL ---
         document.getElementById('divInputLogistica').style.display = 'none';
         document.getElementById('obsDespachoInput').value = ''; 
+        document.getElementById('divDescripcionServicio').classList.add('d-none'); // Ocultar
         
         document.getElementById('btnGestionar').style.display = 'none';
         document.getElementById('btnConfirmar').style.display = 'none';
-        document.getElementById('btnTerminarServicio').style.display = 'none'; // Nuevo botón
+        document.getElementById('btnTerminarServicio').style.display = 'none'; 
         document.getElementById('btnRecepcionar').style.display = 'none';
 
         var myModal = new bootstrap.Modal(document.getElementById('modalDetalle'));
@@ -362,19 +414,24 @@
             .then(data => {
                 window.dataDetalleActual = data; 
                 document.getElementById('loadingSpinner').classList.add('d-none');
-                document.getElementById('tablaDetalle').classList.remove('d-none');
-
+                
                 // LÓGICA: ¿Es Producto o Servicio?
                 if(!data || data.length === 0) {
-                    // ES SERVICIO
-                    document.getElementById('cuerpoTabla').innerHTML = "<tr><td colspan='3' class='text-center text-warning p-4'>🛠️ Esta es una solicitud de servicio/mantención.<br>No requiere despacho de productos.</td></tr>";
+                    // --- CASO SERVICIO ---
+                    // Recuperamos el texto del textarea oculto
+                    let textArea = document.getElementById("desc-" + id);
+                    let textoFull = textArea ? textArea.value : "Sin detalles.";
+                    
+                    document.getElementById('divDescripcionServicio').classList.remove('d-none');
+                    document.getElementById('textoDescripcionFull').innerText = textoFull;
                     
                     // Solo Superusuario ve el botón de cerrar
                     {% if session.get('rol') == 'superusuario' %}
                         document.getElementById('btnTerminarServicio').style.display = 'inline-block';
                     {% endif %}
                 } else {
-                    // ES PRODUCTO
+                    // --- CASO PRODUCTO ---
+                    document.getElementById('tablaDetalle').classList.remove('d-none');
                     document.getElementById('btnGestionar').style.display = 'inline-block';
                     dibujarTabla(data, false);
                 }
@@ -382,6 +439,24 @@
             .catch(error => {
                 console.error("Error:", error);
                 document.getElementById('loadingSpinner').classList.add('d-none');
+            });
+    }
+
+    // --- FUNCIÓN HELPER PARA RECARGAR TABLA SIN CERRAR MODAL ---
+    function recargarDatosTabla() {
+        document.getElementById('loadingSpinner').classList.remove('d-none');
+        document.getElementById('tablaDetalle').classList.add('d-none');
+
+        fetch(`/sucursales/api/detalle/${solicitudActualId}`)
+            .then(response => response.json())
+            .then(data => {
+                window.dataDetalleActual = data;
+                document.getElementById('loadingSpinner').classList.add('d-none');
+                document.getElementById('tablaDetalle').classList.remove('d-none');
+                
+                // Redibujar manteniendo el modo edición si estaba activo
+                // Pero como es admin, los botones salen siempre.
+                dibujarTabla(data, false);
             });
     }
 
@@ -407,7 +482,8 @@
             const envioCompleto = item.cantidad_despachada >= item.cantidad_solicitada;
             const recepcionCompleta = item.cantidad_recepcionada >= item.cantidad_despachada;
             
-            if (envioCompleto && recepcionCompleta && !modoEdicion) return;
+            // Si está completo, no lo mostramos a menos que estemos en edición o seamos superusuario
+            if (envioCompleto && recepcionCompleta && !modoEdicion && ROL_USUARIO !== 'superusuario') return;
 
             let enTransito = item.cantidad_despachada - item.cantidad_recepcionada; 
             if (enTransito < 0) enTransito = 0;
@@ -470,11 +546,23 @@
                 }
             }
             
+            // 3. SUPERPODERES ADMIN: Botones de Editar y Eliminar
+            let colAdmin = "";
+            if (ROL_USUARIO === 'superusuario') {
+                colAdmin = `
+                    <td class="text-end" style="min-width: 90px;">
+                        <button class="btn btn-sm btn-outline-warning py-0 px-1 me-1" title="Editar Cantidad" onclick="editarItem(${item.detalle_id}, ${item.cantidad_solicitada})">✏️</button>
+                        <button class="btn btn-sm btn-outline-danger py-0 px-1" title="Eliminar Ítem" onclick="eliminarItem(${item.detalle_id})">🗑️</button>
+                    </td>
+                `;
+            }
+            
             let row = `
                 <tr>
                     <td><div class="fw-bold">${item.nombre_producto}</div></td>
                     <td>${columnaCantidad}</td>
                     <td>${columnaAccion}</td>
+                    ${colAdmin}
                 </tr>
             `;
             tbody.innerHTML += row;
@@ -550,7 +638,6 @@
             });
     }
 
-    // NUEVA FUNCIÓN PARA CERRAR SERVICIOS
     function terminarServicio() {
         if(!confirm("¿Dar por solucionado este requerimiento y archivarlo?")) return;
 
@@ -647,6 +734,83 @@
             if(d.success) {
                 location.reload(); 
             } else { alert("Error al postergar"); }
+        });
+    }
+
+    function abrirHistorialAlertas() {
+        var modal = new bootstrap.Modal(document.getElementById('modalHistorialAlertas'));
+        modal.show();
+
+        const tbody = document.getElementById('tbodyHistorialAlertas');
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center p-3">Cargando...</td></tr>';
+
+        fetch('/sucursales/tareas/historial_api')
+            .then(r => r.json())
+            .then(data => {
+                tbody.innerHTML = '';
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center p-3">No hay alertas registradas.</td></tr>';
+                    return;
+                }
+
+                data.forEach(t => {
+                    let fechaCrea = new Date(t.creado).toLocaleString();
+                    let fechaReal = t.realizado ? new Date(t.realizado).toLocaleString() : '-';
+                    
+                    let estadoHtml = '';
+                    if(t.estado === 'Pendiente') estadoHtml = '<span class="badge bg-danger">Pendiente</span>';
+                    else if(t.estado === 'Realizado') estadoHtml = '<span class="badge bg-success">Realizado ✅</span>';
+                    else estadoHtml = '<span class="badge bg-secondary">' + t.estado + '</span>';
+
+                    let row = `
+                        <tr>
+                            <td>${fechaCrea}</td>
+                            <td class="fw-bold">${t.sucursal}</td>
+                            <td>${t.mensaje}</td>
+                            <td>${t.prioridad === 'Urgente' ? '🔴' : '🟢'}</td>
+                            <td>${estadoHtml}</td>
+                            <td>${fechaReal}</td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += row;
+                });
+            })
+            .catch(err => {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Error al cargar datos.</td></tr>';
+            });
+    }
+
+    // 4. FUNCIONES DE SUPERPODERES (EDITAR Y ELIMINAR)
+    function editarItem(detalleId, cantActual) {
+        let nueva = prompt("Nueva cantidad solicitada:", cantActual);
+        if(nueva === null) return;
+        if(isNaN(nueva) || nueva <= 0) return alert("Cantidad inválida");
+
+        fetch('/sucursales/item/actualizar', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ detalle_id: detalleId, cantidad: nueva })
+        }).then(r=>r.json()).then(d=>{ 
+            if(d.success) {
+                // Recargamos la tabla para ver el cambio reflejado (incluyendo estado Completo/Parcial)
+                recargarDatosTabla();
+            } else {
+                alert("Error: " + d.error); 
+            }
+        });
+    }
+
+    function eliminarItem(detalleId) {
+        if(!confirm("¿ELIMINAR este producto del pedido?\nEsta acción es irreversible.")) return;
+
+        fetch('/sucursales/item/eliminar', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ detalle_id: detalleId })
+        }).then(r=>r.json()).then(d=>{ 
+            if(d.success) {
+                recargarDatosTabla();
+            } else {
+                alert("Error: " + d.error); 
+            }
         });
     }
 </script>

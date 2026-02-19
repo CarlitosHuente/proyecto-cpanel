@@ -20,7 +20,8 @@
                             <th>Sucursal</th>
                             <th>Solicitante</th>
                             <th>Estado</th>
-                            <th>Obs. Entrega</th> <th>Acción</th>
+                            <th>Obs. Logística</th>
+                            <th>Comprobante</th> <th>Acción</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -38,8 +39,17 @@
                                 {% endif %}
                             </td>
                             
-                            <td class="text-warning fst-italic">
+                            <td class="text-warning fst-italic small">
                                 {{ h.obs_despacho if h.obs_despacho else '-' }}
+                            </td>
+                            
+                            <td>
+                                <div class="d-flex align-items-center justify-content-between border border-secondary rounded p-1" style="min-width: 150px;">
+                                    <span id="txt-comp-{{ h.id }}" class="text-info small me-2">{{ h.comprobante if h.comprobante else '...' }}</span>
+                                    <button class="btn btn-sm btn-outline-secondary py-0 px-1" onclick="editarComprobante({{ h.id }}, '{{ h.comprobante if h.comprobante else '' }}')">
+                                        ✏️
+                                    </button>
+                                </div>
                             </td>
 
                             <td>
@@ -51,7 +61,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="7" class="text-center py-4">No hay registros en el historial.</td>
+                            <td colspan="8" class="text-center py-4">No hay registros en el historial.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -92,8 +102,27 @@
   </div>
 </div>
 
+<div class="modal fade" id="modalComprobante" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content bg-dark border-info text-white">
+            <div class="modal-header border-secondary py-2">
+                <h6 class="modal-title">Editar Comprobante</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editCompId">
+                <label class="form-label small text-muted">Observación / N° Factura:</label>
+                <textarea id="editCompTexto" class="form-control bg-secondary text-white border-info" rows="3"></textarea>
+            </div>
+            <div class="modal-footer border-secondary py-1">
+                <button type="button" class="btn btn-sm btn-info w-100" onclick="guardarComprobante()">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
-// Agregamos el 4to parámetro: descripcionServicio
+// FUNCIÓN VER DETALLE EXISTENTE
 function verDetalle(id, sucursal, fecha, descripcionServicio) {
     
     document.getElementById('modalTitulo').innerText = "Pedido #" + id + " - " + sucursal + " (" + fecha + ")";
@@ -151,6 +180,39 @@ function verDetalle(id, sucursal, fecha, descripcionServicio) {
             console.error('Error:', error);
             document.getElementById('cuerpoTabla').innerHTML = "<tr><td colspan='4' class='text-danger'>Error al cargar datos</td></tr>";
         });
+}
+
+// NUEVAS FUNCIONES PARA COMPROBANTE
+var modalCompObj = null;
+
+function editarComprobante(id, textoActual) {
+    document.getElementById('editCompId').value = id;
+    document.getElementById('editCompTexto').value = textoActual;
+    
+    var el = document.getElementById('modalComprobante');
+    modalCompObj = new bootstrap.Modal(el);
+    modalCompObj.show();
+}
+
+function guardarComprobante() {
+    const id = document.getElementById('editCompId').value;
+    const texto = document.getElementById('editCompTexto').value;
+
+    fetch('/sucursales/actualizar_comprobante', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ solicitud_id: id, texto: texto })
+    })
+    .then(r => r.json())
+    .then(d => {
+        if(d.success) {
+            // Actualizar visualmente sin recargar
+            document.getElementById('txt-comp-' + id).innerText = texto;
+            modalCompObj.hide();
+        } else {
+            alert("Error al guardar: " + (d.error || 'Desconocido'));
+        }
+    });
 }
 </script>
 {% endblock %}
