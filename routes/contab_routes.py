@@ -581,8 +581,15 @@ def informe_gerencial():
     df = df[df["CUENTA"].str.startswith(('3', '4'))]
     df = df[df["PERIODO_STR"] == periodo].copy()
 
-    switch_sg = request.args.get("distribuir_sg") == "on"
-    switch_fab = request.args.get("ajuste_fabrica") == "on"
+# Revisa si el formulario mandó el campo oculto "form_enviado"
+    if request.args.get("form_enviado"):
+        # Si lo envió, respeta exactamente lo que el usuario haya dejado marcado o desmarcado
+        switch_sg = request.args.get("distribuir_sg") == "on"
+        switch_fab = request.args.get("ajuste_fabrica") == "on"
+    else:
+        # Si NO lo envió (es la primera vez que cargas la página), préndelos por defecto
+        switch_sg = True
+        switch_fab = True
     
     df_final = calcular_matriz_gestion(df, periodo, switch_sg, switch_fab, data_config)
     
@@ -669,16 +676,25 @@ def comparativo_gestion():
     comp_cc = request.args.get("comp_cc", "Total Empresa")
     comp_modo = request.args.get("comp_modo", "last_6")
     
+    comp_modo = request.args.get("comp_modo", "last_6")
+    mes_anual = request.args.get("mes_anual") # Nuevo parámetro para el mes seleccionado
+    
+    
+    
     if not df.empty: fecha_fin = df["FECHA"].max()
     else: fecha_fin = datetime.now()
+
+    # Si el usuario eligió un mes para la comparativa anual, lo usamos. Si no, usamos el último con datos.
+    mes_base = int(mes_anual) if mes_anual and mes_anual.isdigit() else fecha_fin.month
 
     cols = []
     if comp_modo == "last_6":
         for i in range(5, -1, -1): cols.append((fecha_fin - pd.DateOffset(months=i)).strftime("%Y-%m"))
-    elif comp_modo == "last_12":
-        for i in range(11, -1, -1): cols.append((fecha_fin - pd.DateOffset(months=i)).strftime("%Y-%m"))
+    elif comp_modo == "last_14": # Cambiado a 14 meses
+        for i in range(13, -1, -1): cols.append((fecha_fin - pd.DateOffset(months=i)).strftime("%Y-%m"))
     elif comp_modo == "anual":
-        for i in range(2, -1, -1): cols.append(datetime(fecha_fin.year - i, fecha_fin.month, 1).strftime("%Y-%m"))
+        # Ahora compara el "mes_base" de los últimos 3 años (ej: Feb 2024, Feb 2025, Feb 2026)
+        for i in range(2, -1, -1): cols.append(datetime(fecha_fin.year - i, mes_base, 1).strftime("%Y-%m"))
 
     df["SALDO_REAL"] = (df["DEBE"] - df["HABER"]) * -1
     df["PERIODO_STR"] = df["FECHA"].dt.strftime("%Y-%m")
@@ -688,8 +704,13 @@ def comparativo_gestion():
     df = df[df["CUENTA"].str.startswith(('3', '4'))]
     df = df[df["PERIODO_STR"].isin(cols)]
 
-    switch_sg = request.args.get("distribuir_sg") == "on"
-    switch_fab = request.args.get("ajuste_fabrica") == "on"
+    # Lógica de los switches por defecto ACTIVADOS
+    if request.args.get("form_enviado"):
+        switch_sg = request.args.get("distribuir_sg") == "on"
+        switch_fab = request.args.get("ajuste_fabrica") == "on"
+    else:
+        switch_sg = True
+        switch_fab = True
 
     # Calculo centralizado
     df_final = calcular_matriz_gestion(df, None, switch_sg, switch_fab, data_config)
@@ -768,7 +789,7 @@ def comparativo_gestion():
             reporte.append(f)
 
     todos_cc = sorted(list(set(obtener_datos("mayor")["CENTRO COSTO"].dropna().unique())))
-    return render_template("contab/comparativo_gestion.html", reporte=reporte, columnas=cols, todos_cc=todos_cc, comp_cc=comp_cc, comp_modo=comp_modo, switch_sg=switch_sg, switch_fab=switch_fab)
+    return render_template("contab/comparativo_gestion.html", reporte=reporte, columnas=cols, todos_cc=todos_cc, comp_cc=comp_cc, comp_modo=comp_modo, switch_sg=switch_sg, switch_fab=switch_fab, mes_anual=mes_base)
 
 @contab_bp.route("/dashboard_gestion")
 @login_requerido
@@ -804,7 +825,17 @@ def dashboard_gestion():
     dash_cc = request.args.get("dash_cc", "Total Empresa")
     
     # Calculo centralizado (siempre ON para dashboard)
-    df_final = calcular_matriz_gestion(df, None, True, True, data_config)
+    # Lógica de los switches por defecto ACTIVADOS
+    if request.args.get("form_enviado"):
+        switch_sg = request.args.get("distribuir_sg") == "on"
+        switch_fab = request.args.get("ajuste_fabrica") == "on"
+    else:
+        switch_sg = True
+        switch_fab = True
+
+    # Calculo centralizado dinámico
+    df_final = calcular_matriz_gestion(df, None, switch_sg, switch_fab, data_config)
+    
     
     if dash_cc != "Total Empresa":
         df_final = df_final[df_final["CENTRO COSTO"] == dash_cc]
@@ -861,8 +892,7 @@ def dashboard_gestion():
     }
 
     todos_cc = sorted(list(set(obtener_datos("mayor")["CENTRO COSTO"].dropna().unique())))
-    return render_template("contab/dashboard_gestion.html", dash_cc=dash_cc, todos_cc=todos_cc, kpis=kpis, charts=charts, ultimo_mes=ult_mes_str, anio_actual=anio_act, anio_anterior=anio_ant)
-
+    return render_template("contab/dashboard_gestion.html", dash_cc=dash_cc, todos_cc=todos_cc, kpis=kpis, charts=charts, ultimo_mes=ult_mes_str, anio_actual=anio_act, anio_anterior=anio_ant, switch_sg=switch_sg, switch_fab=switch_fab)
 @contab_bp.route("/comparativo")
 @login_requerido
 @permiso_modulo("contab")

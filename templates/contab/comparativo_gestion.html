@@ -7,6 +7,8 @@
     <h2 class="text-white m-0">Comparativo de Gestión</h2>
     
     <form method="GET" class="d-flex align-items-center gap-2 bg-dark p-2 rounded border border-secondary flex-wrap">
+        <input type="hidden" name="form_enviado" value="1">
+
         <select name="comp_cc" class="form-select form-select-sm bg-secondary text-white border-0" style="min-width: 150px;" onchange="this.form.submit()">
             <option value="Total Empresa" {% if comp_cc == 'Total Empresa' %}selected{% endif %}>Total Empresa</option>
             {% for cc in todos_cc %}
@@ -18,9 +20,26 @@
 
         <select name="comp_modo" class="form-select form-select-sm bg-secondary text-white border-0" style="min-width: 140px;" onchange="this.form.submit()">
             <option value="last_6" {% if comp_modo == 'last_6' %}selected{% endif %}>Últimos 6 Meses</option>
-            <option value="last_12" {% if comp_modo == 'last_12' %}selected{% endif %}>Últimos 12 Meses</option>
+            <option value="last_14" {% if comp_modo == 'last_14' %}selected{% endif %}>Últimos 14 Meses</option>
             <option value="anual" {% if comp_modo == 'anual' %}selected{% endif %}>Comp. Anual</option>
         </select>
+
+        {% if comp_modo == 'anual' %}
+        <select name="mes_anual" class="form-select form-select-sm bg-info text-dark fw-bold border-0" style="min-width: 120px;" onchange="this.form.submit()">
+            <option value="1" {% if mes_anual == 1 %}selected{% endif %}>Enero</option>
+            <option value="2" {% if mes_anual == 2 %}selected{% endif %}>Febrero</option>
+            <option value="3" {% if mes_anual == 3 %}selected{% endif %}>Marzo</option>
+            <option value="4" {% if mes_anual == 4 %}selected{% endif %}>Abril</option>
+            <option value="5" {% if mes_anual == 5 %}selected{% endif %}>Mayo</option>
+            <option value="6" {% if mes_anual == 6 %}selected{% endif %}>Junio</option>
+            <option value="7" {% if mes_anual == 7 %}selected{% endif %}>Julio</option>
+            <option value="8" {% if mes_anual == 8 %}selected{% endif %}>Agosto</option>
+            <option value="9" {% if mes_anual == 9 %}selected{% endif %}>Septiembre</option>
+            <option value="10" {% if mes_anual == 10 %}selected{% endif %}>Octubre</option>
+            <option value="11" {% if mes_anual == 11 %}selected{% endif %}>Noviembre</option>
+            <option value="12" {% if mes_anual == 12 %}selected{% endif %}>Diciembre</option>
+        </select>
+        {% endif %}
 
         <div class="vr bg-secondary mx-1 d-none d-md-block"></div>
 
@@ -35,6 +54,8 @@
                    {% if switch_fab %}checked{% endif %} onchange="this.form.submit()">
             <label class="form-check-label text-white small" for="switchFab">Aj. Fca</label>
         </div>
+        
+        <button type="submit" class="d-none"></button>
     </form>
 </div>
 

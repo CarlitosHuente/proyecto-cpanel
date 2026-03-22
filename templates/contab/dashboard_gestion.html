@@ -8,13 +8,29 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2 class="text-white m-0 display-6 fw-bold">Dashboard Gerencial</h2>
         
-        <form action="{{ url_for('contab.dashboard_gestion') }}" method="get" class="d-flex align-items-center">
+        <form action="{{ url_for('contab.dashboard_gestion') }}" method="get" class="d-flex align-items-center gap-3 bg-dark p-2 rounded border border-secondary flex-wrap">
+            <input type="hidden" name="form_enviado" value="1">
             <input type="hidden" name="dash_cc" value="{{ dash_cc }}">
-            <div class="input-group">
-                <span class="input-group-text bg-danger text-white border-danger fw-bold">Periodo</span>
+            
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-danger text-white border-danger fw-bold p-2">Periodo</span>
                 <input type="month" name="periodo" value="{{ ultimo_mes }}" 
-                       class="form-control bg-dark text-white border-danger fw-bold" 
+                       class="form-control form-control-sm bg-secondary text-white border-0 fw-bold" 
                        onchange="this.form.submit()">
+            </div>
+
+            <div class="vr bg-secondary mx-1 d-none d-md-block"></div>
+
+            <div class="form-check form-switch m-0">
+                <input class="form-check-input" type="checkbox" role="switch" id="switchSG" name="distribuir_sg" 
+                       {% if switch_sg %}checked{% endif %} onchange="this.form.submit()">
+                <label class="form-check-label text-white small" for="switchSG">Dist. SG</label>
+            </div>
+
+            <div class="form-check form-switch m-0">
+                <input class="form-check-input" type="checkbox" role="switch" id="switchFab" name="ajuste_fabrica" 
+                       {% if switch_fab %}checked{% endif %} onchange="this.form.submit()">
+                <label class="form-check-label text-white small" for="switchFab">Aj. Fca</label>
             </div>
         </form>
     </div>
