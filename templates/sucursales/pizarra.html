@@ -859,7 +859,7 @@
                     
                     const imgElement = document.getElementById('imgAnuncioGlobal');
                     if (data.imagen && data.imagen !== 'None' && data.imagen !== 'null' && data.imagen !== '') {
-                        imgElement.src = "{{ url_for('static', filename='uploads/anuncios/') }}" + data.imagen;
+                        imgElement.src = "/config/uploads/anuncios/" + data.imagen;
                         imgElement.style.display = 'block';
                     } else {
                         imgElement.style.display = 'none';

@@ -29,7 +29,7 @@ os.makedirs(UPLOAD_FOLDER_CONTAB, exist_ok=True)
 # Deja la ruta disponible para toda la app
 app.config["UPLOAD_FOLDER_CONTAB"] = UPLOAD_FOLDER_CONTAB
 # Guardar imagenes
-UPLOAD_FOLDER_ANUNCIOS = os.path.join(BASE_DIR, "static", "uploads", "anuncios")
+UPLOAD_FOLDER_ANUNCIOS = os.path.join(BASE_DIR, "uploads", "anuncios")
 os.makedirs(UPLOAD_FOLDER_ANUNCIOS, exist_ok=True)
 app.config["UPLOAD_FOLDER_ANUNCIOS"] = UPLOAD_FOLDER_ANUNCIOS
 

@@ -256,7 +256,7 @@
         const previewImg = document.getElementById('previewImg');
         if (imgName && imgName !== 'None' && imgName !== 'null' && imgName !== '') {
             // Construimos la ruta hacia la carpeta static/uploads/anuncios/
-            previewImg.src = "{{ url_for('static', filename='uploads/anuncios/') }}" + imgName;
+            previewImg.src = "/config/uploads/anuncios/" + imgName;
             previewImg.style.display = 'block';
         } else {
             previewImg.style.display = 'none';

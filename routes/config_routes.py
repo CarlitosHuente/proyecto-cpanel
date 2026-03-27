@@ -466,3 +466,11 @@ def toggle_anuncio():
         return jsonify({"success": False, "error": str(e)})
     finally:
         conn.close()
+        
+from flask import send_from_directory, current_app
+
+# --- PEGAR AL FINAL DE config_routes.py ---
+@config_bp.route("/uploads/anuncios/<filename>")
+def ver_imagen_anuncio(filename):
+    """Esta ruta permite al navegador leer la imagen desde la carpeta uploads protegida"""
+    return send_from_directory(current_app.config['UPLOAD_FOLDER_ANUNCIOS'], filename)
