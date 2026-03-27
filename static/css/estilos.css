@@ -183,3 +183,76 @@ thead th {
     .val-secundario, .val-rendimiento { font-size: 0.7rem; }
 }
 /* # FIN ESTILOS CALENDARIO RECOMPUESTOS # */
+
+/* =========================================
+   ESTILOS PARA EDITOR DE ANUNCIOS (QUILL)
+   ========================================= */
+/* 1. Entradas de texto normales (Título, Fechas) */
+#formAnuncio .form-control {
+    background-color: #2b2b2b !important;
+    color: #ffffff !important;
+}
+#formAnuncio .form-control:focus {
+    background-color: #1a1a1a !important;
+    color: #ffffff !important;
+    border-color: #0dcaf0 !important;
+}
+
+/* 2. Editor Quill - Área de escritura */
+#editor {
+    background-color: #ffffff !important;
+}
+.ql-editor {
+    color: #000000 !important; /* Letra negra para escribir */
+    font-size: 16px;
+}
+.ql-editor.ql-blank::before {
+    color: #888888 !important; /* Texto fantasma visible */
+}
+
+/* 3. Barra de herramientas de Quill */
+.ql-toolbar {
+    background-color: #f8f9fa !important;
+    border-color: #cccccc !important;
+}
+.ql-snow .ql-stroke { stroke: #333333 !important; }
+.ql-snow .ql-fill { fill: #333333 !important; }
+
+/* 4. Desplegable de Tamaños (El cuadro blanco rebelde) */
+.ql-snow .ql-picker { color: #333333 !important; }
+.ql-snow .ql-picker-options {
+    background-color: #ffffff !important;
+    border-color: #cccccc !important;
+}
+.ql-snow .ql-picker-item {
+    color: #000000 !important;
+}
+.ql-snow .ql-picker-item:hover {
+    color: #007bff !important;
+}
+.ql-snow .ql-picker-item.ql-selected {
+    color: #007bff !important;
+    font-weight: bold;
+}
+/* ====================================================
+   ESCUDO ANTI "LETRAS BLANCAS" DENTRO DEL EDITOR
+   ==================================================== */
+
+/* 1. Fuerza letra negra al texto del menú desplegable (que son spans) */
+.ql-toolbar span,
+.ql-toolbar .ql-picker-label,
+.ql-toolbar .ql-picker-label::before {
+    color: #333333 !important;
+}
+
+/* 2. Fuerza letra negra a TODO lo que escribas dentro del cuadro blanco */
+.ql-editor p, 
+.ql-editor h1, 
+.ql-editor h2, 
+.ql-editor h3, 
+.ql-editor span, 
+.ql-editor li,
+.ql-editor strong,
+.ql-editor em {
+    color: #000000 !important;
+}

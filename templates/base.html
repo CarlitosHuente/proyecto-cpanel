@@ -274,6 +274,15 @@
                     <li><a href="{{ url_for('config.categorias') }}" class="text-white text-decoration-none rounded p-1 d-block">
                         <i class="bi bi-tags me-2"></i> Categorías
                     </a></li>
+
+                    {% if session.get('rol') == 'superusuario' %}
+                    <li class="nav-item">
+                        <a class="nav-link text-white" href="{{ url_for('config.gestion_anuncios') }}">
+                            <i class="bi bi-megaphone"></i> Config. Pop-Ups
+                        </a>
+                    </li>
+                    {% endif %}
+                    
                     
                 </ul>
             </div>

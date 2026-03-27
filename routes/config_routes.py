@@ -369,3 +369,100 @@ def eliminar_producto(id):
     finally:
         conn.close()
     return redirect(url_for('config.productos'))
+
+
+import os
+from werkzeug.utils import secure_filename
+from flask import Blueprint, request, jsonify, render_template, current_app
+
+@config_bp.route("/anuncios")
+@login_requerido
+@permiso_modulo("config") # O el permiso que uses para superusuario
+def gestion_anuncios():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM anuncios_globales ORDER BY fecha_creacion DESC")
+    anuncios = cursor.fetchall()
+    conn.close()
+    return render_template("config/anuncios.html", anuncios=anuncios)
+
+@config_bp.route("/anuncios/guardar", methods=["POST"])
+@login_requerido
+@permiso_modulo("config")
+def guardar_anuncio():
+    anuncio_id = request.form.get("anuncio_id") # <-- NUEVO: Capturamos si viene un ID
+    titulo = request.form.get("titulo")
+    fecha_inicio = request.form.get("fecha_inicio")
+    fecha_fin = request.form.get("fecha_fin")
+    contenido_html = request.form.get("contenido_html")
+    
+    imagen_ruta = None
+    if 'imagen' in request.files:
+        file = request.files['imagen']
+        if file.filename != '':
+            filename = secure_filename(file.filename)
+            ruta_guardado = os.path.join(current_app.config['UPLOAD_FOLDER_ANUNCIOS'], filename)
+            file.save(ruta_guardado)
+            imagen_ruta = filename
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        if anuncio_id:
+            # === MODO EDICIÓN (UPDATE) ===
+            if imagen_ruta:
+                # Si subió una nueva imagen, actualizamos todo
+                cursor.execute("""
+                    UPDATE anuncios_globales 
+                    SET titulo=%s, contenido_html=%s, imagen_ruta=%s, fecha_inicio=%s, fecha_fin=%s
+                    WHERE anuncio_id=%s
+                """, (titulo, contenido_html, imagen_ruta, fecha_inicio, fecha_fin, anuncio_id))
+            else:
+                # Si no subió imagen, actualizamos todo menos la foto (conserva la que tenía)
+                cursor.execute("""
+                    UPDATE anuncios_globales 
+                    SET titulo=%s, contenido_html=%s, fecha_inicio=%s, fecha_fin=%s
+                    WHERE anuncio_id=%s
+                """, (titulo, contenido_html, fecha_inicio, fecha_fin, anuncio_id))
+        else:
+            # === MODO NUEVO (INSERT) ===
+            cursor.execute("""
+                INSERT INTO anuncios_globales (titulo, contenido_html, imagen_ruta, fecha_inicio, fecha_fin, activo)
+                VALUES (%s, %s, %s, %s, %s, 0)
+            """, (titulo, contenido_html, imagen_ruta, fecha_inicio, fecha_fin))
+            
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        conn.close()
+
+@config_bp.route("/anuncios/toggle", methods=["POST"])
+@login_requerido
+def toggle_anuncio():
+    data = request.get_json()
+    anuncio_id = data.get("anuncio_id")
+    nuevo_estado = data.get("activo") # 1 o 0
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        if nuevo_estado == 1:
+            # 1. Regla de Exclusividad: Apagamos TODOS los demás
+            cursor.execute("UPDATE anuncios_globales SET activo = 0")
+            # 2. Encendemos el que pidieron
+            cursor.execute("UPDATE anuncios_globales SET activo = 1 WHERE anuncio_id = %s", (anuncio_id,))
+            # 3. RESET DE VISTAS: Borramos el historial para que vuelva a aparecer a todos
+            cursor.execute("DELETE FROM anuncios_vistas WHERE anuncio_id = %s", (anuncio_id,))
+        else:
+            # Solo lo apagamos
+            cursor.execute("UPDATE anuncios_globales SET activo = 0 WHERE anuncio_id = %s", (anuncio_id,))
+            
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        conn.close()

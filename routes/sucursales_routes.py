@@ -837,3 +837,52 @@ def eliminar_item_detalle():
         return jsonify({"success": False, "error": str(e)})
     finally:
         conn.close()
+        
+# --- PEGAR AL FINAL DE routes/sucursales_routes.py ---
+
+@sucursales_bp.route("/api/anuncio_activo")
+@login_requerido
+def api_anuncio_activo():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # 1. Buscar si hay algún anuncio activo
+        cursor.execute("SELECT * FROM anuncios_globales WHERE activo = 1 LIMIT 1")
+        anuncio = cursor.fetchone()
+        
+        if not anuncio:
+            return jsonify({"hay_anuncio": False})
+            
+        # Extraer datos (manejando dict o tupla)
+        aid = anuncio['anuncio_id'] if isinstance(anuncio, dict) else anuncio[0]
+        atitulo = anuncio['titulo'] if isinstance(anuncio, dict) else anuncio[1]
+        ahtml = anuncio['contenido_html'] if isinstance(anuncio, dict) else anuncio[2]
+        aimg = anuncio['imagen_ruta'] if isinstance(anuncio, dict) else anuncio[3]
+        
+        # 2. Verificar si ESTA SUCURSAL ya lo vio
+        suc_id = session.get('sucursal_id')
+        if not suc_id:
+            suc_id = 0 # Si es admin sin sucursal asignada, usamos 0 para su registro
+            
+        cursor.execute("SELECT vista_id FROM anuncios_vistas WHERE anuncio_id = %s AND sucursal_id = %s", (aid, suc_id))
+        visto = cursor.fetchone()
+        
+        mostrar_auto = False
+        
+        # Si NO lo ha visto, le decimos al frontend que lo abra automáticamente
+        if not visto:
+            mostrar_auto = True
+            cursor.execute("INSERT INTO anuncios_vistas (anuncio_id, sucursal_id) VALUES (%s, %s)", (aid, suc_id))
+            conn.commit()
+            
+        return jsonify({
+            "hay_anuncio": True,
+            "mostrar_auto": mostrar_auto,
+            "titulo": atitulo,
+            "html": ahtml,
+            "imagen": aimg
+        })
+    except Exception as e:
+        return jsonify({"hay_anuncio": False, "error": str(e)})
+    finally:
+        conn.close()

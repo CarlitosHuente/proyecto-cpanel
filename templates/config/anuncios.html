@@ -1,0 +1,270 @@
+{% extends 'base.html' %}
+{% block title %}Gestión de Anuncios{% endblock %}
+
+{% block content %}
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+<script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-white mb-0">📢 Configuración de Pop-Ups</h2>
+        <a href="{{ url_for('dashboard.dashboard') }}" class="btn btn-outline-light">Volver</a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-5 mb-4">
+            <div class="card bg-dark border-secondary text-white">
+                <div class="card-header border-secondary fw-bold" id="formTitulo">Crear Nuevo Anuncio</div>
+                <div class="card-body">
+                    <form id="formAnuncio" enctype="multipart/form-data">
+                        <input type="hidden" id="anuncio_id" name="anuncio_id">
+
+                        <div class="mb-3">
+                            <label class="form-label text-muted small">Título (Solo para control interno)</label>
+                            <input type="text" id="titulo" name="titulo" class="form-control bg-secondary text-white border-0" required>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col">
+                                <label class="form-label text-muted small">Inicio</label>
+                                <input type="date" id="fecha_inicio" name="fecha_inicio" class="form-control bg-secondary text-white border-0" required>
+                            </div>
+                            <div class="col">
+                                <label class="form-label text-muted small">Término</label>
+                                <input type="date" id="fecha_fin" name="fecha_fin" class="form-control bg-secondary text-white border-0" required>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label text-muted small">Imagen Centrada (Opcional)</label>
+                            <input type="file" id="imagen" name="imagen" class="form-control bg-secondary text-white border-0" accept="image/*">
+                            <small id="img-help" class="text-warning d-none">Dejar vacío para conservar la imagen actual.</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label text-muted small">Mensaje / Comunicado <span class="text-info">(Tip: Presiona Windows + Punto para Emojis)</span></label>
+                            <div id="editor" class="bg-light rounded" style="height: 200px;"></div>
+                        </div>
+
+                        <div class="d-flex justify-content-between mt-4">
+                            <button type="button" class="btn btn-info text-white" onclick="previsualizar()">👁️ Previsualizar</button>
+                            <div>
+                                <button type="button" id="btnCancelarEdicion" class="btn btn-secondary d-none" onclick="cancelarEdicion()">Cancelar</button>
+                                <button type="submit" id="btnGuardar" class="btn btn-success fw-bold">💾 Guardar Anuncio</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-7">
+            <div class="card bg-dark border-secondary text-white">
+                <div class="card-header border-secondary fw-bold">Historial de Anuncios</div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover mb-0 align-middle">
+                            <thead class="table-secondary">
+                                <tr>
+                                    <th>Título</th>
+                                    <th>Vigencia</th>
+                                    <th class="text-center">Estado</th>
+                                    <th class="text-end">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for a in anuncios %}
+                                <tr>
+                                    {% set aid = a['anuncio_id'] if a is mapping else a[0] %}
+                                    {% set atitulo = a['titulo'] if a is mapping else a[1] %}
+                                    {% set ahtml = a['contenido_html'] if a is mapping else a[2] %}
+                                    {% set aimg = a['imagen_ruta'] if a is mapping else a[3] %}
+                                    {% set aini = a['fecha_inicio'] if a is mapping else a[4] %}
+                                    {% set afin = a['fecha_fin'] if a is mapping else a[5] %}
+                                    {% set aactivo = a['activo'] if a is mapping else a[6] %}
+                                    
+                                    <td>{{ atitulo }}</td>
+                                    <td><small>{{ aini.strftime('%d/%m') }} al {{ afin.strftime('%d/%m') }}</small></td>
+                                    <td class="text-center">
+                                        <div class="form-check form-switch d-flex justify-content-center">
+                                            <input class="form-check-input" type="checkbox" 
+                                                   onchange="toggleActivo({{ aid }}, this.checked)"
+                                                   {% if aactivo %}checked{% endif %}>
+                                        </div>
+                                    </td>
+                                    <td class="text-end text-nowrap">
+                                        <textarea id="raw-html-{{ aid }}" class="d-none">{{ ahtml }}</textarea>
+                                        <input type="hidden" id="raw-img-{{ aid }}" value="{{ aimg if aimg else '' }}">
+                                        
+                                        <button type="button" class="btn btn-sm btn-outline-info me-1" onclick="previsualizarHistorial({{ aid }})">
+                                            👁️ Ver
+                                        </button>
+
+                                        <button type="button" class="btn btn-sm btn-outline-warning" 
+                                                onclick="editarAnuncio({{ aid }}, '{{ atitulo }}', '{{ aini.strftime('%Y-%m-%d') }}', '{{ afin.strftime('%Y-%m-%d') }}')">
+                                            ✏️ Editar
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center py-4">No hay anuncios creados.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalPreview" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-white border-info" style="border-width: 2px;">
+            <div class="modal-header border-secondary pb-2">
+                <h5 class="modal-title text-warning"><i class="bi bi-megaphone"></i> Comunicado</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center p-4">
+                <img id="previewImg" src="" style="max-width: 100%; max-height: 250px; border-radius: 8px; display: none;" class="mb-3 mx-auto">
+                <div id="previewHTML" class="text-start" style="font-size: 1.05rem;"></div>
+            </div>
+            <div class="modal-footer border-secondary justify-content-center">
+                <button type="button" class="btn btn-primary px-5 fw-bold" data-bs-dismiss="modal">Cerrar Preview</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Inicializar Quill con nueva barra (Tamaños/Header agregados)
+    var quill = new Quill('#editor', {
+        theme: 'snow',
+        modules: {
+            toolbar: [
+                [{ 'header': [1, 2, 3, false] }], // <--- Títulos (Tamaños)
+                ['bold', 'italic', 'underline', 'strike'],
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                [{ 'color': [] }, { 'background': [] }],
+                [{ 'align': [] }],
+                ['clean']
+            ]
+        }
+    });
+
+    // Guardar o Actualizar
+    document.getElementById('formAnuncio').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        var formData = new FormData(this);
+        var htmlContent = document.querySelector('.ql-editor').innerHTML;
+        if(htmlContent === '<p><br></p>') return alert("Escribe un mensaje.");
+        
+        formData.append('contenido_html', htmlContent);
+
+        fetch('/config/anuncios/guardar', {
+            method: 'POST',
+            body: formData
+        }).then(r=>r.json()).then(d=>{
+            if(d.success) location.reload();
+            else alert("Error al guardar: " + d.error);
+        });
+    });
+
+    // Cambiar estado Activo/Inactivo
+    function toggleActivo(id, isChecked) {
+        if(isChecked) {
+            if(!confirm("Al activar esto se apagarán los demás y volverá a mostrarse a todas las sucursales. ¿Continuar?")) {
+                location.reload(); return;
+            }
+        }
+        
+        fetch('/config/anuncios/toggle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({anuncio_id: id, activo: isChecked ? 1 : 0})
+        }).then(r=>r.json()).then(d=>{
+            if(d.success) location.reload();
+            else alert("Error: " + d.error);
+        });
+    }
+
+    // CARGAR DATOS PARA EDITAR
+    function editarAnuncio(id, titulo, inicio, fin) {
+        document.getElementById('anuncio_id').value = id;
+        document.getElementById('titulo').value = titulo;
+        document.getElementById('fecha_inicio').value = inicio;
+        document.getElementById('fecha_fin').value = fin;
+        
+        // Inyectar HTML al editor
+        let rawHtml = document.getElementById('raw-html-' + id).value;
+        document.querySelector('.ql-editor').innerHTML = rawHtml;
+
+        // Cambiar estética del formulario
+        document.getElementById('formTitulo').innerText = "Editando Anuncio #" + id;
+        document.getElementById('btnGuardar').innerText = "Actualizar Anuncio";
+        document.getElementById('img-help').classList.remove('d-none');
+        document.getElementById('btnCancelarEdicion').classList.remove('d-none');
+    }
+
+    // CANCELAR EDICIÓN (Limpiar formulario)
+    function cancelarEdicion() {
+        document.getElementById('formAnuncio').reset();
+        document.getElementById('anuncio_id').value = "";
+        document.querySelector('.ql-editor').innerHTML = "";
+        
+        document.getElementById('formTitulo').innerText = "Crear Nuevo Anuncio";
+        document.getElementById('btnGuardar').innerText = "💾 Guardar Anuncio";
+        document.getElementById('img-help').classList.add('d-none');
+        document.getElementById('btnCancelarEdicion').classList.add('d-none');
+    }
+
+    // Previsualizar lo que se está editando
+    function previsualizar() {
+        document.getElementById('previewHTML').innerHTML = document.querySelector('.ql-editor').innerHTML;
+        
+        const fileInput = document.getElementById('imagen');
+        const previewImg = document.getElementById('previewImg');
+        
+        if (fileInput.files && fileInput.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                previewImg.src = e.target.result;
+                previewImg.style.display = 'block';
+            }
+            reader.readAsDataURL(fileInput.files[0]);
+        } else {
+            previewImg.style.display = 'none';
+        }
+
+        var modal = new bootstrap.Modal(document.getElementById('modalPreview'));
+        modal.show();
+    }
+
+    // --- NUEVA FUNCIÓN: Ver anuncio del historial ---
+    function previsualizarHistorial(id) {
+        // Obtener datos ocultos
+        let htmlContent = document.getElementById('raw-html-' + id).value;
+        let imgName = document.getElementById('raw-img-' + id).value;
+
+        // Inyectar HTML
+        document.getElementById('previewHTML').innerHTML = htmlContent;
+        
+        // Manejar la imagen (si existe)
+        const previewImg = document.getElementById('previewImg');
+        if (imgName && imgName !== 'None' && imgName !== 'null' && imgName !== '') {
+            // Construimos la ruta hacia la carpeta static/uploads/anuncios/
+            previewImg.src = "{{ url_for('static', filename='uploads/anuncios/') }}" + imgName;
+            previewImg.style.display = 'block';
+        } else {
+            previewImg.style.display = 'none';
+        }
+
+        // Mostrar el modal
+        var modal = new bootstrap.Modal(document.getElementById('modalPreview'));
+        modal.show();
+    }
+</script>
+{% endblock %}

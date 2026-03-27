@@ -64,6 +64,10 @@
         <button type="button" class="btn btn-warning text-dark" data-bs-toggle="modal" data-bs-target="#modalServicio">
             <i class="bi bi-tools"></i> Solicitar Mantención/Otros
         </button>
+
+        <button class="btn btn-outline-info text-white fw-bold me-2" id="btnNoticiasGlobales" style="display: none;" onclick="abrirAnuncioGlobal()" title="Ver Comunicado Oficial">
+            📰 Noticias
+        </button>
     </div>
 
     {% if not solicitudes %}
@@ -384,6 +388,30 @@
     </div>
 </div>
 {% endif %}
+
+<div class="modal fade" id="modalAnuncioGlobal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content bg-dark text-white" style="border: 2px solid #0dcaf0; box-shadow: 0 0 20px rgba(13, 202, 240, 0.4);">
+            <div class="modal-header border-secondary pb-2 bg-dark">
+                <h4 class="modal-title text-info fw-bold" id="tituloAnuncioGlobal">
+                    <i class="bi bi-megaphone-fill"></i> Comunicado
+                </h4>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center p-4">
+                <img id="imgAnuncioGlobal" src="" style="max-width: 100%; max-height: 450px; border-radius: 8px; display: none;" class="mb-4 mx-auto shadow">
+                
+                <div id="htmlAnuncioGlobal" class="text-start" style="font-size: 1.15rem; line-height: 1.6;">
+                    </div>
+            </div>
+            <div class="modal-footer border-secondary justify-content-center">
+                <button type="button" class="btn btn-info px-5 fw-bold text-white" data-bs-dismiss="modal">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 
 <script>
@@ -812,6 +840,45 @@
                 alert("Error: " + d.error); 
             }
         });
+    }
+
+
+    // --- LÓGICA DE NOTICIAS GLOBALES (POP-UP) ---
+    document.addEventListener("DOMContentLoaded", function() {
+        // Al cargar la pizarra, verificamos si hay anuncios
+        fetch('/sucursales/api/anuncio_activo')
+            .then(response => response.json())
+            .then(data => {
+                if (data.hay_anuncio) {
+                    // 1. Encendemos el botón de Noticias
+                    const btnNoticias = document.getElementById('btnNoticiasGlobales');
+                    if(btnNoticias) btnNoticias.style.display = 'inline-block';
+
+                    // 2. Cargamos el contenido en el Modal
+                    document.getElementById('htmlAnuncioGlobal').innerHTML = data.html;
+                    
+                    const imgElement = document.getElementById('imgAnuncioGlobal');
+                    if (data.imagen && data.imagen !== 'None' && data.imagen !== 'null' && data.imagen !== '') {
+                        imgElement.src = "{{ url_for('static', filename='uploads/anuncios/') }}" + data.imagen;
+                        imgElement.style.display = 'block';
+                    } else {
+                        imgElement.style.display = 'none';
+                    }
+
+                    // 3. Si es la primera vez que lo ve, ¡Abrir automáticamente!
+                    if (data.mostrar_auto) {
+                        var modalAnuncio = new bootstrap.Modal(document.getElementById('modalAnuncioGlobal'));
+                        modalAnuncio.show();
+                    }
+                }
+            })
+            .catch(err => console.error("Error cargando anuncio:", err));
+    });
+
+    // Función para el botón manual
+    function abrirAnuncioGlobal() {
+        var modalAnuncio = new bootstrap.Modal(document.getElementById('modalAnuncioGlobal'));
+        modalAnuncio.show();
     }
 </script>
 {% endblock %}
