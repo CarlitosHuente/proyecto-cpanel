@@ -12,6 +12,19 @@ from utils.utils_excel import aplicar_formato_numerico_excel
 
 costeo_bp = Blueprint("costeo", __name__, url_prefix="/costeo")
 
+def obtener_alias_sucursal(sucursal):
+    s = str(sucursal).upper().strip().replace("Ñ", "N")
+    alias = [s]
+    if "FOOD" in s or "ESC" in s or "MILITAR" in s:
+        alias.extend(["ESC. MILITAR", "ESCUELA MILITAR", "FOOD TRUCK", "FOODTRUCK"])
+    if "WEB" in s:
+        alias.extend(["WEB", "PAGINA WEB", "PAGINAWEB"])
+    if "COSTANERA" in s:
+        alias.extend(["COSTANERA", "COSTANERA CENTER"])
+    if "EGANA" in s or "EGAÑA" in s:
+        alias.extend(["PLAZA EGANA", "PLAZA EGAÑA"])
+    return list(set(alias))
+
 @costeo_bp.route("/mapeo")
 @login_requerido
 @permiso_modulo("contab")
@@ -202,7 +215,13 @@ def gav_corporativo():
                     # Calcular cuánto se le asignó a cada sucursal según las reglas de SG
                     regla_cta = regla_efectiva_sg.get(cta_nombre, {})
                     for suc in sucursales:
-                        pct = float(regla_cta.get(suc.upper(), 0))
+                        pct = 0.0
+                        aliases_suc = obtener_alias_sucursal(suc)
+                        for branch_key, val in regla_cta.items():
+                            b_search = branch_key.upper().strip().replace("Ñ", "N")
+                            if any(a in b_search or b_search in a for a in aliases_suc):
+                                pct = float(val)
+                                break
                         asignado_sg_por_sucursal[suc] += saldo * pct
 
     return render_template("contab/costeo_gav.html", 
@@ -288,9 +307,10 @@ def correr_motor_costeo(periodo, sucursal):
             # D. Extraer solo los gastos (3) propios de la sucursal (Búsqueda Flexible)
             df_gastos = pd.DataFrame()
             if not df_procesado.empty and "CUENTA" in df_procesado.columns and "CENTRO COSTO" in df_procesado.columns:
-                suc_search = sucursal.upper().strip().replace("Ñ", "N")
+                aliases_suc = obtener_alias_sucursal(sucursal)
                 cc_normalized = df_procesado["CENTRO COSTO"].astype(str).str.upper().str.strip().str.replace("Ñ", "N", regex=False)
-                mask = (df_procesado["CUENTA"].str.startswith("3")) & (cc_normalized.str.contains(suc_search, na=False))
+                mask_cc = cc_normalized.apply(lambda x: any((a in x or x in a) for a in aliases_suc) if str(x).strip() else False)
+                mask = (df_procesado["CUENTA"].str.startswith("3")) & mask_cc
                 df_gastos = df_procesado[mask].copy()
             
             if not df_gastos.empty:
@@ -363,10 +383,10 @@ def correr_motor_costeo(periodo, sucursal):
             cta_nombre = str(row["NOMBRE"])
             monto = abs(float(row["SALDO_REAL"]))
             pct = 0.0
-            suc_search = sucursal.upper().strip().replace("Ñ", "N")
+            aliases_suc = obtener_alias_sucursal(sucursal)
             for branch_key, val in regla_efectiva_sg.get(cta_nombre, {}).items():
                 b_search = branch_key.upper().strip().replace("Ñ", "N")
-                if b_search == suc_search or b_search in suc_search or suc_search in b_search:
+                if any(a in b_search or b_search in a for a in aliases_suc):
                     pct = float(val)
                     break
             if pct > 0:
