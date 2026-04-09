@@ -23,7 +23,7 @@ git checkout feature/contacarvajal
 
 
 # Crear CArpeta Local
-
+En MAC es con python3
 python -m venv venv
 
 # y dependencias 
@@ -33,10 +33,16 @@ pip install -r requirements.txt
 # Activar LocalHost
 
 .\venv\Scripts\activate
+mac.  source venv/bin/activate
 
-
+#Primer Entorno
+    pip install -r requirements.txt
+    
 # y ejecutar la app
 python app.py
 
 # Crear ZIP
 git archive -o huente_app.zip HEAD
+
+# Abrir mysql desde Mac
+mysql -u root -p

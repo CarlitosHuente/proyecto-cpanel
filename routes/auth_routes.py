@@ -7,7 +7,10 @@ from utils.logger import registrar_acceso
 # --- Configuración del Cliente Supabase ---
 url: str = os.environ.get("SUPABASE_URL")
 key: str = os.environ.get("SUPABASE_KEY")
-supabase: Client = create_client(url, key)
+
+supabase = None
+if url and key:
+    supabase = create_client(url, key)
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -61,6 +64,8 @@ def login():
 
 @auth_bp.route("/google-login")
 def google_login():
+    if not supabase:
+        return "Inicio de sesión con Google deshabilitado temporalmente.", 400
     data = supabase.auth.sign_in_with_oauth({
         "provider": "google",
         "options": {
@@ -72,6 +77,8 @@ def google_login():
 
 @auth_bp.route("/callback")
 def callback():
+    if not supabase:
+        return "Supabase no está configurado.", 400
     try:
         code = request.args.get("code")
         supabase.auth.exchange_code_for_session({"auth_code": code})
@@ -103,6 +110,7 @@ def callback():
 
 @auth_bp.route("/logout")
 def logout():
-    supabase.auth.sign_out()
+    if supabase:
+        supabase.auth.sign_out()
     session.clear()
     return redirect(url_for("auth.login"))

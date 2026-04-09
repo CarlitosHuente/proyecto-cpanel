@@ -22,7 +22,7 @@ def get_db_connection():
     return pymysql.connect(
         host="localhost",
         user="root",
-        password="6235834",
+        password="26235834",
         database="huente_app",
         cursorclass=pymysql.cursors.DictCursor,
     )

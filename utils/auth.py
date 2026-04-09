@@ -92,18 +92,6 @@ def obtener_usuario_por_email(email: str):
     finally:
         conn.close()
 
-def obtener_usuario_por_email(email: str):
-    conn = get_db_connection()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT * FROM usuarios_huente WHERE email=%s",
-                (email,)
-            )
-            return cur.fetchone()
-    finally:
-        conn.close()
-
 def autenticar_huente(email: str, password: str):
     """Valida login Huente (correo + contraseña)."""
     user = obtener_usuario_por_email(email)

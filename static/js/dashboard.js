@@ -1,4 +1,5 @@
 let sucursalActiva = null;
+let carruselInterval = null; // Variable global para limpiar el carrusel
 
 // --- INICIO DE CAMBIOS ---
 
@@ -44,7 +45,30 @@ function actualizarDashboard() {
         .then(res => res.json())
         .then(data => {
             renderTorta(data.ventas_por_familia);
-            animarContador("monto_neto", data.total_neto);
+            
+            // Render KPIs Enriquecidos
+            if (data.kpis) {
+                renderKPI("kpi_neto", "kpi_neto_var", data.kpis.neto_actual, data.kpis.neto_anterior, true);
+                renderKPI("kpi_cantidad", "kpi_cantidad_var", data.kpis.cantidad_actual, data.kpis.cantidad_anterior, false);
+                
+                iniciarCarruselProductos(data.kpis.top_productos_cantidad);
+            }
+
+            // Render Análisis Avanzado
+            if (data.analisis_avanzado) {
+                renderRankingSucursales(data.analisis_avanzado.ranking_sucursales);
+                renderListaTop("lista_estrellas", data.analisis_avanzado.estrellas, false);
+                renderListaTop("lista_alertas", data.analisis_avanzado.alertas, true);
+            }
+
+            // --- NUEVOS GRÁFICOS ---
+            // Condicionados a que el backend envíe esta información
+            if (data.tendencia) {
+                renderTendenciaVentas(data.tendencia);
+            }
+            if (data.comparativo_periodo) {
+                renderComparativoPeriodo(data.comparativo_periodo);
+            }
 
             // Si hay datos, renderizar los gráficos de barras con la primera familia
             if (data.ventas_por_familia && data.ventas_por_familia.length > 0) {
@@ -256,22 +280,200 @@ function renderBarrasCantidad(familia, productos) {
     Plotly.newPlot("grafico_barras_cantidad", [trace], layout);
 }
 
-function animarContador(idElemento, valorFinal) {
+function animarContador(idElemento, valorFinal, isCurrency = true) {
     const el = document.getElementById(idElemento);
     const valorInicial = parseInt(el.innerText.replace(/\D/g, "")) || 0;
     const duracion = 1000;
     const pasos = 30;
     const incremento = (valorFinal - valorInicial) / pasos;
     let contador = 0;
+    
+    const formatNumber = (num) => isCurrency ? `$${Math.round(num).toLocaleString("es-CL")}` : Math.round(num).toLocaleString("es-CL");
 
     const intervalo = setInterval(() => {
         contador++;
         const valorActual = valorInicial + incremento * contador;
-        el.innerText = `$${Math.round(valorActual).toLocaleString("es-CL")}`;
+        el.innerText = formatNumber(valorActual);
         if (contador >= pasos) {
             clearInterval(intervalo);
-            el.innerText = `$${valorFinal.toLocaleString("es-CL")}`;
+            el.innerText = formatNumber(valorFinal);
         }
     }, duracion / pasos);
 }
 
+// --- FUNCIONES PARA KPIs Y ANÁLISIS ---
+
+function renderKPI(idValor, idVar, actual, anterior, isCurrency) {
+    animarContador(idValor, actual, isCurrency);
+    const elVar = document.getElementById(idVar);
+    if (anterior > 0) {
+        const pct = ((actual - anterior) / anterior) * 100;
+        const sign = pct >= 0 ? "▲" : "▼";
+        const color = pct >= 0 ? "#198754" : "#dc3545"; // Bootstrap success/danger
+        elVar.innerHTML = `<span style="color: ${color}">${sign} ${Math.abs(pct).toFixed(1)}% vs anterior</span>`;
+    } else {
+        elVar.innerHTML = `<span style="color: #6c757d">Sin data previa</span>`;
+    }
+}
+
+function iniciarCarruselProductos(productos) {
+    if (carruselInterval) clearInterval(carruselInterval);
+    
+    const elNombre = document.getElementById("kpi_carrusel_nombre");
+    const elCant = document.getElementById("kpi_carrusel_cantidad");
+    const elVar = document.getElementById("kpi_carrusel_var");
+    
+    if (!productos || productos.length === 0) {
+        elNombre.innerText = "Sin ventas";
+        elCant.innerText = "0";
+        elVar.innerHTML = "-";
+        return;
+    }
+
+    let index = 0;
+    
+    function actualizarCard() {
+        const prod = productos[index];
+        elNombre.innerText = prod.DESCRIPCION;
+        animarContador("kpi_carrusel_cantidad", prod.cantidad_actual, false);
+        
+        if (prod.cantidad_anterior > 0) {
+            const pct = ((prod.cantidad_actual - prod.cantidad_anterior) / prod.cantidad_anterior) * 100;
+            const sign = pct >= 0 ? "▲" : "▼";
+            const color = pct >= 0 ? "#198754" : "#dc3545"; 
+            elVar.innerHTML = `<span style="color: ${color}">${sign} ${Math.abs(pct).toFixed(1)}% vs ant.</span>`;
+        } else {
+            elVar.innerHTML = `<span style="color: #6c757d">Sin data previa</span>`;
+        }
+        index = (index + 1) % productos.length;
+    }
+
+    actualizarCard(); // Primera llamada inmediata
+    if (productos.length > 1) {
+        carruselInterval = setInterval(actualizarCard, 3500); // Rota cada 3.5 segundos
+    }
+}
+
+function renderRankingSucursales(datos) {
+    if (!datos || datos.length === 0) {
+        document.getElementById("contenedor_ranking").style.display = "none";
+        document.getElementById("contenedor_estrellas").className = "col-lg-6 mb-3";
+        document.getElementById("contenedor_alertas").className = "col-lg-6 mb-3";
+        return;
+    }
+
+    document.getElementById("contenedor_ranking").style.display = "block";
+    document.getElementById("contenedor_estrellas").className = "col-lg-4 mb-3";
+    document.getElementById("contenedor_alertas").className = "col-lg-4 mb-3";
+
+    const trace = {
+        x: datos.map(d => d.neto),
+        y: datos.map(d => d.sucursal),
+        type: "bar",
+        orientation: "h",
+        marker: { color: "#0dcaf0" },
+        text: datos.map(d => "$" + d.neto.toLocaleString("es-CL")),
+        textposition: "auto",
+        hovertemplate: "<b>%{y}</b><br>$%{x:,.0f}<extra></extra>"
+    };
+
+    const layout = {
+        margin: { l: 80, r: 10, t: 10, b: 30 },
+        paper_bgcolor: "transparent",
+        plot_bgcolor: "transparent",
+        font: { color: "#fff" },
+        xaxis: { showgrid: false, showticklabels: false },
+        yaxis: { showgrid: false }
+    };
+
+    Plotly.newPlot("grafico_ranking", [trace], layout, {displayModeBar: false});
+}
+
+function renderListaTop(idContenedor, datos, isAlerta) {
+    const cont = document.getElementById(idContenedor);
+    if (!datos || datos.length === 0) {
+        cont.innerHTML = "<p class='text-muted mt-2'>Sin datos / Sin caídas detectadas.</p>";
+        return;
+    }
+
+    let html = "<ul class='list-group list-group-flush bg-transparent'>";
+    datos.forEach(d => {
+        const varAbs = Math.abs(d.variacion);
+        // Si la variación es 0 (porque no hay data previa), solo mostramos el texto.
+        const textVar = varAbs > 0 ? "$" + varAbs.toLocaleString("es-CL") : "-";
+        const colorClass = isAlerta ? "text-danger" : "text-success";
+        const sign = isAlerta && varAbs > 0 ? "-" : (varAbs > 0 ? "+" : "");
+
+        html += `
+            <li class="list-group-item bg-transparent border-secondary text-white d-flex justify-content-between align-items-center px-0 py-1" style="border-bottom: 1px solid #333 !important;">
+                <span class="text-truncate text-white" style="max-width: 65%; font-size:0.85rem;" title="${d.DESCRIPCION}">${d.DESCRIPCION}</span>
+                <span class="${colorClass} fw-bold" style="font-size:0.85rem;">${sign}${textVar}</span>
+            </li>
+        `;
+    });
+    html += "</ul>";
+    cont.innerHTML = html;
+}
+
+// --- NUEVAS FUNCIONES DE RENDERIZADO ---
+
+function renderTendenciaVentas(datos) {
+    // datos debe ser un objeto: { etiquetas: ['Ene', 'Feb', ...], actual: [100, 200...], anterior: [90, 180...] }
+    const traceActual = {
+        x: datos.etiquetas,
+        y: datos.actual,
+        type: "scatter",
+        mode: "lines+markers",
+        name: "Año Actual",
+        line: { color: "#e60000", width: 3 }, // Rojo corporativo
+        hovertemplate: "<b>%{x}</b><br>Actual: $%{y:,.0f}<extra></extra>"
+    };
+
+    const traceAnterior = {
+        x: datos.etiquetas,
+        y: datos.anterior,
+        type: "scatter",
+        mode: "lines",
+        name: "Año Anterior",
+        line: { color: "#6c757d", width: 2, dash: "dot" }, // Gris punteado
+        hovertemplate: "<b>%{x}</b><br>Anterior: $%{y:,.0f}<extra></extra>"
+    };
+
+    const layout = {
+        title: "Tendencia de Ventas (Actual vs Anterior)",
+        height: 350,
+        paper_bgcolor: "#111",
+        plot_bgcolor: "#111",
+        font: { color: "#fff" },
+        hovermode: "x unified",
+        xaxis: { showgrid: false },
+        yaxis: { gridcolor: "#333", tickformat: "$,.0f" },
+        legend: { orientation: "h", y: -0.2 }
+    };
+
+    Plotly.newPlot("grafico_tendencia", [traceActual, traceAnterior], layout);
+}
+
+function renderComparativoPeriodo(datos) {
+    // datos debe ser un objeto: { etiquetas: ['Año Anterior', 'Año Actual'], valores: [45000, 50000] }
+    const trace = {
+        x: datos.etiquetas,
+        y: datos.valores,
+        type: "bar",
+        marker: { color: ["#6c757d", "#e60000"] }, // Gris vs Rojo
+        text: datos.valores.map(v => "$" + v.toLocaleString("es-CL")),
+        textposition: "auto",
+        hovertemplate: "<b>%{x}</b><br>$%{y:,.0f}<extra></extra>"
+    };
+
+    const layout = {
+        title: "Comparativo del Periodo",
+        height: 350,
+        paper_bgcolor: "#111",
+        plot_bgcolor: "#111",
+        font: { color: "#fff" },
+        yaxis: { showticklabels: false, gridcolor: "#333" }
+    };
+
+    Plotly.newPlot("grafico_comparativo", [trace], layout);
+}
