@@ -195,12 +195,12 @@ def gav_corporativo():
                 saldo = abs(float(row["SALDO_REAL"]))
                 if saldo > 0:
                     cta_display = f"{row['CUENTA']} - {row['NOMBRE']}"
-                    cta_num = str(row['CUENTA'])
+                    cta_nombre = str(row['NOMBRE'])
                     gastos_sg[cta_display] = gastos_sg.get(cta_display, 0) + saldo
                     total_sg += saldo
                     
                     # Calcular cuánto se le asignó a cada sucursal según las reglas de SG
-                    regla_cta = regla_efectiva_sg.get(cta_num, {})
+                    regla_cta = regla_efectiva_sg.get(cta_nombre, {})
                     for suc in sucursales:
                         pct = float(regla_cta.get(suc.upper(), 0))
                         asignado_sg_por_sucursal[suc] += saldo * pct
@@ -360,11 +360,11 @@ def correr_motor_costeo(periodo, sucursal):
     if not df_procesado.empty and "CUENTA" in df_procesado.columns and "CENTRO COSTO" in df_procesado.columns:
         mask_sg = (df_procesado["CUENTA"].str.startswith("3")) & (df_procesado["CENTRO COSTO"].str.contains("SERVICIOS GENERALES", na=False))
         for _, row in df_procesado[mask_sg].iterrows():
-            cta = row["CUENTA"]
+            cta_nombre = str(row["NOMBRE"])
             monto = abs(float(row["SALDO_REAL"]))
             pct = 0.0
             suc_search = sucursal.upper().strip().replace("Ñ", "N")
-            for branch_key, val in regla_efectiva_sg.get(cta, {}).items():
+            for branch_key, val in regla_efectiva_sg.get(cta_nombre, {}).items():
                 b_search = branch_key.upper().strip().replace("Ñ", "N")
                 if b_search == suc_search or b_search in suc_search or suc_search in b_search:
                     pct = float(val)

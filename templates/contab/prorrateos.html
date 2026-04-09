@@ -608,6 +608,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const totalGastosFabrica = {{ total_gastos_fabrica|default(0.0)|tojson|safe }};
   const centrosDisponibles = {{ centros_disponibles|tojson|safe }};
   const reglasCuentas = {{ reglas_cuentas|default({})|tojson|safe }};
+  const reglasSG = {{ reglas_sg|default({})|tojson|safe }};
   const ventasTotales = {{ ventas_totales|default(0.0)|tojson|safe }};
   const ventasPorCC = {{ ventas_por_cc|default({})|tojson|safe }};
 
@@ -643,9 +644,13 @@ document.addEventListener("DOMContentLoaded", function () {
       document.getElementById("texto-cuenta-sg").innerText =
         `Cuenta: ${cuentaSGActual} – Periodo: ${periodoActual}`;
 
+      const regla_actual = reglasSG[cuentaSGActual] || {};
+
       if (tbodySG) {
         tbodySG.querySelectorAll(".input-porcentaje").forEach(inp => {
-          inp.value = 0;
+          const centro = inp.dataset.centro;
+          const valor = regla_actual[centro] != null ? regla_actual[centro] * 100 : 0;
+          inp.value = valor.toFixed(2);
         });
       }
       recalcularTotalSG();

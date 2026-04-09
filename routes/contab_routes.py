@@ -258,6 +258,7 @@ def prorrateos():
                            periodo=periodo, pestaña=pestaña, 
                            cuentas_serv_generales=cuentas_serv_generales, centros_disponibles=centros_disponibles,
                            config_cuentas=lista_config_cuentas, cuentas_prorrateo=cuentas_prorrateo, reglas_cuentas=reglas_periodo.get("cuentas_globales", {}),
+                           reglas_sg=reglas_periodo.get("serv_generales", {}),
                            gastos_fabrica=gastos_fabrica, total_gastos_fabrica=total_gastos_fabrica,
                            empanadas_elaboradas=empanadas_elaboradas, empanadas_compradas=empanadas_compradas,
                            costo_unitario_empanada=costo_unitario_empanada,
