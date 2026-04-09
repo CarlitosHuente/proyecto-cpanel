@@ -55,7 +55,10 @@
                 <h6 class="text-light opacity-75 mb-1">Gastos Asignados por Reglas</h6>
                 {% if gasto_asignado < total_gasto %}
                 <h3 class="text-warning fw-bold m-0">${{ "{:,.0f}".format(gasto_asignado).replace(",", ".") }}</h3>
-                <span style="font-size:0.75rem;" class="text-warning">Hay un saldo de ${{ "{:,.0f}".format(total_gasto - gasto_asignado).replace(",", ".") }} sin regla asignada.</span>
+                <span style="font-size:0.75rem;" class="text-warning">
+                    Hay un saldo de ${{ "{:,.0f}".format(total_gasto - gasto_asignado).replace(",", ".") }} perdido. 
+                    <a href="#" class="text-warning fw-bold text-decoration-underline ms-1" data-bs-toggle="modal" data-bs-target="#modalNoAsignados" title="Ver detalle de las fugas">🔍 Ver Detalle</a>
+                </span>
                 {% else %}
                 <h3 class="text-success fw-bold m-0">${{ "{:,.0f}".format(gasto_asignado).replace(",", ".") }}</h3>
                 <span style="font-size:0.75rem;" class="text-success">Distribución completa.</span>
@@ -150,6 +153,44 @@
                                     <td class="text-warning pe-4" id="mdlTotalUni"></td>
                                 </tr>
                             </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Gastos No Asignados (Fugas) -->
+    <div class="modal fade" id="modalNoAsignados" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content bg-dark text-white" style="border: 1px solid #444;">
+                <div class="modal-header border-secondary" style="background-color: #111;">
+                    <h5 class="modal-title text-warning"><i class="bi bi-exclamation-triangle"></i> Cuentas sin asignar (Fugas)</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover mb-0 align-middle text-start" style="font-size: 0.85rem;">
+                            <thead class="bg-black">
+                                <tr>
+                                    <th class="ps-4">Cuenta de Gasto</th>
+                                    <th>Motivo del Rechazo</th>
+                                    <th class="text-end pe-4">Monto Perdido</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for cta, data in gastos_no_asignados.items() %}
+                                <tr style="border-bottom: 1px solid #333;">
+                                    <td class="ps-4 text-light fw-bold">{{ cta }}</td>
+                                    <td class="text-muted">{{ data.motivo }}</td>
+                                    <td class="text-end pe-4 text-warning fw-bold">${{ "{:,.0f}".format(data.monto).replace(",", ".") }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted py-4">No se detectaron gastos sin asignar. ¡Todo en orden!</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
                         </table>
                     </div>
                 </div>

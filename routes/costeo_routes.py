@@ -327,6 +327,8 @@ def correr_motor_costeo(periodo, sucursal):
     reglas_gastos = reglas.get("reglas_gastos", {})
     costos_directos, _ = obtener_costos_efectivos(periodo)
 
+    gastos_no_asignados = {}
+
     for cta_display, monto_gasto in gastos_cuenta.items():
         regla = reglas_gastos.get(cta_display)
         
@@ -339,6 +341,7 @@ def correr_motor_costeo(periodo, sucursal):
                     break
                     
         if not regla:
+            gastos_no_asignados[cta_display] = {"monto": monto_gasto, "motivo": "Sin regla configurada en el Paso 3"}
             continue
         
         alcance = regla.get("alcance", "global")
@@ -347,6 +350,7 @@ def correr_motor_costeo(periodo, sucursal):
         
         prods_validos = [p for p in afectados if p in ventas_prod and ventas_prod[p]["unidades"] > 0]
         if not prods_validos:
+            gastos_no_asignados[cta_display] = {"monto": monto_gasto, "motivo": "Productos afectados no tienen ventas este mes"}
             continue
             
         if metodo == "venta_dinero":
@@ -355,6 +359,7 @@ def correr_motor_costeo(periodo, sucursal):
             base_total = sum(ventas_prod[p]["unidades"] for p in prods_validos)
             
         if base_total == 0:
+            gastos_no_asignados[cta_display] = {"monto": monto_gasto, "motivo": "Base de reparto (ventas/volumen) es 0"}
             continue
             
         for p in prods_validos:
@@ -451,7 +456,7 @@ def correr_motor_costeo(periodo, sucursal):
 
     resultados.sort(key=lambda x: x["ingreso"], reverse=True)
 
-    return sucursales, sucursal, resultados, total_ingreso_sucursal, total_gasto_sucursal, gasto_asignado_total, gastos_cuenta
+    return sucursales, sucursal, resultados, total_ingreso_sucursal, total_gasto_sucursal, gasto_asignado_total, gastos_cuenta, gastos_no_asignados
 
 @costeo_bp.route("/simulador")
 @login_requerido
@@ -460,7 +465,7 @@ def simulador():
     periodo = request.args.get("periodo", datetime.now().strftime("%Y-%m"))
     sucursal = request.args.get("sucursal", "")
     
-    sucursales, sucursal, resultados, total_ingreso_sucursal, total_gasto_sucursal, gasto_asignado_total, gastos_cuenta = correr_motor_costeo(periodo, sucursal)
+    sucursales, sucursal, resultados, total_ingreso_sucursal, total_gasto_sucursal, gasto_asignado_total, gastos_cuenta, gastos_no_asignados = correr_motor_costeo(periodo, sucursal)
 
     return render_template("contab/costeo_simulador.html",
                            periodo=periodo,
@@ -470,7 +475,8 @@ def simulador():
                            total_ingreso=total_ingreso_sucursal,
                            total_gasto=total_gasto_sucursal,
                            gasto_asignado=gasto_asignado_total,
-                           gastos_cuenta=gastos_cuenta)
+                           gastos_cuenta=gastos_cuenta,
+                           gastos_no_asignados=gastos_no_asignados)
 
 @costeo_bp.route("/exportar_simulador")
 @login_requerido
@@ -479,7 +485,7 @@ def exportar_simulador():
     periodo = request.args.get("periodo", datetime.now().strftime("%Y-%m"))
     sucursal = request.args.get("sucursal", "")
     
-    _, _, resultados, _, _, _, _ = correr_motor_costeo(periodo, sucursal)
+    _, _, resultados, _, _, _, _, _ = correr_motor_costeo(periodo, sucursal)
     
     df_exp = pd.DataFrame(resultados)
     if df_exp.empty:
@@ -510,7 +516,7 @@ def rentabilidad_gerencia():
     periodo = request.args.get("periodo", datetime.now().strftime("%Y-%m"))
     sucursal = request.args.get("sucursal", "")
     
-    sucursales, sucursal, resultados, total_ingreso, _, _, _ = correr_motor_costeo(periodo, sucursal)
+    sucursales, sucursal, resultados, total_ingreso, _, _, _, _ = correr_motor_costeo(periodo, sucursal)
     
     costo_total_op = sum(r["costo_total_uni"] * r["unidades"] for r in resultados)
     margen_neto = total_ingreso - costo_total_op
