@@ -17,6 +17,7 @@ from utils.auth import tiene_permiso
 from routes.finanzas_routes import finanzas_bp
 from routes.sucursales_routes import sucursales_bp
 from routes.fabrica_routes import fabrica_bp
+from routes.costeo_routes import costeo_bp
 import os
 
 app = Flask(__name__)
@@ -50,6 +51,7 @@ app.register_blueprint(config_bp)
 app.register_blueprint(finanzas_bp)
 app.register_blueprint(sucursales_bp)
 app.register_blueprint(fabrica_bp)
+app.register_blueprint(costeo_bp)
 
 
 

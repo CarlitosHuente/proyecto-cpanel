@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Mapeo de Productos a Cuentas{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="text-info mb-1">Módulo de Costeo (ABC)</h2>
+    
+    <!-- PESTAÑAS DE NAVEGACIÓN -->
+    <ul class="nav nav-tabs mt-3 mb-4 border-secondary">
+        <li class="nav-item"><a class="nav-link active bg-dark text-white border-secondary" href="{{ url_for('costeo.mapeo') }}">1. Mapeo Contable</a></li>
+        <li class="nav-item"><a class="nav-link text-light" href="{{ url_for('costeo.costos_directos') }}">2. Costo Directo</a></li>
+        <li class="nav-item"><a class="nav-link text-light" href="{{ url_for('costeo.reglas_gastos') }}">3. Reglas Local</a></li>
+        <li class="nav-item"><a class="nav-link text-light" href="{{ url_for('costeo.gav_corporativo') }}">4. GAV Corporativo</a></li>
+        <li class="nav-item"><a class="nav-link text-light" href="{{ url_for('costeo.simulador') }}">5. Simulador</a></li>
+    </ul>
+
+    <h4 class="text-white mb-2">Paso 1: Mapeo Comercial vs Contable</h4>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <p class="text-light opacity-75 mb-0">Asigna cada producto de ventas a su cuenta contable de ingresos correspondiente.</p>
+        <input type="text" id="buscador" class="form-control bg-dark text-white border-secondary w-25" placeholder="Buscar producto...">
+    </div>
+
+    <div class="card bg-dark text-white border-secondary shadow mt-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0 align-middle">
+                    <thead class="bg-black">
+                        <tr>
+                            <th class="ps-4" style="width: 40%;">Producto (De las Ventas)</th>
+                            <th style="width: 45%;">Cuenta Contable de Ingreso (Del Mayor)</th>
+                            <th class="text-center" style="width: 15%;">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for prod in productos %}
+                        <tr style="border-bottom: 1px solid #333;">
+                            <td class="ps-4 fw-bold text-light">{{ prod }}</td>
+                            <td>
+                                <select class="form-select bg-dark text-white border-secondary select-cuenta" data-producto="{{ prod }}">
+                                    <option value="">-- Ignorar / Sin Asignar --</option>
+                                    {% for cta in cuentas %}
+                                        <option value="{{ cta.display }}" {% if mapeo_actual.get(prod) == cta.display %}selected{% endif %}>
+                                            {{ cta.display }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td class="text-center" id="status-{{ loop.index }}">
+                                {% if mapeo_actual.get(prod) %}
+                                    <span class="badge bg-success">Mapeado</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">Pendiente</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.querySelectorAll('.select-cuenta').forEach((select, index) => {
+    select.addEventListener('change', function() {
+        const producto = this.getAttribute('data-producto');
+        const cuenta = this.value;
+        const statusCell = document.getElementById(`status-${index + 1}`);
+        
+        statusCell.innerHTML = '<div class="spinner-border spinner-border-sm text-info" role="status"></div>';
+
+        fetch('{{ url_for("costeo.api_guardar_mapeo") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ producto: producto, cuenta: cuenta })
+        })
+        .then(response => response.json())
+        .then(data => {
+            statusCell.innerHTML = cuenta === "" ? '<span class="badge bg-warning text-dark">Pendiente</span>' : '<span class="badge bg-success">Mapeado</span>';
+        }).catch(() => statusCell.innerHTML = '<span class="badge bg-danger">Error</span>');
+    });
+});
+
+// Buscador Visual
+document.getElementById('buscador').addEventListener('keyup', function() {
+    const filtro = this.value.toLowerCase();
+    const filas = document.querySelectorAll('tbody tr');
+    filas.forEach(fila => {
+        const texto = fila.querySelector('td:first-child').innerText.toLowerCase();
+        fila.style.display = texto.includes(filtro) ? '' : 'none';
+    });
+});
+</script>
+{% endblock %}

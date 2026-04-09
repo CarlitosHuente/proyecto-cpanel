@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Rentabilidad por Producto{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-1">
+        <h2 class="text-info m-0">Rentabilidad de Productos</h2>
+        <button class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#modalDiccionario">
+            <i class="bi bi-info-circle"></i> ¿Cómo se calcula esto?
+        </button>
+    </div>
+    <p class="text-light opacity-75 mb-4">Vista ejecutiva del margen neto consolidado por sucursal, considerando costos directos de producción, gastos locales operacionales y GAV corporativo.</p>
+
+    <!-- Filtros Limpios -->
+    <form method="GET" class="row g-3 mb-4 p-3 bg-dark rounded border border-secondary w-100" style="max-width: 800px;">
+        <div class="col-md-5">
+            <label class="form-label text-info">Periodo (Mes)</label>
+            <input type="month" name="periodo" class="form-control bg-black text-white border-secondary" value="{{ periodo }}">
+        </div>
+        <div class="col-md-5">
+            <label class="form-label text-info">Sucursal</label>
+            <select name="sucursal" class="form-select bg-black text-white border-secondary">
+                {% for suc in sucursales %}
+                <option value="{{ suc }}" {% if suc == sucursal %}selected{% endif %}>{{ suc }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button type="submit" class="btn btn-info w-100 fw-bold"><i class="bi bi-search"></i> Buscar</button>
+        </div>
+    </form>
+
+    <!-- KPIs Gerenciales -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card text-white p-3 text-center h-100 shadow" style="background-color: #0d1a10; border: 1px solid #198754;">
+                <h6 class="text-light opacity-75 mb-1">Ingresos Totales (Venta)</h6>
+                <h3 class="text-success fw-bold m-0">${{ "{:,.0f}".format(total_ingreso).replace(",", ".") }}</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white p-3 text-center h-100 shadow" style="background-color: #1f0c0c; border: 1px solid #dc3545;">
+                <h6 class="text-light opacity-75 mb-1">Costo y Gastos Totales</h6>
+                <h3 class="text-danger fw-bold m-0">${{ "{:,.0f}".format(costo_total_op).replace(",", ".") }}</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white p-3 text-center h-100 shadow" style="background-color: #0a192f; border: 1px solid #0dcaf0;">
+                <h6 class="text-light opacity-75 mb-1">Margen Neto Global ($)</h6>
+                <h3 class="text-info fw-bold m-0">${{ "{:,.0f}".format(margen_neto).replace(",", ".") }}</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white p-3 text-center h-100 shadow" style="background-color: #1a1608; border: 1px solid #ffc107;">
+                <h6 class="text-light opacity-75 mb-1">Margen Neto Global (%)</h6>
+                <h3 class="text-warning fw-bold m-0">{{ "{:,.1f}".format(margen_pct).replace(",", ".") }}%</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico -->
+    <div class="card bg-dark border-secondary shadow mb-4">
+        <div class="card-body p-2">
+            <div id="grafico_top_productos" style="height: 350px;"></div>
+        </div>
+    </div>
+
+    <!-- Tabla Resumen -->
+    <div class="card bg-dark text-white border-secondary shadow mb-5">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover table-bordered mb-0 align-middle text-end" style="font-size: 0.9rem;">
+                    <thead class="bg-black text-center">
+                        <tr>
+                            <th class="text-start ps-3">Producto</th>
+                            <th>Unidades Vendidas</th>
+                            <th>Precio Promedio ($)</th>
+                            <th class="text-danger">Costo Total Unitario</th>
+                            <th class="text-info">Margen Neto Unitario</th>
+                            <th class="text-warning">Margen Neto (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in resultados %}
+                        <tr>
+                            <td class="text-start ps-3 fw-bold text-light">{{ r.producto }}</td>
+                            <td>{{ "{:,.0f}".format(r.unidades).replace(",", ".") }}</td>
+                            <td>${{ "{:,.0f}".format(r.precio_prom).replace(",", ".") }}</td>
+                            <td class="text-danger">${{ "{:,.0f}".format(r.costo_total_uni).replace(",", ".") }}</td>
+                            <td class="text-info fw-bold">${{ "{:,.0f}".format(r.margen_uni).replace(",", ".") }}</td>
+                            <td class="text-warning fw-bold">{{ "{:,.1f}".format(r.margen_pct).replace(",", ".") }}%</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="6" class="text-center text-muted py-4">No hay datos de rentabilidad para este periodo.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Diccionario -->
+    <div class="modal fade" id="modalDiccionario" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content bg-dark text-white" style="border: 1px solid #444;">
+                <div class="modal-header border-secondary" style="background-color: #111;">
+                    <h5 class="modal-title text-info"><i class="bi bi-book"></i> Diccionario de Rentabilidad</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" style="font-size: 0.9rem;">
+                    <h6 class="text-warning border-bottom border-secondary pb-2 mb-3">1. Tarjetas de Resumen (KPIs)</h6>
+                    <ul class="list-group list-group-flush mb-4">
+                        <li class="list-group-item bg-transparent text-light border-secondary">
+                            <strong class="text-success">Ingresos Totales (Venta):</strong> Sumatoria de todas las ventas netas de la sucursal en el periodo, obtenidas desde el sistema comercial.
+                        </li>
+                        <li class="list-group-item bg-transparent text-light border-secondary">
+                            <strong class="text-danger">Costo y Gastos Totales:</strong> Es el peso financiero completo de la sucursal. Incluye el costo de hacer los productos (receta), los gastos fijos del local (luz, arriendo) y el GAV corporativo asignado.
+                        </li>
+                        <li class="list-group-item bg-transparent text-light border-secondary">
+                            <strong class="text-info">Margen Neto Global ($):</strong> Es la ganancia pura en dinero para la empresa (Ingresos - Costos y Gastos Totales).
+                        </li>
+                        <li class="list-group-item bg-transparent text-light border-secondary">
+                            <strong class="text-warning">Margen Neto Global (%):</strong> Representa qué porcentaje de los ingresos totales logra convertirse en ganancia real.
+                        </li>
+                    </ul>
+
+                    <h6 class="text-warning border-bottom border-secondary pb-2 mb-3">2. Conceptos Unitarios (Tabla)</h6>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item bg-transparent text-light border-secondary">
+                            <strong>Precio Promedio:</strong> (Ingreso Total del Producto / Unidades Vendidas).
+                        </li>
+                        <li class="list-group-item bg-transparent text-light border-secondary">
+                            <strong class="text-info">Costo Directo Unitario:</strong> El costo base de la receta o materia prima ingresado manualmente en el sistema (Costo estándar).
+                        </li>
+                        <li class="list-group-item bg-transparent text-light border-secondary">
+                            <strong class="text-warning">Gasto Fijo Local:</strong> Es la porción de los gastos de la sucursal (ej. Arriendo) + la porción de la Fábrica que absorbe cada unidad vendida, calculado en base a las reglas configuradas.
+                        </li>
+                        <li class="list-group-item bg-transparent text-light border-secondary">
+                            <strong style="color: #d63384;">GAV Corporativo:</strong> Gasto de Administración y Ventas. Es el "impuesto corporativo" (Servicios Generales y Administración) que cada producto debe ayudar a pagar en proporción a la venta que genera.
+                        </li>
+                        <li class="list-group-item bg-transparent text-light border-secondary">
+                            <strong class="text-danger">Costo Total Unitario:</strong> La suma del Costo Directo + Gasto Fijo Local + GAV Corporativo.
+                        </li>
+                        <li class="list-group-item bg-transparent text-light border-secondary">
+                            <strong class="text-success">Margen Neto Unitario:</strong> (Precio Promedio - Costo Total Unitario). Cuánta ganancia neta deja la venta de una sola unidad.
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+    const nombres = {{ nombres_grafico | tojson | safe }};
+    const margenes = {{ margenes_grafico | tojson | safe }};
+    if (nombres.length > 0) Plotly.newPlot('grafico_top_productos', [{ x: nombres, y: margenes, type: 'bar', marker: { color: '#0dcaf0' }, text: margenes.map(v => "$" + Math.round(v).toLocaleString("es-CL")), textposition: 'auto', hovertemplate: "<b>%{x}</b><br>Aporte Total: $%{y:,.0f}<extra></extra>" }], { title: { text: "Top 10 Productos por Aporte Total al Margen ($)", font: { color: "#fff", size: 16 } }, paper_bgcolor: "transparent", plot_bgcolor: "transparent", font: { color: "#ccc" }, margin: { t: 50, b: 90, l: 60, r: 20 }, xaxis: { showgrid: false, tickangle: -20 }, yaxis: { showgrid: true, gridcolor: "#333", tickformat: "$,.0f" } }, {displayModeBar: false, responsive: true});
+    else document.getElementById('grafico_top_productos').innerHTML = "<div class='text-center mt-5 text-muted'>Sin datos para graficar</div>";
+</script>
+{% endblock %}

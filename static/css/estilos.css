@@ -256,3 +256,15 @@ thead th {
 .ql-editor em {
     color: #000000 !important;
 }
+
+/* Hacer visible el icono del calendario en los selectores de fecha oscuros */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="month"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+}
+
+/* Ajuste global para mejorar la legibilidad del texto secundario en fondos oscuros */
+.text-muted {
+    color: #a0a0a0 !important; /* Un gris más claro y legible */
+}

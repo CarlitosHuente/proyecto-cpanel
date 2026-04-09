@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Reglas de Gasto{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="text-info mb-1">Módulo de Costeo (ABC)</h2>
+    
+    <!-- PESTAÑAS DE NAVEGACIÓN -->
+    <ul class="nav nav-tabs mt-3 mb-4 border-secondary">
+        <li class="nav-item"><a class="nav-link text-light" href="{{ url_for('costeo.mapeo') }}">1. Mapeo Contable</a></li>
+        <li class="nav-item"><a class="nav-link text-light" href="{{ url_for('costeo.costos_directos') }}">2. Costo Directo</a></li>
+        <li class="nav-item"><a class="nav-link active bg-dark text-white border-secondary" href="{{ url_for('costeo.reglas_gastos') }}">3. Reglas Local</a></li>
+        <li class="nav-item"><a class="nav-link text-light" href="{{ url_for('costeo.gav_corporativo') }}">4. GAV Corporativo</a></li>
+        <li class="nav-item"><a class="nav-link text-light" href="{{ url_for('costeo.simulador') }}">5. Simulador</a></li>
+    </ul>
+
+    <h4 class="text-white mb-2">Paso 3: Motor de Distribución (Reglas)</h4>
+    <p class="text-light opacity-75">Configura cómo se reparte cada Gasto (Cuenta 3) entre los productos que se venden en la sucursal.</p>
+
+    <div class="accordion mt-4" id="accordionReglas" style="--bs-accordion-bg: #111;">
+        {% for cta in cuentas %}
+        {% set outer_index = loop.index %}
+        {% set r = reglas_actuales.get(cta.display, {}) %}
+        <div class="accordion-item border-secondary mb-2" style="border-radius: 8px; overflow: hidden;">
+            <h2 class="accordion-header" id="heading-{{ loop.index }}">
+                <button class="accordion-button collapsed text-white" style="background-color: #1a1a1a;" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ loop.index }}">
+                    {{ cta.display }}
+                    {% if r %}
+                        <span class="badge bg-success ms-3 status-badge" id="badge-{{ loop.index }}">Configurado</span>
+                    {% else %}
+                        <span class="badge bg-warning text-dark ms-3 status-badge" id="badge-{{ loop.index }}">Pendiente</span>
+                    {% endif %}
+                </button>
+            </h2>
+            <div id="collapse-{{ loop.index }}" class="accordion-collapse collapse" data-bs-parent="#accordionReglas">
+                <div class="accordion-body bg-dark text-white border-top border-secondary">
+                    <form class="form-regla" data-cuenta="{{ cta.display }}" data-index="{{ loop.index }}">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold text-info">1. ¿A qué aplica este gasto?</label>
+                                <select name="alcance" class="form-select bg-dark text-white border-secondary select-alcance">
+                                    <option value="global" {% if r.get('alcance') == 'global' or not r %}selected{% endif %}>Global (Aplica a toda la sucursal)</option>
+                                    <option value="especifico" {% if r.get('alcance') == 'especifico' %}selected{% endif %}>Específico (Aplica solo a algunos productos)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold text-info">2. ¿Cómo se reparte el dinero?</label>
+                                <select name="metodo" class="form-select bg-dark text-white border-secondary">
+                                    <option value="venta_dinero" {% if r.get('metodo') == 'venta_dinero' or not r %}selected{% endif %}>En base a Ingresos ($)</option>
+                                    <option value="unidades_vendidas" {% if r.get('metodo') == 'unidades_vendidas' %}selected{% endif %}>En base a Unidades/Volumen</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Contenedor para selección específica de productos -->
+                        <div class="productos-contenedor mb-3 p-3 border border-secondary rounded" style="display: {% if r.get('alcance') == 'especifico' %}block{% else %}none{% endif %}; max-height: 200px; overflow-y: auto; background-color: #0a0a0a;">
+                            <label class="form-label fw-bold text-warning mb-2">Selecciona los productos afectados:</label>
+                            <div class="row">
+                                {% for prod in productos %}
+                                <div class="col-md-4 mb-1">
+                                    <div class="form-check">
+                                        <input class="form-check-input check-prod" type="checkbox" name="productos_afectados" value="{{ prod }}" id="chk-{{ outer_index }}-{{ loop.index }}" {% if prod in r.get('productos_afectados', []) %}checked{% endif %}>
+                                        <label class="form-check-label" style="font-size: 0.85rem;" for="chk-{{ outer_index }}-{{ loop.index }}">
+                                            {{ prod }}
+                                        </label>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-outline-success btn-sm w-100">Guardar Regla</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+document.querySelectorAll('.select-alcance').forEach(select => {
+    select.addEventListener('change', function() {
+        const contenedor = this.closest('form').querySelector('.productos-contenedor');
+        contenedor.style.display = this.value === 'especifico' ? 'block' : 'none';
+    });
+});
+
+document.querySelectorAll('.form-regla').forEach(form => {
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const cuenta = this.getAttribute('data-cuenta');
+        const index = this.getAttribute('data-index');
+        const btnGuardar = this.querySelector('button[type="submit"]');
+        
+        const formData = new FormData(this);
+        const regla = {
+            alcance: formData.get('alcance'),
+            metodo: formData.get('metodo'),
+            productos_afectados: formData.getAll('productos_afectados')
+        };
+
+        btnGuardar.innerHTML = "Guardando...";
+        fetch('{{ url_for("costeo.api_guardar_regla") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cuenta: cuenta, regla: regla })
+        }).then(res => res.json()).then(data => {
+            btnGuardar.innerHTML = "Guardado ✔";
+            document.getElementById(`badge-${index}`).className = "badge bg-success ms-3 status-badge";
+            document.getElementById(`badge-${index}`).innerText = "Configurado";
+            
+            setTimeout(() => {
+                const collapseEl = document.getElementById(`collapse-${index}`);
+                let bsCollapse = bootstrap.Collapse.getInstance(collapseEl);
+                if (!bsCollapse) {
+                    bsCollapse = new bootstrap.Collapse(collapseEl, { toggle: false });
+                }
+                bsCollapse.hide();
+                btnGuardar.innerHTML = "Guardar Regla";
+            }, 600); // 600ms para que el usuario alcance a leer "Guardado ✔"
+        });
+    });
+});
+</script>
+{% endblock %}
