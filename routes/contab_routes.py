@@ -5,7 +5,7 @@ import pandas as pd
 import json
 import tempfile
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, send_from_directory, flash, current_app, send_file
+from flask import Blueprint, render_template, request, redirect, url_for, send_from_directory, flash, current_app, send_file, jsonify
 from utils.auth import login_requerido, permiso_modulo
 from utils.sheet_cache import obtener_datos
 
@@ -389,6 +389,69 @@ def guardar_comentario_api():
     else: comentarios.pop(key, None)
     guardar_comentarios(comentarios)
     return {"ok": True}
+
+@contab_bp.route("/api/prorrateos/matriz_sg", methods=["GET"])
+@login_requerido
+@permiso_modulo("contab")
+def api_obtener_matriz_sg():
+    hoy = datetime.now()
+    meses = [(hoy - pd.DateOffset(months=i)).strftime("%Y-%m") for i in range(11, -1, -1)]
+    
+    data = cargar_prorrateos()
+    reglas = data.get("reglas_mensuales", {})
+    
+    sucursales = set()
+    cuentas_sg = set()
+    
+    # 1. Buscar en el JSON Histórico (Por si hay reglas viejas)
+    for m in reglas.values():
+        sg = m.get("serv_generales", {})
+        for cta, dist in sg.items():
+            cuentas_sg.add(cta)
+            for suc in dist.keys():
+                sucursales.add(suc)
+                
+    # 2. Buscar en la Base de Datos (Libro Mayor)
+    df = obtener_datos("mayor")
+    if not df.empty:
+        df["CENTRO COSTO"] = df["CENTRO COSTO"].astype(str).str.strip()
+        df["NOMBRE"] = df["NOMBRE"].astype(str).str.strip()
+        
+        for c in df["CENTRO COSTO"].unique():
+            if c.lower() != "servicios generales" and c.lower() != "nan":
+                sucursales.add(c)
+                
+        df_sg = df[df["CENTRO COSTO"].str.lower() == "servicios generales"]
+        for nom in df_sg["NOMBRE"].unique():
+            if nom.lower() != "nan":
+                cuentas_sg.add(nom)
+                
+    # 3. Construir la Matriz completa
+    matriz = []
+    for cta in sorted(list(cuentas_sg)):
+        for suc in sorted(list(sucursales)):
+            fila = {"cuenta": cta, "sucursal": suc}
+            for m in meses:
+                fila[m] = reglas.get(m, {}).get("serv_generales", {}).get(cta, {}).get(suc, 0.0)
+            matriz.append(fila)
+        
+    return jsonify({"meses": meses, "filas": matriz})
+
+@contab_bp.route("/api/prorrateos/matriz_sg/guardar", methods=["POST"])
+@login_requerido
+@permiso_modulo("contab")
+def api_guardar_matriz_sg():
+    payload = request.get_json(force=True)
+    data = cargar_prorrateos()
+    reglas = data.setdefault("reglas_mensuales", {})
+    
+    for m, d_mes in payload.items():
+        if m not in reglas:
+            reglas[m] = {}
+        reglas[m]["serv_generales"] = d_mes
+        
+    guardar_prorrateos(data)
+    return jsonify({"ok": True})
 
 # ==============================================================================
 # 6. REPORTES GERENCIALES (MOTOR CENTRALIZADO)

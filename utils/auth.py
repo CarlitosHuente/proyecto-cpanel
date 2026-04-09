@@ -3,7 +3,7 @@ import os
 from functools import wraps
 from utils.db import get_db_connection
 from werkzeug.security import check_password_hash
-from flask import session, redirect, url_for, render_template
+from flask import session, redirect, url_for, render_template, request
 
 
 
@@ -34,15 +34,16 @@ def login_requerido(f):
     @wraps(f)
     def decorado(*args, **kwargs):
         # --- INICIO DEL BYPASS DE DESARROLLO ---
-        # Verificamos si la variable de entorno está en modo "development"
-        # y si no hay un usuario en la sesión.
-        # # if os.environ.get("FLASK_ENV") == "development" and "usuario" not in session:
-        # #     # Si se cumplen las condiciones, creamos una sesión falsa para el desarrollador.
-        # #     session["usuario"] = "developer@local.test"
-        # #     print("=====================================================================")
-        # #     print("== MODO DESARROLLO: Bypass de login activado.                        ==")
-        # #     print("== Usuario simulado: developer@local.test                            ==")
-        # #     print("=====================================================================")
+        # Detectamos automáticamente si estás en local (localhost o 127.0.0.1)
+        if ("localhost" in request.host or "127.0.0.1" in request.host) and "usuario" not in session:
+            # Creamos una sesión falsa como superusuario para no pedir login
+            session["usuario"] = "developer@local.test"
+            session["rol"] = "superusuario"
+            session["sucursal_id"] = None
+            print("=====================================================================")
+            print("== MODO DESARROLLO: Bypass de login activado automáticamente.      ==")
+            print("== Usuario simulado: developer@local.test (Superusuario)           ==")
+            print("=====================================================================")
         # --- FIN DEL BYPASS ---
 
         # Esta es la comprobación original que se ejecutará siempre.
