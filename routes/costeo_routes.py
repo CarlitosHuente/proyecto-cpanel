@@ -541,6 +541,47 @@ def simulador():
                            total_costo_directo=total_costo_directo,
                            total_margen_op=total_margen_op)
 
+@costeo_bp.route("/simulador_global")
+@login_requerido
+@permiso_modulo("contab")
+def simulador_global():
+    periodo = request.args.get("periodo", datetime.now().strftime("%Y-%m"))
+    sucursal = request.args.get("sucursal", "")
+    
+    sucursales, sucursal, resultados, total_ingreso_sucursal, total_gasto_sucursal, gasto_asignado_total, gastos_cuenta, gastos_no_asignados, total_costo_directo, total_margen_op = correr_motor_costeo(periodo, sucursal)
+
+    # Calculamos la meta: la carga fija total que la sucursal debe cubrir (Fijos Locales + GAV)
+    total_carga_fija = sum(r["gasto_fijo_tot"] + r["gav_tot"] for r in resultados)
+
+    recomendaciones = {}
+    if total_carga_fija > 0:
+        if resultados:
+            # Buscar el producto más vendido (Estrella en volumen)
+            top_prod = sorted(resultados, key=lambda x: x["unidades"], reverse=True)[0]
+            if top_prod["margen_op_uni"] > 0:
+                recomendaciones["estrella"] = {
+                    "producto": top_prod["producto"],
+                    "unidades": total_carga_fija / top_prod["margen_op_uni"],
+                    "diarias": (total_carga_fija / top_prod["margen_op_uni"]) / 30
+                }
+                
+        # Si actualmente están perdiendo dinero (Margen Op < Carga Fija)
+        if total_margen_op < total_carga_fija:
+            brecha = total_carga_fija - total_margen_op
+            if total_margen_op > 0:
+                recomendaciones["volumen"] = (total_carga_fija / total_margen_op - 1) * 100
+            if total_ingreso_sucursal > 0:
+                recomendaciones["precio"] = (brecha / total_ingreso_sucursal) * 100
+
+    return render_template("contab/costeo_simulador_global.html",
+                           periodo=periodo,
+                           sucursal=sucursal,
+                           sucursales=sucursales,
+                           resultados=resultados,
+                           total_carga_fija=total_carga_fija,
+                           total_margen_op_actual=total_margen_op,
+                           recomendaciones=recomendaciones)
+
 @costeo_bp.route("/exportar_simulador")
 @login_requerido
 @permiso_modulo("contab")

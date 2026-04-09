@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+{% block title %}Simulador Global de Escenarios{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="text-warning mb-1"><i class="bi bi-magic"></i> Simulador Global de Escenarios (What-If)</h2>
+    
+    <ul class="nav nav-tabs mt-3 mb-4 border-secondary">
+        <li class="nav-item"><a class="nav-link text-light" href="{{ url_for('costeo.mapeo') }}">1. Mapeo Contable</a></li>
+        <li class="nav-item"><a class="nav-link text-light" href="{{ url_for('costeo.costos_directos') }}">2. Costo Directo</a></li>
+        <li class="nav-item"><a class="nav-link text-light" href="{{ url_for('costeo.reglas_gastos') }}">3. Reglas Local</a></li>
+        <li class="nav-item"><a class="nav-link text-light" href="{{ url_for('costeo.gav_corporativo') }}">4. GAV Corporativo</a></li>
+        <li class="nav-item"><a class="nav-link text-light" href="{{ url_for('costeo.simulador') }}">5. Simulador</a></li>
+        <li class="nav-item"><a class="nav-link active bg-dark text-warning border-secondary fw-bold" href="{{ url_for('costeo.simulador_global') }}"><i class="bi bi-magic"></i> 6. Escenarios</a></li>
+    </ul>
+
+    <p class="text-light opacity-75">Modifica los precios de venta simulados para ver el impacto en tiempo real sobre la rentabilidad y cobertura de la sucursal.</p>
+
+    <!-- Filtros -->
+    <form method="GET" class="row g-3 mb-4 p-3 bg-dark rounded border border-secondary">
+        <div class="col-md-4">
+            <label class="form-label text-warning">Periodo Base de Volumen</label>
+            <input type="month" name="periodo" class="form-control bg-black text-white border-secondary" value="{{ periodo }}">
+        </div>
+        <div class="col-md-5">
+            <label class="form-label text-warning">Sucursal a Simular</label>
+            <select name="sucursal" class="form-select bg-black text-white border-secondary">
+                {% for suc in sucursales %}
+                <option value="{{ suc }}" {% if suc == sucursal %}selected{% endif %}>{{ suc }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+            <button type="submit" class="btn btn-warning w-100 fw-bold text-dark"><i class="bi bi-search"></i> Cargar Datos</button>
+        </div>
+    </form>
+
+    <!-- Recomendaciones Inteligentes -->
+    {% if recomendaciones %}
+    <div class="row g-3 mb-4">
+        {% if recomendaciones.estrella %}
+        <div class="col-md-4">
+            <div class="card bg-dark border-info h-100 p-3 shadow-sm">
+                <div class="d-flex align-items-center mb-2">
+                    <i class="bi bi-star-fill text-info fs-4 me-2"></i>
+                    <h6 class="text-info fw-bold m-0 ms-1">Punto de Equilibrio (Estrella)</h6>
+                </div>
+                <p class="text-light opacity-75 m-0" style="font-size: 0.85rem;">
+                    Para cubrir toda la carga fija vendiendo solo <strong>{{ recomendaciones.estrella.producto }}</strong>, necesitas vender 
+                    <strong class="text-white">{{ "{:,.0f}".format(recomendaciones.estrella.unidades).replace(",", ".") }} unid.</strong> al mes 
+                    (aprox. <span class="text-warning">{{ "{:,.0f}".format(recomendaciones.estrella.diarias).replace(",", ".") }} al día</span>).
+                </p>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if recomendaciones.precio %}
+        <div class="col-md-4">
+            <div class="card bg-dark border-warning h-100 p-3 shadow-sm">
+                <div class="d-flex align-items-center mb-2">
+                    <i class="bi bi-tag-fill text-warning fs-4 me-2"></i>
+                    <h6 class="text-warning fw-bold m-0 ms-1">Ajuste Plano de Precios</h6>
+                </div>
+                <p class="text-light opacity-75 m-0" style="font-size: 0.85rem;">
+                    Si mantienes la cantidad actual vendida, deberías subir el precio de <strong>todos los productos en un {{ "{:,.1f}".format(recomendaciones.precio).replace(",", ".") }}%</strong> para lograr cubrir exactamente los gastos fijos.
+                </p>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if recomendaciones.volumen %}
+        <div class="col-md-4">
+            <div class="card bg-dark border-success h-100 p-3 shadow-sm">
+                <div class="d-flex align-items-center mb-2">
+                    <i class="bi bi-graph-up-arrow text-success fs-4 me-2"></i>
+                    <h6 class="text-success fw-bold m-0 ms-1">Meta de Volumen Comercial</h6>
+                </div>
+                <p class="text-light opacity-75 m-0" style="font-size: 0.85rem;">
+                    Sin tocar los precios de la carta, deberías aumentar la cantidad vendida de <strong>todos los productos en un {{ "{:,.1f}".format(recomendaciones.volumen).replace(",", ".") }}%</strong> para lograr pagar el local.
+                </p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Termómetro y KPIs Globales -->
+    <div class="row row-cols-1 row-cols-md-4 g-3 mb-4">
+        <!-- Carga Fija -->
+        <div class="col">
+            <div class="card bg-dark border-secondary text-center h-100 p-3 shadow">
+                <h6 class="text-light opacity-75 mb-2" style="font-size: 0.85rem;">Gastos Fijos a Cubrir</h6>
+                <h4 class="text-danger fw-bold m-0" id="kpiCargaFija" data-val="{{ total_carga_fija }}">${{ "{:,.0f}".format(total_carga_fija).replace(",", ".") }}</h4>
+                <small class="text-muted mt-1">Local + Corporativo</small>
+            </div>
+        </div>
+        
+        <!-- Escenario Simulado (Mg Op) -->
+        <div class="col">
+            <div class="card text-center h-100 p-3 shadow" style="background-color: #0a1128; border: 1px solid #0d6efd;">
+                <h6 class="text-info opacity-75 mb-2" style="font-size: 0.85rem;">Mg. Operacional Simulado</h6>
+                <h4 class="text-info fw-bold m-0" id="kpiMargenSimulado">$0</h4>
+                <small class="text-muted mt-1">Aporte para pagar los Fijos</small>
+            </div>
+        </div>
+
+        <!-- Escenario Simulado (Neto) -->
+        <div class="col">
+            <div class="card text-center h-100 p-3 shadow" style="background-color: #1a1608; border: 1px solid #ffc107;">
+                <h6 class="text-warning opacity-75 mb-2" style="font-size: 0.85rem;">Resultado Neto Simulado</h6>
+                <h4 class="text-warning fw-bold m-0" id="kpiNetoSimulado">$0</h4>
+                <small class="mt-1" id="kpiDiferencia" style="font-size: 0.75rem;"></small>
+            </div>
+        </div>
+
+        <!-- Cobertura -->
+        <div class="col">
+            <div class="card bg-dark border-secondary text-center h-100 p-3 shadow justify-content-center">
+                <h6 class="text-light opacity-75 mb-2" style="font-size: 0.85rem;">Cobertura del Local</h6>
+                <div class="mt-1">
+                    <span class="badge bg-secondary fs-5" id="badgeCoberturaSimulada">0%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla Interactiva -->
+    <div class="card bg-dark text-white border-secondary shadow mb-5">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover table-bordered mb-0 align-middle text-end" style="font-size: 0.9rem;" id="tablaSimulador">
+                    <thead class="bg-black text-center">
+                        <tr>
+                            <th class="text-start ps-3">Producto</th>
+                            <th>Volumen (Mes)</th>
+                            <th>Precio Real ($)</th>
+                            <th class="text-info">Costo Directo</th>
+                            <th class="text-warning" style="width: 150px;">Nuevo Precio ($)</th>
+                            <th class="text-primary">Nuevo Mg. Op. Unitario</th>
+                            <th class="text-success">Nuevo Aporte Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in resultados %}
+                        <tr class="fila-producto" 
+                            data-unidades="{{ r.unidades }}" 
+                            data-costo-directo="{{ r.costo_directo_uni }}"
+                            data-precio-real="{{ r.precio_prom }}">
+                            
+                            <td class="text-start ps-3 fw-bold text-light">{{ r.producto }}</td>
+                            <td>{{ "{:,.0f}".format(r.unidades).replace(",", ".") }}</td>
+                            <td>${{ "{:,.0f}".format(r.precio_prom).replace(",", ".") }}</td>
+                            <td class="text-info">${{ "{:,.0f}".format(r.costo_directo_uni).replace(",", ".") }}</td>
+                            
+                            <!-- Input Interactivo -->
+                            <td class="p-1">
+                                <input type="number" class="form-control form-control-sm bg-black text-warning fw-bold text-end border-warning input-precio-simulado" 
+                                       value="{{ r.precio_prom | round | int }}" step="10">
+                            </td>
+                            
+                            <!-- Resultados Simulados (Calculados por JS) -->
+                            <td class="text-primary fw-bold calc-mg-uni"></td>
+                            <td class="text-success fw-bold calc-aporte-tot"></td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="7" class="text-center text-muted py-4">No hay datos para simular en esta sucursal.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const inputsPrecio = document.querySelectorAll('.input-precio-simulado');
+    const kpiCargaFija = parseFloat(document.getElementById('kpiCargaFija').getAttribute('data-val')) || 0;
+    const kpiMargenSimulado = document.getElementById('kpiMargenSimulado');
+    const kpiNetoSimulado = document.getElementById('kpiNetoSimulado');
+    const badgeCoberturaSimulada = document.getElementById('badgeCoberturaSimulada');
+    const kpiDiferencia = document.getElementById('kpiDiferencia');
+    const margenActualReal = {{ total_margen_op_actual | default(0) }};
+
+    function formatMoney(num) { return '$' + Math.round(num).toLocaleString('es-CL'); }
+
+    function recalcularEscenario() {
+        let totalAporteSimulado = 0;
+        document.querySelectorAll('.fila-producto').forEach(fila => {
+            const unidades = parseFloat(fila.getAttribute('data-unidades')) || 0;
+            const costoDirecto = parseFloat(fila.getAttribute('data-costo-directo')) || 0;
+            const inputPrecio = fila.querySelector('.input-precio-simulado');
+            let precioSimulado = parseFloat(inputPrecio.value) || 0;
+            
+            let nuevoMgUni = precioSimulado - costoDirecto;
+            let nuevoAporteTot = nuevoMgUni * unidades;
+            totalAporteSimulado += nuevoAporteTot;
+
+            fila.querySelector('.calc-mg-uni').innerText = formatMoney(nuevoMgUni);
+            fila.querySelector('.calc-aporte-tot').innerText = formatMoney(nuevoAporteTot);
+            
+            const precioReal = parseFloat(fila.getAttribute('data-precio-real')) || 0;
+            if (Math.abs(precioSimulado - precioReal) > 1) {
+                inputPrecio.classList.add('bg-warning', 'text-dark');
+                inputPrecio.classList.remove('bg-black', 'text-warning');
+            } else {
+                inputPrecio.classList.remove('bg-warning', 'text-dark');
+                inputPrecio.classList.add('bg-black', 'text-warning');
+            }
+        });
+
+        kpiMargenSimulado.innerText = formatMoney(totalAporteSimulado);
+        
+        let nuevoNeto = totalAporteSimulado - kpiCargaFija;
+        kpiNetoSimulado.innerText = formatMoney(nuevoNeto);
+        kpiNetoSimulado.className = nuevoNeto >= 0 ? "text-success fw-bold m-0" : "text-danger fw-bold m-0";
+
+        let cobertura = kpiCargaFija > 0 ? (totalAporteSimulado / kpiCargaFija * 100) : 0;
+        badgeCoberturaSimulada.innerText = `Cobertura: ${cobertura.toFixed(1).replace('.', ',')}%`;
+        badgeCoberturaSimulada.className = cobertura >= 100 ? 'badge bg-success fs-5' : 'badge bg-danger fs-5';
+
+        let netoRealActual = margenActualReal - kpiCargaFija;
+        let diferencia = nuevoNeto - netoRealActual;
+        if (diferencia > 0) kpiDiferencia.innerHTML = `<span class="text-success fw-bold">▲ +${formatMoney(diferencia)} extra</span> vs Real`;
+        else if (diferencia < 0) kpiDiferencia.innerHTML = `<span class="text-danger fw-bold">▼ ${formatMoney(diferencia)} pérdida</span> vs Real`;
+        else kpiDiferencia.innerHTML = `<span class="text-muted">Sin variación vs Real</span>`;
+    }
+
+    inputsPrecio.forEach(input => input.addEventListener('input', recalcularEscenario));
+    recalcularEscenario();
+});
+</script>
+{% endblock %}
