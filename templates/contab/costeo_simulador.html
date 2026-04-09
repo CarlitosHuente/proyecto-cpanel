@@ -37,31 +37,43 @@
     </form>
 
     <!-- Resumen KPIs -->
-    <div class="row g-3 mb-4">
-        <div class="col-md-4">
+    <div class="row row-cols-1 row-cols-md-5 g-2 mb-4">
+        <div class="col">
             <div class="card text-white p-3 text-center h-100 justify-content-center shadow" style="background-color: #0d1a10; border: 1px solid #198754;">
-                <h6 class="text-light opacity-75 mb-1">Ingresos de la Sucursal</h6>
-                <h3 class="text-success fw-bold m-0">${{ "{:,.0f}".format(total_ingreso).replace(",", ".") }}</h3>
+                <h6 class="text-light opacity-75 mb-1" style="font-size: 0.85rem;">Ingresos Sucursal</h6>
+                <h4 class="text-success fw-bold m-0">${{ "{:,.0f}".format(total_ingreso).replace(",", ".") }}</h4>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col">
+            <div class="card text-white p-3 text-center h-100 justify-content-center shadow" style="background-color: #051b24; border: 1px solid #0dcaf0;">
+                <h6 class="text-light opacity-75 mb-1" style="font-size: 0.85rem;">Costo Directo Total</h6>
+                <h4 class="text-info fw-bold m-0">${{ "{:,.0f}".format(total_costo_directo).replace(",", ".") }}</h4>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card text-white p-3 text-center h-100 justify-content-center shadow" style="background-color: #0a1128; border: 1px solid #0d6efd;">
+                <h6 class="text-light opacity-75 mb-1" style="font-size: 0.85rem;">Margen Operacional</h6>
+                <h4 class="text-primary fw-bold m-0">${{ "{:,.0f}".format(total_margen_op).replace(",", ".") }}</h4>
+            </div>
+        </div>
+        <div class="col">
             <div class="card text-white p-3 text-center h-100 justify-content-center shadow" style="background-color: #1f0c0c; border: 1px solid #dc3545;">
-                <h6 class="text-light opacity-75 mb-1">Gastos (Cuentas 3) en Mayor</h6>
-                <h3 class="text-danger fw-bold m-0">${{ "{:,.0f}".format(total_gasto).replace(",", ".") }}</h3>
+                <h6 class="text-light opacity-75 mb-1" style="font-size: 0.85rem;">Gastos Fijos (Mayor)</h6>
+                <h4 class="text-danger fw-bold m-0">${{ "{:,.0f}".format(total_gasto).replace(",", ".") }}</h4>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col">
             <div class="card text-white p-3 text-center h-100 justify-content-center shadow" style="background-color: #1a1608; border: 1px solid #ffc107;">
-                <h6 class="text-light opacity-75 mb-1">Gastos Asignados por Reglas</h6>
-                {% if gasto_asignado < total_gasto %}
-                <h3 class="text-warning fw-bold m-0">${{ "{:,.0f}".format(gasto_asignado).replace(",", ".") }}</h3>
-                <span style="font-size:0.75rem;" class="text-warning">
-                    Hay un saldo de ${{ "{:,.0f}".format(total_gasto - gasto_asignado).replace(",", ".") }} perdido. 
+                <h6 class="text-light opacity-75 mb-1" style="font-size: 0.85rem;">Gasto Fijo Asignado</h6>
+                {% if gasto_asignado < (total_gasto - 1) %}
+                <h4 class="text-warning fw-bold m-0">${{ "{:,.0f}".format(gasto_asignado).replace(",", ".") }}</h4>
+                <span style="font-size:0.7rem;" class="text-warning">
+                    Fuga: ${{ "{:,.0f}".format(total_gasto - gasto_asignado).replace(",", ".") }}
                     <a href="#" class="text-warning fw-bold text-decoration-underline ms-1" data-bs-toggle="modal" data-bs-target="#modalNoAsignados" title="Ver detalle de las fugas">🔍 Ver Detalle</a>
                 </span>
                 {% else %}
-                <h3 class="text-success fw-bold m-0">${{ "{:,.0f}".format(gasto_asignado).replace(",", ".") }}</h3>
-                <span style="font-size:0.75rem;" class="text-success">Distribución completa.</span>
+                <h4 class="text-warning fw-bold m-0">${{ "{:,.0f}".format(gasto_asignado).replace(",", ".") }}</h4>
+                <span style="font-size:0.7rem;" class="text-success">Distribución completa.</span>
                 {% endif %}
             </div>
         </div>
@@ -79,6 +91,8 @@
                             <th>Ingreso Total</th>
                             <th>Precio Prom.</th>
                             <th class="text-info">Costo Directo</th>
+                            <th class="text-primary">Margen Op. $</th>
+                            <th class="text-primary">Margen Op. %</th>
                             <th class="text-warning">Gasto Fijo Uni.</th>
                             <th style="color: #d63384;">GAV Uni.</th>
                             <th class="text-danger">Costo Total Uni.</th>
@@ -94,6 +108,8 @@
                             <td>${{ "{:,.0f}".format(r.ingreso).replace(",", ".") }}</td>
                             <td>${{ "{:,.0f}".format(r.precio_prom).replace(",", ".") }}</td>
                             <td class="text-info">${{ "{:,.0f}".format(r.costo_directo_uni).replace(",", ".") }}</td>
+                            <td class="text-primary fw-bold">${{ "{:,.0f}".format(r.margen_op_uni).replace(",", ".") }}</td>
+                            <td class="text-primary">{{ "{:,.1f}".format(r.margen_op_pct).replace(",", ".") }}%</td>
                             <td class="text-warning">
                                 <a href="#" class="text-warning fw-bold text-decoration-none border-bottom border-warning link-desglose pb-1" 
                                    data-producto="{{ r.producto }}" 

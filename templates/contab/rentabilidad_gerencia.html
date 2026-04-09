@@ -31,29 +31,36 @@
     </form>
 
     <!-- KPIs Gerenciales -->
-    <div class="row g-3 mb-4">
-        <div class="col-md-3">
-            <div class="card text-white p-3 text-center h-100 shadow" style="background-color: #0d1a10; border: 1px solid #198754;">
-                <h6 class="text-light opacity-75 mb-1">Ingresos Totales (Venta)</h6>
-                <h3 class="text-success fw-bold m-0">${{ "{:,.0f}".format(total_ingreso).replace(",", ".") }}</h3>
+    <div class="row row-cols-1 row-cols-md-5 g-2 mb-4">
+        <div class="col">
+            <div class="card text-white p-3 text-center h-100 justify-content-center shadow" style="background-color: #0d1a10; border: 1px solid #198754;">
+                <h6 class="text-light opacity-75 mb-1" style="font-size: 0.85rem;">Ingresos Sucursal</h6>
+                <h4 class="text-success fw-bold m-0">${{ "{:,.0f}".format(total_ingreso).replace(",", ".") }}</h4>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card text-white p-3 text-center h-100 shadow" style="background-color: #1f0c0c; border: 1px solid #dc3545;">
-                <h6 class="text-light opacity-75 mb-1">Costo y Gastos Totales</h6>
-                <h3 class="text-danger fw-bold m-0">${{ "{:,.0f}".format(costo_total_op).replace(",", ".") }}</h3>
+        <div class="col">
+            <div class="card text-white p-3 text-center h-100 justify-content-center shadow" style="background-color: #051b24; border: 1px solid #0dcaf0;">
+                <h6 class="text-light opacity-75 mb-1" style="font-size: 0.85rem;">Costo Directo Total</h6>
+                <h4 class="text-info fw-bold m-0">${{ "{:,.0f}".format(total_costo_directo).replace(",", ".") }}</h4>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card text-white p-3 text-center h-100 shadow" style="background-color: #0a192f; border: 1px solid #0dcaf0;">
-                <h6 class="text-light opacity-75 mb-1">Margen Neto Global ($)</h6>
-                <h3 class="text-info fw-bold m-0">${{ "{:,.0f}".format(margen_neto).replace(",", ".") }}</h3>
+        <div class="col">
+            <div class="card text-white p-3 text-center h-100 justify-content-center shadow" style="background-color: #0a1128; border: 1px solid #0d6efd;">
+                <h6 class="text-light opacity-75 mb-1" style="font-size: 0.85rem;">Margen Operacional</h6>
+                <h4 class="text-primary fw-bold m-0">${{ "{:,.0f}".format(total_margen_op).replace(",", ".") }}</h4>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card text-white p-3 text-center h-100 shadow" style="background-color: #1a1608; border: 1px solid #ffc107;">
-                <h6 class="text-light opacity-75 mb-1">Margen Neto Global (%)</h6>
-                <h3 class="text-warning fw-bold m-0">{{ "{:,.1f}".format(margen_pct).replace(",", ".") }}%</h3>
+        <div class="col">
+            <div class="card text-white p-3 text-center h-100 justify-content-center shadow" style="background-color: #1f0c0c; border: 1px solid #dc3545;">
+                <h6 class="text-light opacity-75 mb-1" style="font-size: 0.85rem;">Costo Total (ABC)</h6>
+                <h4 class="text-danger fw-bold m-0">${{ "{:,.0f}".format(costo_total_op).replace(",", ".") }}</h4>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card text-white p-3 text-center h-100 justify-content-center shadow" style="background-color: #1a1608; border: 1px solid #ffc107;">
+                <h6 class="text-light opacity-75 mb-1" style="font-size: 0.85rem;">Margen Neto Final</h6>
+                <h4 class="text-warning fw-bold m-0">${{ "{:,.0f}".format(margen_neto).replace(",", ".") }}</h4>
+                <span style="font-size:0.7rem;" class="text-warning">{{ "{:,.1f}".format(margen_pct).replace(",", ".") }}% sobre venta</span>
             </div>
         </div>
     </div>
@@ -75,9 +82,12 @@
                             <th class="text-start ps-3">Producto</th>
                             <th>Unidades Vendidas</th>
                             <th>Precio Promedio ($)</th>
-                            <th class="text-danger">Costo Total Unitario</th>
-                            <th class="text-info">Margen Neto Unitario</th>
-                            <th class="text-warning">Margen Neto (%)</th>
+                            <th class="text-info">Costo Directo Uni.</th>
+                            <th class="text-primary">Margen Op. $</th>
+                            <th class="text-primary">Margen Op. %</th>
+                            <th class="text-danger">Costo Total Uni.</th>
+                            <th class="text-success">Margen Neto Uni.</th>
+                            <th class="text-success">Margen Neto %</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -86,12 +96,15 @@
                             <td class="text-start ps-3 fw-bold text-light">{{ r.producto }}</td>
                             <td>{{ "{:,.0f}".format(r.unidades).replace(",", ".") }}</td>
                             <td>${{ "{:,.0f}".format(r.precio_prom).replace(",", ".") }}</td>
+                            <td class="text-info">${{ "{:,.0f}".format(r.costo_directo_uni).replace(",", ".") }}</td>
+                            <td class="text-primary fw-bold">${{ "{:,.0f}".format(r.margen_op_uni).replace(",", ".") }}</td>
+                            <td class="text-primary">{{ "{:,.1f}".format(r.margen_op_pct).replace(",", ".") }}%</td>
                             <td class="text-danger">${{ "{:,.0f}".format(r.costo_total_uni).replace(",", ".") }}</td>
-                            <td class="text-info fw-bold">${{ "{:,.0f}".format(r.margen_uni).replace(",", ".") }}</td>
-                            <td class="text-warning fw-bold">{{ "{:,.1f}".format(r.margen_pct).replace(",", ".") }}%</td>
+                            <td class="text-success fw-bold">${{ "{:,.0f}".format(r.margen_uni).replace(",", ".") }}</td>
+                            <td class="text-success">{{ "{:,.1f}".format(r.margen_pct).replace(",", ".") }}%</td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="6" class="text-center text-muted py-4">No hay datos de rentabilidad para este periodo.</td></tr>
+                        <tr><td colspan="9" class="text-center text-muted py-4">No hay datos de rentabilidad para este periodo.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>

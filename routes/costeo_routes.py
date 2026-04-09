@@ -263,9 +263,12 @@ def correr_motor_costeo(periodo, sucursal):
 
     ventas_prod = {}
     if not df_ventas.empty:
-        for _, row in df_ventas.groupby("DESCRIPCION").agg({"NETO": "sum", "CANTIDAD": "sum"}).reset_index().iterrows():
+        if "FAMILIA" not in df_ventas.columns:
+            df_ventas["FAMILIA"] = "SIN FAMILIA"
+        for _, row in df_ventas.groupby(["DESCRIPCION", "FAMILIA"]).agg({"NETO": "sum", "CANTIDAD": "sum"}).reset_index().iterrows():
             if row["CANTIDAD"] > 0:
                 ventas_prod[row["DESCRIPCION"]] = {
+                    "familia": str(row["FAMILIA"]).strip().upper(),
                     "ingreso": float(row["NETO"]),
                     "unidades": float(row["CANTIDAD"]),
                     "gasto_asignado": 0.0,
@@ -313,14 +316,44 @@ def correr_motor_costeo(periodo, sucursal):
                 mask = (df_procesado["CUENTA"].str.startswith("3")) & mask_cc
                 df_gastos = df_procesado[mask].copy()
             
+            costo_total_piz = 0.0
+            
             if not df_gastos.empty:
                 df_gastos["DISPLAY"] = df_gastos["CUENTA"] + " - " + df_gastos["NOMBRE"]
                 
-                for _, row in df_gastos.groupby("DISPLAY")["SALDO_REAL"].sum().reset_index().iterrows():
+                for _, row in df_gastos.groupby(["CUENTA", "DISPLAY"])["SALDO_REAL"].sum().reset_index().iterrows():
                     # Los gastos en SALDO_REAL son negativos. Pasamos a absoluto.
                     saldo_positivo = abs(float(row["SALDO_REAL"]))
                     if saldo_positivo > 0:
-                        gastos_cuenta[row["DISPLAY"]] = saldo_positivo
+                        cuenta_str = str(row["CUENTA"]).strip()
+                        if cuenta_str == "3101002":
+                            pass # Excluido de fijos locales: el costo de la empanada frita ahora es un Costo Estándar Global
+                        elif cuenta_str == "3101003":
+                            costo_total_piz += saldo_positivo
+                        else:
+                            gastos_cuenta[row["DISPLAY"]] = saldo_positivo
+
+    # Calcular costos unitarios directos automáticos
+    
+    # 1. EMPANADA DE QUESO FRITA: Costo Estándar Global
+    costo_uni_emp = 0.0
+    if not df_procesado.empty and "CUENTA" in df_procesado.columns:
+        costo_fabrica_global = abs(df_procesado[df_procesado["CUENTA"].astype(str).str.strip() == "3101002"]["SALDO_REAL"].sum())
+        empanadas_elaboradas = float(data_config.get("fabrica_empanadas", {}).get("costeo_periodos", {}).get(periodo, {}).get("empanadas_elaboradas", 0))
+        
+        if empanadas_elaboradas > 0:
+            costo_uni_emp = costo_fabrica_global / empanadas_elaboradas
+        else:
+            # Fallback: total de empanadas fritas vendidas globalmente si no hay dato de producción
+            df_ventas_global = df_ventas_raw[df_ventas_raw["PERIODO"] == periodo] if not df_ventas_raw.empty and "PERIODO" in df_ventas_raw.columns else pd.DataFrame()
+            if not df_ventas_global.empty:
+                unidades_global_emp = df_ventas_global[df_ventas_global["DESCRIPCION"].astype(str).str.upper().str.contains("EMPANADA DE QUESO FRITA", na=False)]["CANTIDAD"].sum()
+                if unidades_global_emp > 0:
+                    costo_uni_emp = costo_fabrica_global / unidades_global_emp
+
+    # 2. PIZZA: Costo Directo Local (Mantiene la regla anterior)
+    unidades_piz = sum(d["unidades"] for d in ventas_prod.values() if "PIZZA" in d["familia"])
+    costo_uni_piz = costo_total_piz / unidades_piz if unidades_piz > 0 else 0
 
     # 4. Aplicar reglas
     reglas = cargar_reglas()
@@ -421,14 +454,40 @@ def correr_motor_costeo(periodo, sucursal):
     # 5. Formatear vista
     resultados = []
     total_gasto_sucursal = sum(gastos_cuenta.values())
+
     gasto_asignado_total = sum(p["gasto_asignado"] for p in ventas_prod.values())
+    total_costo_directo = 0.0
+    total_margen_op = 0.0
 
     for prod, data in ventas_prod.items():
         uni = data["unidades"]
         ing = data["ingreso"]
         precio_prom = ing / uni
-        c_dir_uni = float(costos_directos.get(prod, 0))
+        familia = data.get("familia", "") # e.g., "PIZZA"
+
+        # Nueva lógica de Costo Directo con prioridades
+        # 1. El costo manual (Paso 2) tiene la máxima prioridad (si es mayor a 0).
+        costo_manual = costos_directos.get(prod)
+
+        if costo_manual is not None and float(costo_manual) > 0:
+            c_dir_uni = float(costo_manual)
+        else:
+            # 2. Si no hay costo manual, se aplica la lógica automática.
+            if "EMPANADA DE QUESO FRITA" in prod.upper():
+                c_dir_uni = costo_uni_emp
+            elif "PIZZA" in familia:
+                c_dir_uni = costo_uni_piz
+            else:
+                # 3. Si no hay costo manual ni regla automática, el costo es 0.
+                c_dir_uni = 0.0
+
         c_dir_tot = c_dir_uni * uni
+        total_costo_directo += c_dir_tot
+        
+        margen_op_uni = precio_prom - c_dir_uni
+        margen_op_pct = (margen_op_uni / precio_prom * 100) if precio_prom > 0 else 0
+        total_margen_op += (margen_op_uni * uni)
+        
         g_asig_tot = data["gasto_asignado"]
         g_asig_uni = g_asig_tot / uni
         gav_tot = data["gav_asignado"]
@@ -443,6 +502,8 @@ def correr_motor_costeo(periodo, sucursal):
             "ingreso": ing,
             "precio_prom": precio_prom,
             "costo_directo_uni": c_dir_uni,
+            "margen_op_uni": margen_op_uni,
+            "margen_op_pct": margen_op_pct,
             "gasto_fijo_uni": g_asig_uni,
             "gasto_fijo_tot": g_asig_tot,
             "gav_uni": gav_uni,
@@ -456,7 +517,7 @@ def correr_motor_costeo(periodo, sucursal):
 
     resultados.sort(key=lambda x: x["ingreso"], reverse=True)
 
-    return sucursales, sucursal, resultados, total_ingreso_sucursal, total_gasto_sucursal, gasto_asignado_total, gastos_cuenta, gastos_no_asignados
+    return sucursales, sucursal, resultados, total_ingreso_sucursal, total_gasto_sucursal, gasto_asignado_total, gastos_cuenta, gastos_no_asignados, total_costo_directo, total_margen_op
 
 @costeo_bp.route("/simulador")
 @login_requerido
@@ -465,7 +526,7 @@ def simulador():
     periodo = request.args.get("periodo", datetime.now().strftime("%Y-%m"))
     sucursal = request.args.get("sucursal", "")
     
-    sucursales, sucursal, resultados, total_ingreso_sucursal, total_gasto_sucursal, gasto_asignado_total, gastos_cuenta, gastos_no_asignados = correr_motor_costeo(periodo, sucursal)
+    sucursales, sucursal, resultados, total_ingreso_sucursal, total_gasto_sucursal, gasto_asignado_total, gastos_cuenta, gastos_no_asignados, total_costo_directo, total_margen_op = correr_motor_costeo(periodo, sucursal)
 
     return render_template("contab/costeo_simulador.html",
                            periodo=periodo,
@@ -476,7 +537,9 @@ def simulador():
                            total_gasto=total_gasto_sucursal,
                            gasto_asignado=gasto_asignado_total,
                            gastos_cuenta=gastos_cuenta,
-                           gastos_no_asignados=gastos_no_asignados)
+                           gastos_no_asignados=gastos_no_asignados,
+                           total_costo_directo=total_costo_directo,
+                           total_margen_op=total_margen_op)
 
 @costeo_bp.route("/exportar_simulador")
 @login_requerido
@@ -485,14 +548,14 @@ def exportar_simulador():
     periodo = request.args.get("periodo", datetime.now().strftime("%Y-%m"))
     sucursal = request.args.get("sucursal", "")
     
-    _, _, resultados, _, _, _, _, _ = correr_motor_costeo(periodo, sucursal)
+    _, _, resultados, _, _, _, _, _, _, _ = correr_motor_costeo(periodo, sucursal)
     
     df_exp = pd.DataFrame(resultados)
     if df_exp.empty:
         return "No hay datos para exportar", 204
         
-    df_exp = df_exp[["producto", "unidades", "ingreso", "precio_prom", "costo_directo_uni", "gasto_fijo_uni", "gav_uni", "costo_total_uni", "margen_uni", "margen_pct"]]
-    df_exp.columns = ["Producto", "Unidades", "Ingreso Total", "Precio Prom.", "Costo Directo Uni.", "Gasto Fijo Local Uni.", "GAV Corporativo Uni.", "Costo Total Uni.", "Margen Neto Uni.", "Margen Neto %"]
+    df_exp = df_exp[["producto", "unidades", "ingreso", "precio_prom", "costo_directo_uni", "margen_op_uni", "margen_op_pct", "gasto_fijo_uni", "gav_uni", "costo_total_uni", "margen_uni", "margen_pct"]]
+    df_exp.columns = ["Producto", "Unidades", "Ingreso Total", "Precio Prom.", "Costo Directo Uni.", "Margen Operacional Uni.", "Margen Operacional %", "Gasto Fijo Local Uni.", "GAV Corporativo Uni.", "Costo Total Uni.", "Margen Neto Uni.", "Margen Neto %"]
     
     output = io.BytesIO()
     df_exp.to_excel(output, index=False)
@@ -516,15 +579,15 @@ def rentabilidad_gerencia():
     periodo = request.args.get("periodo", datetime.now().strftime("%Y-%m"))
     sucursal = request.args.get("sucursal", "")
     
-    sucursales, sucursal, resultados, total_ingreso, _, _, _, _ = correr_motor_costeo(periodo, sucursal)
+    sucursales, sucursal, resultados, total_ingreso, _, _, _, _, total_costo_directo, total_margen_op = correr_motor_costeo(periodo, sucursal)
     
     costo_total_op = sum(r["costo_total_uni"] * r["unidades"] for r in resultados)
     margen_neto = total_ingreso - costo_total_op
     margen_pct = (margen_neto / total_ingreso * 100) if total_ingreso > 0 else 0
     
-    top_resultados = sorted(resultados, key=lambda x: x["margen_uni"] * x["unidades"], reverse=True)[:10]
+    top_resultados = sorted(resultados, key=lambda x: x["margen_op_uni"] * x["unidades"], reverse=True)[:10]
     nombres_grafico = [r["producto"] for r in top_resultados]
-    margenes_grafico = [r["margen_uni"] * r["unidades"] for r in top_resultados]
+    margenes_grafico = [r["margen_op_uni"] * r["unidades"] for r in top_resultados]
     
     return render_template("contab/rentabilidad_gerencia.html",
                            periodo=periodo,
@@ -532,6 +595,8 @@ def rentabilidad_gerencia():
                            sucursales=sucursales,
                            resultados=resultados,
                            total_ingreso=total_ingreso,
+                           total_costo_directo=total_costo_directo,
+                           total_margen_op=total_margen_op,
                            costo_total_op=costo_total_op,
                            margen_neto=margen_neto,
                            margen_pct=margen_pct,

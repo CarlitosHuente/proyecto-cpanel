@@ -694,8 +694,10 @@ def informe_gerencial():
 
     ESTRUCTURA = [
         {"id": "ingresos_op", "titulo": "INGRESOS DE EXPLOTACIÓN", "tipo": "macro", "fuente": ["Ingresos Operacionales", "Ingresos Venta"]},
-        {"id": "costos_op", "titulo": "COSTOS DE EXPLOTACIÓN", "tipo": "macro", "fuente": ["Costos de Explotación", "Costo Venta"]},
-        {"id": "margen", "titulo": "MARGEN DE EXPLOTACIÓN", "tipo": "calculo", "color": "warning", "operacion": ["ingresos_op", "costos_op"]},
+        {"id": "costo_directo", "titulo": "COSTO DIRECTO (COSTO DE VENTA)", "tipo": "macro", "fuente": ["Costo Venta"]},
+        {"id": "margen_op", "titulo": "MARGEN OPERACIONAL (BRUTO)", "tipo": "calculo", "color": "primary", "operacion": ["ingresos_op", "costo_directo"]},
+        {"id": "costos_fijos", "titulo": "GASTOS FIJOS LOCALES", "tipo": "macro", "fuente": ["Costos de Explotación"]},
+        {"id": "margen", "titulo": "MARGEN DE EXPLOTACIÓN", "tipo": "calculo", "color": "warning", "operacion": ["margen_op", "costos_fijos"]},
         {"id": "gastos_adm", "titulo": "GASTOS DE ADMINISTRACIÓN Y VENTAS", "tipo": "macro", "fuente": ["Gastos de Administración y Ventas"]},
         {"id": "res_op", "titulo": "RESULTADO OPERACIONAL", "tipo": "calculo", "color": "info", "operacion": ["margen", "gastos_adm"]},
         {"id": "no_op", "titulo": "INGRESOS Y EGRESOS NO OPERACIONALES", "tipo": "macro", "fuente": ["Ingresos No Operacionales"]},
@@ -822,8 +824,10 @@ def comparativo_gestion():
 
     ESTRUCTURA = [
         {"id": "ingresos_op", "titulo": "INGRESOS DE EXPLOTACIÓN", "tipo": "macro", "fuente": ["Ingresos Operacionales", "Ingresos Venta"]},
-        {"id": "costos_op", "titulo": "COSTOS DE EXPLOTACIÓN", "tipo": "macro", "fuente": ["Costos de Explotación", "Costo Venta"]},
-        {"id": "margen", "titulo": "MARGEN DE EXPLOTACIÓN", "tipo": "calculo", "color": "warning", "operacion": ["ingresos_op", "costos_op"]},
+        {"id": "costo_directo", "titulo": "COSTO DIRECTO (COSTO DE VENTA)", "tipo": "macro", "fuente": ["Costo Venta"]},
+        {"id": "margen_op", "titulo": "MARGEN OPERACIONAL (BRUTO)", "tipo": "calculo", "color": "primary", "operacion": ["ingresos_op", "costo_directo"]},
+        {"id": "costos_fijos", "titulo": "GASTOS FIJOS LOCALES", "tipo": "macro", "fuente": ["Costos de Explotación"]},
+        {"id": "margen", "titulo": "MARGEN DE EXPLOTACIÓN", "tipo": "calculo", "color": "warning", "operacion": ["margen_op", "costos_fijos"]},
         {"id": "gastos_adm", "titulo": "GASTOS DE ADMINISTRACIÓN Y VENTAS", "tipo": "macro", "fuente": ["Gastos de Administración y Ventas"]},
         {"id": "res_op", "titulo": "RESULTADO OPERACIONAL", "tipo": "calculo", "color": "info", "operacion": ["margen", "gastos_adm"]},
         {"id": "no_op", "titulo": "INGRESOS Y EGRESOS NO OPERACIONALES", "tipo": "macro", "fuente": ["Ingresos No Operacionales"]},
