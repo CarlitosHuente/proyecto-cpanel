@@ -37,10 +37,12 @@ def ventas():
     if not desde and not hasta:
         if not semana_actual:
             if año_actual:
-                semana_actual = df[df["AÑO"] == int(año_actual)]["SEMANA"].max()
+                if not df.empty and "AÑO" in df.columns and "SEMANA" in df.columns:
+                    semana_actual = df[df["AÑO"] == int(año_actual)]["SEMANA"].max()
             else:
-                año_actual = df["AÑO"].max()
-                semana_actual = df[df["AÑO"] == año_actual]["SEMANA"].max()
+                if not df.empty and "AÑO" in df.columns and "SEMANA" in df.columns:
+                    año_actual = df["AÑO"].max()
+                    semana_actual = df[df["AÑO"] == año_actual]["SEMANA"].max()
         else:
             semana_actual = int(semana_actual)
     else:
@@ -62,8 +64,7 @@ def ventas():
     }
 
 
-    # Aplicar filtros al DataFrame
-# Aplica lógica de control para evitar conflicto entre fechas y semana
+    # Aplica lógica de control para evitar conflicto entre fechas y semana
     if filtros["desde"] and filtros["hasta"]:
         semana = None
         año = None
@@ -81,25 +82,6 @@ def ventas():
         filtros["desde"],
         filtros["hasta"]
     )
-###
-
-
-
-    # Aplicar filtros con debug
-    detalle_df = filtrar_dataframe(
-        df,
-        filtros["filtro_por"],
-        filtros["valor"],
-        filtros["sucursal"],
-        semana,
-        año,
-        filtros["desde"],
-        filtros["hasta"]
-    )
-
-    print("=== DATAFRAME FILTRADO ===")
-    print(detalle_df.head())
-    print("Filas encontradas:", len(detalle_df))
 
     # === Lógica para la nueva pestaña "Detalle por Día" ===
     filtros["dia_semana"] = request.args.get("dia_semana", "TODOS")
@@ -113,25 +95,24 @@ def ventas():
     # Generar detalle
 # Generar detalle agrupado visualmente (sin afectar Excel)
     if isinstance(detalle_df, pd.DataFrame) and not detalle_df.empty:
-        detalle_df = obtener_detalle(detalle_df, filtros)
-
-        # Agrupación visual solo para la vista
-        # Reemplaza esto en la función ventas() de ventas_routes.py
-
-        # Agrupación visual solo para la vista
+        # Agrupamos dinámicamente según el filtro seleccionado
+        campo_agrupacion = filtros.get("filtro_por", "FAMILIA")
+        if campo_agrupacion not in detalle_df.columns:
+            campo_agrupacion = "DESCRIPCION"  # Fallback de seguridad
+            
         detalle_agrupado = (
-            detalle_df.groupby("PRODUCTO", as_index=False)
+            detalle_df.groupby(campo_agrupacion, as_index=False)
             .agg(
                 CANTIDAD=("CANTIDAD", "sum"),
                 NETO=("NETO", "sum")
             )
-        )
+        ).rename(columns={campo_agrupacion: "PRODUCTO"}) # Renombramos para la vista
+
         # Calculamos el precio unitario de forma segura
         detalle_agrupado["PRECIO_UNITARIO"] = detalle_agrupado.apply(
             lambda row: row["NETO"] / row["CANTIDAD"] if row["CANTIDAD"] != 0 else 0,
             axis=1
         )
-
         detalle = detalle_agrupado.to_dict(orient="records")
     else:
         detalle = []
@@ -147,7 +128,9 @@ def ventas():
         opciones_valor = sorted(df[filtro_por].dropna().unique())
 
     # Lista de sucursales
-    sucursales = sorted(df["SUCURSAL"].dropna().unique().tolist())
+    sucursales = []
+    if "SUCURSAL" in df.columns:
+        sucursales = sorted(df["SUCURSAL"].dropna().unique().tolist())
     sucursales.insert(0, "TODAS")
 
     return render_template("ventas.html",

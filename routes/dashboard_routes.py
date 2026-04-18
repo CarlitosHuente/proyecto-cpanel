@@ -69,18 +69,18 @@ def api_dashboard_data():
     detalle_por_familia = {}
     if not df_filtrado.empty:
         for _, row in df_filtrado.iterrows():
-            familia_item = row["FAMILIA"]
+            familia_item = str(row["FAMILIA"]) if pd.notna(row["FAMILIA"]) else "SIN FAMILIA"
             producto = {
-                "descripcion": row["DESCRIPCION"],
-                "neto": row["NETO"],
-                "cantidad": row["CANTIDAD"]
+                "descripcion": str(row["DESCRIPCION"]),
+                "neto": float(row["NETO"]) if pd.notna(row["NETO"]) else 0,
+                "cantidad": float(row["CANTIDAD"]) if pd.notna(row["CANTIDAD"]) else 0
             }
             if familia_item not in detalle_por_familia:
                 detalle_por_familia[familia_item] = []
             detalle_por_familia[familia_item].append(producto)
 
     torta_data = [
-        {"nombre": row["FAMILIA"], "valor": int(row["NETO"])}
+        {"nombre": str(row["FAMILIA"]) if pd.notna(row["FAMILIA"]) else "SIN FAMILIA", "valor": int(row["NETO"])}
         for _, row in ventas_por_familia.iterrows()
     ]
     total_neto = int(df_filtrado["NETO"].sum()) if not df_filtrado.empty else 0
@@ -163,11 +163,30 @@ def api_dashboard_data():
     top_estrellas = []
     top_alertas = []
 
-    if not df_filtrado.empty:
+    if empresa == "agricola":
+        # Para agrícola, mostrar las últimas 5 semanas en lugar de sucursales
+        if not df.empty and "FECHA" in df.columns:
+            if not df_filtrado.empty and "FECHA" in df_filtrado.columns:
+                fecha_ref = df_filtrado["FECHA"].max()
+            elif hasta:
+                fecha_ref = pd.to_datetime(hasta, errors="coerce")
+            else:
+                fecha_ref = pd.Timestamp.now()
+            
+            if pd.notna(fecha_ref):
+                df_hist = df[df["FECHA"] <= fecha_ref].copy()
+                if not df_hist.empty and "AÑO" in df_hist.columns and "SEMANA" in df_hist.columns:
+                    df_hist = df_hist.dropna(subset=["AÑO", "SEMANA"])
+                    df_hist["YW"] = df_hist["AÑO"].astype(int).astype(str) + "-" + df_hist["SEMANA"].astype(int).astype(str).str.zfill(2)
+                    rank_df = df_hist.groupby("YW").agg({"NETO": "sum", "SEMANA": "first", "AÑO": "first"}).sort_index(ascending=False).head(5)
+                    rank_df = rank_df.sort_index(ascending=True)
+                    ranking_sucursales = [{"sucursal": f"Sem {int(row['SEMANA'])} ({int(row['AÑO'])})", "neto": int(row["NETO"])} for _, row in rank_df.iterrows()]
+    elif not df_filtrado.empty:
         if not sucursal or sucursal == "TODAS":
             rank_df = df_filtrado.groupby("SUCURSAL")["NETO"].sum().sort_values(ascending=True)
             ranking_sucursales = [{"sucursal": str(k), "neto": int(v)} for k, v in rank_df.items()]
 
+    if not df_filtrado.empty:
         if not df_ant.empty:
             curr_prod = df_filtrado.groupby("DESCRIPCION").agg({"NETO": "sum", "CANTIDAD": "sum"}).reset_index().rename(columns={"NETO": "neto_actual", "CANTIDAD": "cantidad_actual"})
             prev_prod = df_ant.groupby("DESCRIPCION").agg({"NETO": "sum", "CANTIDAD": "sum"}).reset_index().rename(columns={"NETO": "neto_anterior", "CANTIDAD": "cantidad_anterior"})

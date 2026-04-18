@@ -20,9 +20,10 @@ from routes.fabrica_routes import fabrica_bp
 from routes.costeo_routes import costeo_bp
 import os
 
-app = Flask(__name__)
-app.permanent_session_lifetime = timedelta(minutes=45) #Tiempo Maximo de inactividad.
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
+app = Flask(__name__, template_folder=os.path.join(BASE_DIR, 'templates'))
+app.permanent_session_lifetime = timedelta(minutes=45) #Tiempo Maximo de inactividad.
 UPLOAD_FOLDER_CONTAB = os.path.join(BASE_DIR, "uploads", "contab")
 # Crea la carpeta si no existe
 os.makedirs(UPLOAD_FOLDER_CONTAB, exist_ok=True)

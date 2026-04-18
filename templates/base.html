@@ -186,7 +186,17 @@
         {% endif %}
 
         {% if tiene_permiso(session.get('rol'), 'ventas') %}
-        <a href="{{ url_for('ventas.ventas') }}"><span class="texto-menu">Ventas</span></a>
+        <div class="dropdown">
+            <a class="dropdown-toggle d-block px-3 py-2 text-white" href="#" role="button" id="ventasDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                <span class="texto-menu">Ventas</span>
+            </a>
+            <ul class="dropdown-menu bg-dark border-0" aria-labelledby="ventasDropdown">
+                <li><a class="dropdown-item text-white" href="{{ url_for('ventas.ventas') }}">Dashboard Ventas</a></li>
+                {% if session.get('rol') in ['superusuario', 'admin'] %}
+                <li><a class="dropdown-item text-white" href="{{ url_for('config.gestion_agricola') }}">Importar Agrícola</a></li>
+                {% endif %}
+            </ul>
+        </div>
         {% endif %}
 
         {% if tiene_permiso(session.get('rol'), 'seremi') %}
@@ -291,6 +301,8 @@
             </div>
         </li>
         {% endif %}
+
+
 
         
         <a href="{{ url_for('auth.logout') }}"><span class="texto-menu">Cerrar sesión</span></a>

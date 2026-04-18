@@ -1,8 +1,11 @@
-from flask import Blueprint, render_template, request, redirect, url_for, abort
+from flask import Blueprint, render_template, request, redirect, url_for, abort, session, jsonify, current_app
 from utils.auth import login_requerido, permiso_modulo, PERMISOS
 from utils.db import get_db_connection
 from werkzeug.security import generate_password_hash
 from collections import defaultdict
+import pandas as pd
+import os
+from werkzeug.utils import secure_filename
 
 config_bp = Blueprint('config', __name__, url_prefix='/config')
 
@@ -474,3 +477,124 @@ from flask import send_from_directory, current_app
 def ver_imagen_anuncio(filename):
     """Esta ruta permite al navegador leer la imagen desde la carpeta uploads protegida"""
     return send_from_directory(current_app.config['UPLOAD_FOLDER_ANUNCIOS'], filename)
+
+# ==========================================
+# GESTIÓN DE CARGA AGRÍCOLA (EXCEL -> DB)
+# ==========================================
+
+@config_bp.route("/agricola")
+@login_requerido
+@permiso_modulo("agricola")
+def gestion_agricola():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM cargas_agricola ORDER BY fecha_carga DESC LIMIT 5")
+    cargas = cursor.fetchall()
+    conn.close()
+    return render_template("config/agricola_upload.html", cargas=cargas)
+
+@config_bp.route("/agricola/upload", methods=["POST"])
+@login_requerido
+@permiso_modulo("agricola")
+def upload_agricola():
+    if 'archivo_excel' not in request.files:
+        return jsonify({"success": False, "error": "No se envió ningún archivo"})
+        
+    file = request.files['archivo_excel']
+    if file.filename == '':
+        return jsonify({"success": False, "error": "Archivo vacío"})
+
+    filename = secure_filename(file.filename)
+    temp_dir = os.path.join(current_app.root_path, 'uploads', 'temp')
+    os.makedirs(temp_dir, exist_ok=True)
+    file_path = os.path.join(temp_dir, filename)
+    file.save(file_path)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        if filename.endswith('.csv'):
+            df = pd.read_csv(file_path, encoding='utf-8', low_memory=False)
+        else:
+            df = pd.read_excel(file_path)
+
+        # Limpiar columnas numéricas para evitar errores de MySQL (Ej: valores como "23,657.00" o "$ 100")
+        columnas_numericas = ['PROPINA', 'SUBTOTAL', 'TOTAL', 'CANTIDAD', 'PRECIO', 'PRECIO_LIS', 'SUB_RENGL', 'TOT_RENGL']
+        for col in columnas_numericas:
+            if col in df.columns:
+                # Si Pandas detecta la columna como texto (por los signos o el formato CSV)
+                if df[col].dtype == 'object':
+                    # 1. Quitamos signos peso y espacios
+                    df[col] = df[col].astype(str).str.replace('$', '', regex=False).str.strip()
+                    # 2. Formato Latino: Quitamos punto de miles y cambiamos coma por punto decimal
+                    df[col] = df[col].str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+
+        # Reemplazar valores nulos por None para evitar errores en MySQL
+        df = df.where(pd.notnull(df), None)
+
+        usuario_actual = session.get("usuario", "desconocido")
+        cursor.execute(
+            "INSERT INTO cargas_agricola (nombre_archivo, registros_insertados, usuario) VALUES (%s, %s, %s)",
+            (filename, len(df), usuario_actual)
+        )
+        carga_id = cursor.lastrowid
+
+        datos_insertar = []
+        for _, row in df.iterrows():
+            # Convertimos explícitamente cualquier NaN/Nulo de Pandas a None para MySQL
+            row_dict = {str(k).strip().upper(): (None if pd.isna(v) else v) for k, v in row.items()}
+            
+            fecha_val = None
+            if row_dict.get('FECHA'):
+                try:
+                    fecha_val = pd.to_datetime(row_dict.get('FECHA')).strftime('%Y-%m-%d')
+                except: pass
+            
+            datos_insertar.append((
+                carga_id, row_dict.get('ID_COMANDA'), row_dict.get('ESTADO'), row_dict.get('ESTADO_STK'),
+                fecha_val, row_dict.get('APERTURA'), row_dict.get('HORA_PEDID'), row_dict.get('HORA_ENTRE'),
+                row_dict.get('HORA_ACORD'), row_dict.get('CIERRE'), row_dict.get('COD_HORARI'), row_dict.get('DES_HORARI'),
+                row_dict.get('COD_REPART'), row_dict.get('DES_REPART'), row_dict.get('COD_ZONA'), row_dict.get('DES_ZONA'),
+                row_dict.get('COD_CLIENT'), row_dict.get('DES_CLIENT'), row_dict.get('PROPINA'), row_dict.get('IMPRESION'),
+                row_dict.get('SUBTOTAL'), row_dict.get('TOTAL'), row_dict.get('T_COMP'), row_dict.get('N_COMP'),
+                row_dict.get('COD_ARTICU'), row_dict.get('DES_ARTICU'), row_dict.get('TIPO'), row_dict.get('RUBRO'),
+                row_dict.get('COD_BODEGA'), row_dict.get('DES_BODEGA'), row_dict.get('CANTIDAD'), row_dict.get('PRECIO'),
+                row_dict.get('PRECIO_LIS'), row_dict.get('SUB_RENGL'), row_dict.get('TOT_RENGL'), row_dict.get('HORA_COCI'),
+                row_dict.get('ENVIO_COCI'), row_dict.get('MODIFICADO'), row_dict.get('MOTIVO'), row_dict.get('AUTORIZA'),
+                row_dict.get('USUARIO'), row_dict.get('FECHA_ANU'), row_dict.get('HORA_ANU')
+            ))
+
+        # Inserción masiva por bloques de 1000 para no sobrecargar
+        sql = """INSERT INTO ventas_agricola (carga_id, id_comanda, estado, estado_stk, fecha, apertura, hora_pedid, hora_entre, hora_acord, cierre, cod_horari, des_horari, cod_repart, des_repart, cod_zona, des_zona, cod_client, des_client, propina, impresion, subtotal, total, t_comp, n_comp, cod_articu, des_articu, tipo, rubro, cod_bodega, des_bodega, cantidad, precio, precio_lis, sub_rengl, tot_rengl, hora_coci, envio_coci, modificado, motivo, autoriza, usuario, fecha_anu, hora_anu) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"""
+        chunk_size = 1000
+        for i in range(0, len(datos_insertar), chunk_size):
+            cursor.executemany(sql, datos_insertar[i:i+chunk_size])
+
+        conn.commit()
+        
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        conn.close()
+        if os.path.exists(file_path): os.remove(file_path)
+
+    return jsonify({"success": True, "mensaje": f"Se procesaron {len(df)} registros exitosamente."})
+
+@config_bp.route("/agricola/revertir/<int:carga_id>", methods=["POST"])
+@login_requerido
+@permiso_modulo("agricola")
+def revertir_carga_agricola(carga_id):
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM cargas_agricola WHERE carga_id = %s", (carga_id,))
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        conn.close()
