@@ -1,6 +1,7 @@
 import os
 import json
 from flask import current_app
+import copy
 
 COSTEO_FILENAME = "costeo_reglas.json"
 
@@ -82,9 +83,23 @@ def obtener_costos_efectivos(periodo):
             
     return costos_efectivos, costos_propios
 
-def guardar_regla_gasto(cuenta, regla_data):
+def guardar_regla_gasto(sucursal, escenario, cuenta, regla_data):
     data = cargar_reglas()
-    data["reglas_gastos"][cuenta] = regla_data
+    if "reglas_gastos" not in data: data["reglas_gastos"] = {}
+    if sucursal not in data["reglas_gastos"]: data["reglas_gastos"][sucursal] = {}
+    if escenario not in data["reglas_gastos"][sucursal]: data["reglas_gastos"][sucursal][escenario] = {}
+    
+    data["reglas_gastos"][sucursal][escenario][cuenta] = regla_data
+    guardar_reglas(data)
+
+def copiar_reglas_gastos(sucursal_origen, esc_origen, sucursal_destino, esc_destino):
+    data = cargar_reglas()
+    reglas_origen = data.get("reglas_gastos", {}).get(sucursal_origen, {}).get(esc_origen, {})
+    
+    if "reglas_gastos" not in data: data["reglas_gastos"] = {}
+    if sucursal_destino not in data["reglas_gastos"]: data["reglas_gastos"][sucursal_destino] = {}
+    
+    data["reglas_gastos"][sucursal_destino][esc_destino] = copy.deepcopy(reglas_origen)
     guardar_reglas(data)
 
 def guardar_prorrateo_adm(distribucion):

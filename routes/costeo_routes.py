@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify
 from utils.auth import login_requerido, permiso_modulo
 from utils.sheet_cache import obtener_datos
-from utils.costeo_manager import cargar_reglas, guardar_mapeo, guardar_costo_directo, guardar_regla_gasto, obtener_costos_efectivos, guardar_prorrateo_adm, obtener_prorrateo_adm
+from utils.costeo_manager import cargar_reglas, guardar_mapeo, guardar_costo_directo, guardar_regla_gasto, obtener_costos_efectivos, guardar_prorrateo_adm, obtener_prorrateo_adm, copiar_reglas_gastos
 import pandas as pd
 from datetime import datetime
 from routes.contab_routes import calcular_matriz_gestion, cargar_prorrateos
@@ -115,8 +115,10 @@ def reglas_gastos():
     df_ventas = obtener_datos("comercial")
     if not df_ventas.empty and "DESCRIPCION" in df_ventas.columns:
         productos = sorted(df_ventas["DESCRIPCION"].dropna().unique().tolist())
+        sucursales = sorted(df_ventas["SUCURSAL"].dropna().unique().tolist())
     else:
         productos = []
+        sucursales = []
 
     # Extraer Cuentas de Gasto/Pérdida (Comienzan con 3 o la cuenta contable de gastos)
     df_mayor = obtener_datos("mayor")
@@ -138,15 +140,26 @@ def reglas_gastos():
     reglas = cargar_reglas()
     reglas_actuales = reglas.get("reglas_gastos", {})
 
-    return render_template("contab/costeo_reglas.html", productos=productos, cuentas=cuentas_gasto, reglas_actuales=reglas_actuales)
+    return render_template("contab/costeo_reglas.html", productos=productos, cuentas=cuentas_gasto, reglas_actuales=reglas_actuales, sucursales=sucursales)
 
 @costeo_bp.route("/api/guardar_regla", methods=["POST"])
 @login_requerido
 @permiso_modulo("contab")
 def api_guardar_regla():
     data = request.get_json()
-    guardar_regla_gasto(data.get("cuenta"), data.get("regla"))
+    guardar_regla_gasto(data.get("sucursal"), data.get("escenario"), data.get("cuenta"), data.get("regla"))
     return jsonify({"success": True})
+
+@costeo_bp.route("/api/copiar_reglas", methods=["POST"])
+@login_requerido
+@permiso_modulo("contab")
+def api_copiar_reglas():
+    data = request.get_json()
+    try:
+        copiar_reglas_gastos(data.get("origen_suc"), data.get("origen_esc"), data.get("destino_suc"), data.get("destino_esc"))
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
 
 @costeo_bp.route("/gav")
 @login_requerido
@@ -244,7 +257,7 @@ def api_guardar_gav_adm():
     guardar_prorrateo_adm(data.get("distribucion", {}))
     return jsonify({"success": True})
 
-def correr_motor_costeo(periodo, sucursal):
+def correr_motor_costeo(periodo, sucursal, escenario="Escenario 1"):
     """Motor matemático centralizado. Devuelve la rentabilidad calculada lista para usar."""
     # 1. Obtener lista de sucursales
     df_ventas_raw = obtener_datos("comercial")
@@ -357,7 +370,8 @@ def correr_motor_costeo(periodo, sucursal):
 
     # 4. Aplicar reglas
     reglas = cargar_reglas()
-    reglas_gastos = reglas.get("reglas_gastos", {})
+    reglas_gastos_todas = reglas.get("reglas_gastos", {})
+    reglas_gastos = reglas_gastos_todas.get(sucursal, {}).get(escenario, {})
     costos_directos, _ = obtener_costos_efectivos(periodo)
 
     gastos_no_asignados = {}
@@ -379,6 +393,43 @@ def correr_motor_costeo(periodo, sucursal):
         
         alcance = regla.get("alcance", "global")
         metodo = regla.get("metodo", "venta_dinero")
+
+        if metodo == "porcentaje_manual":
+            porcentajes = regla.get("porcentajes", {})
+            sum_pct = 0.0
+            
+            # 1. Asignar a los manuales específicos
+            for p, pct_val in porcentajes.items():
+                if p in ventas_prod and ventas_prod[p]["unidades"] > 0:
+                    try:
+                        pct_decimal = min(float(pct_val) / 100.0, 1.0)
+                    except ValueError:
+                        pct_decimal = 0.0
+                    
+                    if pct_decimal > 0:
+                        sum_pct += pct_decimal
+                        asignado = monto_gasto * pct_decimal
+                        ventas_prod[p]["gasto_asignado"] += asignado
+                        ventas_prod[p]["desglose_gastos"][cta_display] = asignado
+            
+            # 2. El resto (Híbrido) se reparte por ingresos ($) a los demás
+            resto_pct = max(0.0, 1.0 - sum_pct)
+            monto_resto = monto_gasto * resto_pct
+            
+            if monto_resto > 0:
+                prods_resto = [p for p in ventas_prod.keys() if p not in porcentajes and ventas_prod[p]["unidades"] > 0]
+                base_total = sum(ventas_prod[p]["ingreso"] for p in prods_resto)
+                
+                if base_total > 0:
+                    for p in prods_resto:
+                        proporcion = ventas_prod[p]["ingreso"] / base_total
+                        asignado = monto_resto * proporcion
+                        ventas_prod[p]["gasto_asignado"] += asignado
+                        ventas_prod[p]["desglose_gastos"][f"{cta_display} (Resto Híbrido)"] = asignado
+                else:
+                    gastos_no_asignados[f"{cta_display} (Resto Híbrido)"] = {"monto": monto_resto, "motivo": "Resto del híbrido sin ingresos en otros productos"}
+            continue
+
         afectados = regla.get("productos_afectados", []) if alcance == "especifico" else list(ventas_prod.keys())
         
         prods_validos = [p for p in afectados if p in ventas_prod and ventas_prod[p]["unidades"] > 0]
@@ -525,12 +576,14 @@ def correr_motor_costeo(periodo, sucursal):
 def simulador():
     periodo = request.args.get("periodo", datetime.now().strftime("%Y-%m"))
     sucursal = request.args.get("sucursal", "")
+    escenario = request.args.get("escenario", "Escenario 1")
     
-    sucursales, sucursal, resultados, total_ingreso_sucursal, total_gasto_sucursal, gasto_asignado_total, gastos_cuenta, gastos_no_asignados, total_costo_directo, total_margen_op = correr_motor_costeo(periodo, sucursal)
+    sucursales, sucursal, resultados, total_ingreso_sucursal, total_gasto_sucursal, gasto_asignado_total, gastos_cuenta, gastos_no_asignados, total_costo_directo, total_margen_op = correr_motor_costeo(periodo, sucursal, escenario)
 
     return render_template("contab/costeo_simulador.html",
                            periodo=periodo,
                            sucursal=sucursal,
+                           escenario=escenario,
                            sucursales=sucursales,
                            resultados=resultados,
                            total_ingreso=total_ingreso_sucursal,
@@ -547,8 +600,9 @@ def simulador():
 def simulador_global():
     periodo = request.args.get("periodo", datetime.now().strftime("%Y-%m"))
     sucursal = request.args.get("sucursal", "")
+    escenario = request.args.get("escenario", "Escenario 1")
     
-    sucursales, sucursal, resultados, total_ingreso_sucursal, total_gasto_sucursal, gasto_asignado_total, gastos_cuenta, gastos_no_asignados, total_costo_directo, total_margen_op = correr_motor_costeo(periodo, sucursal)
+    sucursales, sucursal, resultados, total_ingreso_sucursal, total_gasto_sucursal, gasto_asignado_total, gastos_cuenta, gastos_no_asignados, total_costo_directo, total_margen_op = correr_motor_costeo(periodo, sucursal, escenario)
 
     # Calculamos la meta: la carga fija total que la sucursal debe cubrir (Fijos Locales + GAV)
     total_carga_fija = sum(r["gasto_fijo_tot"] + r["gav_tot"] for r in resultados)
@@ -576,6 +630,7 @@ def simulador_global():
     return render_template("contab/costeo_simulador_global.html",
                            periodo=periodo,
                            sucursal=sucursal,
+                           escenario=escenario,
                            sucursales=sucursales,
                            resultados=resultados,
                            total_carga_fija=total_carga_fija,
@@ -588,8 +643,9 @@ def simulador_global():
 def exportar_simulador():
     periodo = request.args.get("periodo", datetime.now().strftime("%Y-%m"))
     sucursal = request.args.get("sucursal", "")
+    escenario = request.args.get("escenario", "Escenario 1")
     
-    _, _, resultados, _, _, _, _, _, _, _ = correr_motor_costeo(periodo, sucursal)
+    _, _, resultados, _, _, _, _, _, _, _ = correr_motor_costeo(periodo, sucursal, escenario)
     
     df_exp = pd.DataFrame(resultados)
     if df_exp.empty:
@@ -619,8 +675,9 @@ def exportar_simulador():
 def rentabilidad_gerencia():
     periodo = request.args.get("periodo", datetime.now().strftime("%Y-%m"))
     sucursal = request.args.get("sucursal", "")
+    escenario = request.args.get("escenario", "Escenario 1")
     
-    sucursales, sucursal, resultados, total_ingreso, _, _, _, _, total_costo_directo, total_margen_op = correr_motor_costeo(periodo, sucursal)
+    sucursales, sucursal, resultados, total_ingreso, _, _, _, _, total_costo_directo, total_margen_op = correr_motor_costeo(periodo, sucursal, escenario)
     
     costo_total_op = sum(r["costo_total_uni"] * r["unidades"] for r in resultados)
     margen_neto = total_ingreso - costo_total_op
@@ -633,6 +690,7 @@ def rentabilidad_gerencia():
     return render_template("contab/rentabilidad_gerencia.html",
                            periodo=periodo,
                            sucursal=sucursal,
+                           escenario=escenario,
                            sucursales=sucursales,
                            resultados=resultados,
                            total_ingreso=total_ingreso,

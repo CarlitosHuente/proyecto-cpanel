@@ -17,19 +17,39 @@
     <h4 class="text-white mb-2">Paso 3: Motor de Distribución (Reglas)</h4>
     <p class="text-light opacity-75">Configura cómo se reparte cada Gasto (Cuenta 3) entre los productos que se venden en la sucursal.</p>
 
+    <!-- PANEL DE SELECCIÓN DE ESCENARIO Y SUCURSAL -->
+    <div class="row mb-4 align-items-end p-3 bg-dark rounded border border-secondary shadow-sm">
+        <div class="col-md-4">
+            <label class="form-label text-warning fw-bold">Sucursal a Configurar</label>
+            <select id="select_sucursal" class="form-select bg-black text-white border-secondary">
+                {% for suc in sucursales %}
+                <option value="{{ suc }}">{{ suc }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label text-info fw-bold">Escenario</label>
+            <select id="select_escenario" class="form-select bg-black text-white border-secondary">
+                <option value="Escenario 1">Escenario 1 (Real)</option>
+                <option value="Escenario 2">Escenario 2 (Proyectado)</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <button class="btn btn-outline-light w-100 fw-bold" data-bs-toggle="modal" data-bs-target="#modalCopiarReglas">
+                <i class="bi bi-copy"></i> Copiar Reglas
+            </button>
+        </div>
+    </div>
+
     <div class="accordion mt-4" id="accordionReglas" style="--bs-accordion-bg: #111;">
+        
         {% for cta in cuentas %}
         {% set outer_index = loop.index %}
-        {% set r = reglas_actuales.get(cta.display, {}) %}
         <div class="accordion-item border-secondary mb-2" style="border-radius: 8px; overflow: hidden;">
             <h2 class="accordion-header" id="heading-{{ loop.index }}">
                 <button class="accordion-button collapsed text-white" style="background-color: #1a1a1a;" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ loop.index }}">
                     {{ cta.display }}
-                    {% if r %}
-                        <span class="badge bg-success ms-3 status-badge" id="badge-{{ loop.index }}">Configurado</span>
-                    {% else %}
-                        <span class="badge bg-warning text-dark ms-3 status-badge" id="badge-{{ loop.index }}">Pendiente</span>
-                    {% endif %}
+                    <span class="badge bg-warning text-dark ms-3 status-badge" id="badge-{{ loop.index }}">Pendiente</span>
                 </button>
             </h2>
             <div id="collapse-{{ loop.index }}" class="accordion-collapse collapse" data-bs-parent="#accordionReglas">
@@ -39,31 +59,33 @@
                             <div class="col-md-6 mb-3">
                                 <label class="form-label fw-bold text-info">1. ¿A qué aplica este gasto?</label>
                                 <select name="alcance" class="form-select bg-dark text-white border-secondary select-alcance">
-                                    <option value="global" {% if r.get('alcance') == 'global' or not r %}selected{% endif %}>Global (Aplica a toda la sucursal)</option>
-                                    <option value="especifico" {% if r.get('alcance') == 'especifico' %}selected{% endif %}>Específico (Aplica solo a algunos productos)</option>
+                                    <option value="global">Global (Aplica a toda la sucursal)</option>
+                                    <option value="especifico">Específico (Aplica solo a algunos productos)</option>
                                 </select>
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label fw-bold text-info">2. ¿Cómo se reparte el dinero?</label>
                                 <select name="metodo" class="form-select bg-dark text-white border-secondary">
-                                    <option value="venta_dinero" {% if r.get('metodo') == 'venta_dinero' or not r %}selected{% endif %}>En base a Ingresos ($)</option>
-                                    <option value="unidades_vendidas" {% if r.get('metodo') == 'unidades_vendidas' %}selected{% endif %}>En base a Unidades/Volumen</option>
+                                    <option value="venta_dinero">En base a Ingresos ($)</option>
+                                    <option value="unidades_vendidas">En base a Unidades/Volumen</option>
+                                    <option value="porcentaje_manual">Porcentaje Manual Fijo (%) - Híbrido</option>
                                 </select>
                             </div>
                         </div>
 
                         <!-- Contenedor para selección específica de productos -->
-                        <div class="productos-contenedor mb-3 p-3 border border-secondary rounded" style="display: {% if r.get('alcance') == 'especifico' %}block{% else %}none{% endif %}; max-height: 200px; overflow-y: auto; background-color: #0a0a0a;">
-                            <label class="form-label fw-bold text-warning mb-2">Selecciona los productos afectados:</label>
+                        <div class="productos-contenedor mb-3 p-3 border border-secondary rounded" style="display: none; max-height: 200px; overflow-y: auto; background-color: #0a0a0a;">
+                            <label class="form-label fw-bold text-warning mb-2">Selecciona los productos afectados (y asigna % si usas Híbrido):</label>
                             <div class="row">
                                 {% for prod in productos %}
-                                <div class="col-md-4 mb-1">
-                                    <div class="form-check">
-                                        <input class="form-check-input check-prod" type="checkbox" name="productos_afectados" value="{{ prod }}" id="chk-{{ outer_index }}-{{ loop.index }}" {% if prod in r.get('productos_afectados', []) %}checked{% endif %}>
-                                        <label class="form-check-label" style="font-size: 0.85rem;" for="chk-{{ outer_index }}-{{ loop.index }}">
+                                <div class="col-md-4 mb-2 d-flex align-items-center">
+                                    <div class="form-check me-2" style="flex: 1;">
+                                        <input class="form-check-input check-prod" type="checkbox" name="productos_afectados" value="{{ prod }}" id="chk-{{ outer_index }}-{{ loop.index }}">
+                                        <label class="form-check-label text-truncate" style="font-size: 0.8rem; max-width: 150px; display: inline-block; vertical-align: middle;" for="chk-{{ outer_index }}-{{ loop.index }}" title="{{ prod }}">
                                             {{ prod }}
                                         </label>
                                     </div>
+                                    <input type="number" class="form-control form-control-sm bg-black text-warning border-warning pct-input" data-prod="{{ prod }}" placeholder="%" style="width: 65px; display: none; font-size: 0.8rem;" min="0" max="100" step="0.1">
                                 </div>
                                 {% endfor %}
                             </div>
@@ -78,50 +100,263 @@
     </div>
 </div>
 
+<!-- Modal Copiar Reglas -->
+<div class="modal fade" id="modalCopiarReglas" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered text-white">
+        <div class="modal-content bg-dark" style="border: 1px solid #444;">
+            <div class="modal-header border-secondary" style="background-color: #111;">
+                <h5 class="modal-title text-info"><i class="bi bi-copy"></i> Copiar Reglas de Costeo</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h6 class="text-warning fw-bold mb-3">Origen (Copiar desde)</h6>
+                <div class="row mb-4">
+                    <div class="col-6">
+                        <label class="form-label text-light" style="font-size: 0.85rem;">Sucursal</label>
+                        <select id="origen_suc" class="form-select bg-black text-white border-secondary">
+                            {% for suc in sucursales %}
+                            <option value="{{ suc }}">{{ suc }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label text-light" style="font-size: 0.85rem;">Escenario</label>
+                        <select id="origen_esc" class="form-select bg-black text-white border-secondary">
+                            <option value="Escenario 1">Escenario 1</option>
+                            <option value="Escenario 2">Escenario 2</option>
+                        </select>
+                    </div>
+                </div>
+
+                <h6 class="text-success fw-bold mb-3">Destino (Pegar en)</h6>
+                <div class="row mb-2">
+                    <div class="col-6">
+                        <label class="form-label text-light" style="font-size: 0.85rem;">Sucursal</label>
+                        <select id="destino_suc" class="form-select bg-black text-white border-secondary">
+                            {% for suc in sucursales %}
+                            <option value="{{ suc }}">{{ suc }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label text-light" style="font-size: 0.85rem;">Escenario</label>
+                        <select id="destino_esc" class="form-select bg-black text-white border-secondary">
+                            <option value="Escenario 1">Escenario 1</option>
+                            <option value="Escenario 2">Escenario 2</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary" style="background-color: #111;">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary fw-bold" onclick="ejecutarCopiaReglas()">Aplicar Copia</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
-document.querySelectorAll('.select-alcance').forEach(select => {
-    select.addEventListener('change', function() {
-        const contenedor = this.closest('form').querySelector('.productos-contenedor');
-        contenedor.style.display = this.value === 'especifico' ? 'block' : 'none';
-    });
-});
+let reglasCompletas = {{ reglas_actuales | tojson | safe }};
 
-document.querySelectorAll('.form-regla').forEach(form => {
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        const cuenta = this.getAttribute('data-cuenta');
-        const index = this.getAttribute('data-index');
-        const btnGuardar = this.querySelector('button[type="submit"]');
-        
-        const formData = new FormData(this);
-        const regla = {
-            alcance: formData.get('alcance'),
-            metodo: formData.get('metodo'),
-            productos_afectados: formData.getAll('productos_afectados')
-        };
+function cargarVistaReglas() {
+    const sucursal = document.getElementById("select_sucursal").value;
+    const escenario = document.getElementById("select_escenario").value;
+    
+    if(!sucursal) return;
 
-        btnGuardar.innerHTML = "Guardando...";
-        fetch('{{ url_for("costeo.api_guardar_regla") }}', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cuenta: cuenta, regla: regla })
-        }).then(res => res.json()).then(data => {
-            btnGuardar.innerHTML = "Guardado ✔";
-            document.getElementById(`badge-${index}`).className = "badge bg-success ms-3 status-badge";
-            document.getElementById(`badge-${index}`).innerText = "Configurado";
+    const reglasVista = (reglasCompletas[sucursal] && reglasCompletas[sucursal][escenario]) 
+                        ? reglasCompletas[sucursal][escenario] 
+                        : {};
+
+    document.querySelectorAll('.form-regla').forEach(form => {
+        const cuenta = form.getAttribute('data-cuenta');
+        const index = form.getAttribute('data-index');
+        const r = reglasVista[cuenta];
+
+        const badge = document.getElementById(`badge-${index}`);
+        const selectAlcance = form.querySelector('[name="alcance"]');
+        const selectMetodo = form.querySelector('[name="metodo"]');
+        const contenedorProductos = form.querySelector('.productos-contenedor');
+        const checkboxes = form.querySelectorAll('input[name="productos_afectados"]');
+
+        if (r) {
+            badge.className = "badge bg-success ms-3 status-badge";
+            badge.innerText = "Configurado";
+            selectMetodo.value = r.metodo || 'venta_dinero';
             
-            setTimeout(() => {
-                const collapseEl = document.getElementById(`collapse-${index}`);
-                let bsCollapse = bootstrap.Collapse.getInstance(collapseEl);
-                if (!bsCollapse) {
-                    bsCollapse = new bootstrap.Collapse(collapseEl, { toggle: false });
+            const isManual = (r.metodo === 'porcentaje_manual');
+            if (isManual) {
+                selectAlcance.value = 'especifico';
+                contenedorProductos.style.display = 'block';
+            } else {
+                selectAlcance.value = r.alcance || 'global';
+                contenedorProductos.style.display = r.alcance === 'especifico' ? 'block' : 'none';
+            }
+
+            const afectados = r.productos_afectados || [];
+            const porcentajes = r.porcentajes || {};
+            
+            checkboxes.forEach(chk => {
+                chk.checked = afectados.includes(chk.value);
+                const pctInput = form.querySelector(`.pct-input[data-prod="${chk.value}"]`);
+                if(pctInput) {
+                    pctInput.value = porcentajes[chk.value] || '';
+                    pctInput.style.display = (isManual && chk.checked) ? 'block' : 'none';
                 }
-                bsCollapse.hide();
-                btnGuardar.innerHTML = "Guardar Regla";
-            }, 600); // 600ms para que el usuario alcance a leer "Guardado ✔"
+            });
+        } else {
+            badge.className = "badge bg-warning text-dark ms-3 status-badge";
+            badge.innerText = "Pendiente";
+            selectAlcance.value = 'global';
+            selectMetodo.value = 'venta_dinero';
+            checkboxes.forEach(chk => {
+                chk.checked = false;
+                const pctInput = form.querySelector(`.pct-input[data-prod="${chk.value}"]`);
+                if(pctInput) { pctInput.style.display = 'none'; pctInput.value = ''; }
+            });
+            contenedorProductos.style.display = 'none';
+        }
+    });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    cargarVistaReglas();
+
+    // Al cambiar la sucursal o el escenario recargamos la vista
+    document.getElementById("select_sucursal").addEventListener("change", cargarVistaReglas);
+    document.getElementById("select_escenario").addEventListener("change", cargarVistaReglas);
+
+    document.querySelectorAll('.select-alcance').forEach(select => {
+        select.addEventListener('change', function() {
+            const contenedor = this.closest('form').querySelector('.productos-contenedor');
+            contenedor.style.display = this.value === 'especifico' ? 'block' : 'none';
+        });
+    });
+
+    document.querySelectorAll('.form-regla [name="metodo"]').forEach(select => {
+        select.addEventListener('change', function() {
+            const form = this.closest('form');
+            const selectAlcance = form.querySelector('[name="alcance"]');
+            const contenedor = form.querySelector('.productos-contenedor');
+            
+            if (this.value === 'porcentaje_manual') {
+                selectAlcance.value = 'especifico';
+                contenedor.style.display = 'block';
+            }
+            
+            form.querySelectorAll('.check-prod').forEach(chk => {
+                const pctInput = form.querySelector(`.pct-input[data-prod="${chk.value}"]`);
+                if(pctInput) pctInput.style.display = (this.value === 'porcentaje_manual' && chk.checked) ? 'block' : 'none';
+            });
+        });
+    });
+
+    document.querySelectorAll('.check-prod').forEach(chk => {
+        chk.addEventListener('change', function() {
+            const form = this.closest('form');
+            const metodo = form.querySelector('[name="metodo"]').value;
+            const pctInput = form.querySelector(`.pct-input[data-prod="${this.value}"]`);
+            
+            if(pctInput) {
+                pctInput.style.display = (metodo === 'porcentaje_manual' && this.checked) ? 'block' : 'none';
+                if(!this.checked) pctInput.value = '';
+            }
+        });
+    });
+
+    document.querySelectorAll('.form-regla').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const sucursal = document.getElementById("select_sucursal").value;
+            const escenario = document.getElementById("select_escenario").value;
+            const cuenta = this.getAttribute('data-cuenta');
+            const index = this.getAttribute('data-index');
+            const btnGuardar = this.querySelector('button[type="submit"]');
+            
+            const formData = new FormData(this);
+            const metodo = formData.get('metodo');
+            
+            const porcentajes = {};
+            let sumPct = 0;
+            
+            if (metodo === 'porcentaje_manual') {
+                formData.getAll('productos_afectados').forEach(prod => {
+                    const input = form.querySelector(`.pct-input[data-prod="${prod}"]`);
+                    const val = parseFloat(input.value) || 0;
+                    porcentajes[prod] = val;
+                    sumPct += val;
+                });
+                
+                if(sumPct > 100) {
+                    alert(`¡Error! La suma de los porcentajes no puede superar el 100%. Actualmente suma ${sumPct}%.`);
+                    return;
+                }
+            }
+            
+            const regla = {
+                alcance: formData.get('alcance'),
+                metodo: metodo,
+                productos_afectados: formData.getAll('productos_afectados'),
+                porcentajes: porcentajes
+            };
+
+            btnGuardar.innerHTML = "Guardando...";
+            fetch('{{ url_for("costeo.api_guardar_regla") }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sucursal: sucursal, escenario: escenario, cuenta: cuenta, regla: regla })
+            }).then(res => res.json()).then(data => {
+                btnGuardar.innerHTML = "Guardado ✔";
+                document.getElementById(`badge-${index}`).className = "badge bg-success ms-3 status-badge";
+                document.getElementById(`badge-${index}`).innerText = "Configurado";
+                
+                // Actualizar el objeto JS para que al cambiar no se borre la info recién guardada
+                if(!reglasCompletas[sucursal]) reglasCompletas[sucursal] = {};
+                if(!reglasCompletas[sucursal][escenario]) reglasCompletas[sucursal][escenario] = {};
+                reglasCompletas[sucursal][escenario][cuenta] = regla;
+                
+                setTimeout(() => {
+                    const collapseEl = document.getElementById(`collapse-${index}`);
+                    let bsCollapse = bootstrap.Collapse.getInstance(collapseEl);
+                    if (!bsCollapse) {
+                        bsCollapse = new bootstrap.Collapse(collapseEl, { toggle: false });
+                    }
+                    bsCollapse.hide();
+                    btnGuardar.innerHTML = "Guardar Regla";
+                }, 600);
+            });
         });
     });
 });
+
+function ejecutarCopiaReglas() {
+    const payload = {
+        origen_suc: document.getElementById("origen_suc").value,
+        origen_esc: document.getElementById("origen_esc").value,
+        destino_suc: document.getElementById("destino_suc").value,
+        destino_esc: document.getElementById("destino_esc").value
+    };
+
+    if (payload.origen_suc === payload.destino_suc && payload.origen_esc === payload.destino_esc) {
+        alert("La sucursal y escenario de origen y destino no pueden ser exactamente los mismos.");
+        return;
+    }
+
+    fetch('{{ url_for("costeo.api_copiar_reglas") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(res => res.json())
+    .then(data => {
+        if(data.success) {
+            alert("Reglas copiadas exitosamente. La página se recargará para mostrar los cambios.");
+            location.reload();
+        } else {
+            alert("Error al copiar: " + data.error);
+        }
+    });
+}
 </script>
 {% endblock %}

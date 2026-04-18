@@ -19,11 +19,11 @@
 
     <!-- Filtros -->
     <form method="GET" class="row g-3 mb-4 p-3 bg-dark rounded border border-secondary">
-        <div class="col-md-4">
+        <div class="col-md-3">
             <label class="form-label text-info">Periodo (Mes)</label>
             <input type="month" name="periodo" class="form-control bg-black text-white border-secondary" value="{{ periodo }}">
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <label class="form-label text-info">Sucursal (Centro Costo)</label>
             <select name="sucursal" class="form-select bg-black text-white border-secondary">
                 {% for suc in sucursales %}
@@ -31,9 +31,16 @@
                 {% endfor %}
             </select>
         </div>
-        <div class="col-md-4 d-flex align-items-end gap-2">
+        <div class="col-md-3">
+            <label class="form-label text-info">Escenario</label>
+            <select name="escenario" class="form-select bg-black text-white border-secondary">
+                <option value="Escenario 1" {% if escenario == 'Escenario 1' %}selected{% endif %}>Escenario 1 (Real)</option>
+                <option value="Escenario 2" {% if escenario == 'Escenario 2' %}selected{% endif %}>Escenario 2 (Proyectado)</option>
+            </select>
+        </div>
+        <div class="col-md-3 d-flex align-items-end gap-2">
             <button type="submit" class="btn btn-info w-50 fw-bold">Correr Simulación</button>
-            <a href="{{ url_for('costeo.exportar_simulador', periodo=periodo, sucursal=sucursal) }}" class="btn btn-success w-50 fw-bold"><i class="bi bi-file-earmark-excel"></i> Exportar</a>
+            <a href="{{ url_for('costeo.exportar_simulador', periodo=periodo, sucursal=sucursal, escenario=escenario) }}" class="btn btn-success w-100 fw-bold px-1"><i class="bi bi-file-earmark-excel"></i> Exportar</a>
         </div>
     </form>
 

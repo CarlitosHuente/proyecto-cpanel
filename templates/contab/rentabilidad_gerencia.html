@@ -12,17 +12,24 @@
     <p class="text-light opacity-75 mb-4">Vista ejecutiva del margen neto consolidado por sucursal, considerando costos directos de producción, gastos locales operacionales y GAV corporativo.</p>
 
     <!-- Filtros Limpios -->
-    <form method="GET" class="row g-3 mb-4 p-3 bg-dark rounded border border-secondary w-100" style="max-width: 800px;">
-        <div class="col-md-5">
+    <form method="GET" class="row g-3 mb-4 p-3 bg-dark rounded border border-secondary w-100" style="max-width: 900px;">
+        <div class="col-md-3">
             <label class="form-label text-info">Periodo (Mes)</label>
             <input type="month" name="periodo" class="form-control bg-black text-white border-secondary" value="{{ periodo }}">
         </div>
-        <div class="col-md-5">
+        <div class="col-md-3">
             <label class="form-label text-info">Sucursal</label>
             <select name="sucursal" class="form-select bg-black text-white border-secondary">
                 {% for suc in sucursales %}
                 <option value="{{ suc }}" {% if suc == sucursal %}selected{% endif %}>{{ suc }}</option>
                 {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label text-info">Escenario de Costeo</label>
+            <select name="escenario" class="form-select bg-black text-white border-secondary">
+                <option value="Escenario 1" {% if escenario == 'Escenario 1' %}selected{% endif %}>Escenario 1 (Real)</option>
+                <option value="Escenario 2" {% if escenario == 'Escenario 2' %}selected{% endif %}>Escenario 2 (Proyectado)</option>
             </select>
         </div>
         <div class="col-md-2 d-flex align-items-end">
