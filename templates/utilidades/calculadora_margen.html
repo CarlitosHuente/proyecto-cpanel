@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}Calculadora de Margen{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="text-info mb-1"><i class="bi bi-tools"></i> Utilidades</h2>
+    <ul class="nav nav-tabs mt-3 mb-4 border-secondary">
+        <li class="nav-item">
+            <a class="nav-link active bg-dark text-white border-secondary" href="{{ url_for('utilidades.calculadora_margen') }}">Calculadoras</a>
+        </li>
+        <!-- Aquí podremos agregar más micromódulos en el futuro -->
+    </ul>
+
+    <div class="row g-4 justify-content-center">
+        <!-- CALCULADORA DE MARGEN -->
+        <div class="col-md-6">
+            <div class="card bg-dark border-secondary shadow-lg h-100">
+                <div class="card-header bg-black border-secondary text-white">
+                    <h5 class="mb-0 text-warning"><i class="bi bi-percent"></i> Calculadora de Margen Comercial</h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="text-muted small mb-4">Ingresa <strong>dos valores cualquiera</strong> y el sistema calculará automáticamente el tercero.</p>
+
+                    <div class="mb-3">
+                        <label class="form-label text-light">Costo Neto ($)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-black text-white border-secondary">$</span>
+                            <input type="number" id="input_costo" class="form-control bg-black text-white border-secondary" placeholder="Ej: 1000" min="0" step="0.01">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label text-light">Precio de Venta Neto ($)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-black text-white border-secondary">$</span>
+                            <input type="number" id="input_precio" class="form-control bg-black text-white border-secondary" placeholder="Ej: 2000" min="0" step="0.01">
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label text-light">Margen sobre Venta (%)</label>
+                        <div class="input-group">
+                            <input type="number" id="input_margen" class="form-control bg-black text-white border-secondary" placeholder="Ej: 50" min="0" max="100" step="0.1">
+                            <span class="input-group-text bg-black text-white border-secondary">%</span>
+                        </div>
+                        <div class="form-text text-secondary mt-1" style="font-size: 0.75rem;">
+                            <!-- Comentario de cómo se calcula -->
+                            Fórmula Financiera: <code>((Precio - Costo) / Precio) * 100</code>
+                        </div>
+                    </div>
+                    
+                    <button id="btn_limpiar" class="btn btn-outline-secondary w-100 mt-2"><i class="bi bi-eraser"></i> Limpiar Campos</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CALCULADORA DE IVA -->
+        <div class="col-md-6">
+            <div class="card bg-dark border-secondary shadow-lg h-100">
+                <div class="card-header bg-black border-secondary text-white">
+                    <h5 class="mb-0 text-success"><i class="bi bi-receipt"></i> Calculadora de IVA (19%)</h5>
+                </div>
+                <div class="card-body text-white">
+                    <p class="text-muted small mb-4">Ingresa <strong>un valor cualquiera</strong> y el sistema calculará automáticamente los otros dos.</p>
+
+                    <div class="mb-3">
+                        <label class="form-label text-light">Valor Neto ($)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-black text-white border-secondary">$</span>
+                            <input type="number" id="input_neto_iva" class="form-control bg-black text-white border-secondary" placeholder="Ej: 1000" min="0">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label text-light">Monto IVA (19%) ($)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-black text-white border-secondary">$</span>
+                            <input type="number" id="input_monto_iva" class="form-control bg-black text-white border-secondary" placeholder="Ej: 190" min="0">
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label text-light">Valor Total (Bruto) ($)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-black text-white border-secondary">$</span>
+                            <input type="number" id="input_total_iva" class="form-control bg-black text-white border-secondary" placeholder="Ej: 1190" min="0">
+                        </div>
+                    </div>
+                    
+                    <button id="btn_limpiar_iva" class="btn btn-outline-secondary w-100 mt-2"><i class="bi bi-eraser"></i> Limpiar Campos</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const inputCosto = document.getElementById("input_costo");
+    const inputPrecio = document.getElementById("input_precio");
+    const inputMargen = document.getElementById("input_margen");
+    const btnLimpiar = document.getElementById("btn_limpiar");
+
+    const elements = {
+        'costo': inputCosto,
+        'precio': inputPrecio,
+        'margen': inputMargen
+    };
+
+    let activeFields = [];
+
+    function updateActiveFields(field) {
+        if (elements[field].value === "") {
+            activeFields = activeFields.filter(f => f !== field);
+        } else {
+            if (!activeFields.includes(field)) {
+                activeFields.push(field);
+            } else {
+                // Mover al final (más reciente)
+                activeFields = activeFields.filter(f => f !== field);
+                activeFields.push(field);
+            }
+            
+            // Mantener solo los últimos 2 modificados
+            if (activeFields.length > 2) {
+                activeFields.shift();
+            }
+        }
+        calcular();
+    }
+
+    function resetStyles() {
+        Object.values(elements).forEach(el => {
+            el.classList.remove("text-success", "bg-dark", "fw-bold");
+            el.classList.add("bg-black");
+        });
+    }
+
+    function calcular() {
+        const c = parseFloat(inputCosto.value);
+        const p = parseFloat(inputPrecio.value);
+        const m = parseFloat(inputMargen.value);
+
+        if (activeFields.length < 2) {
+            resetStyles();
+            const allFields = ['costo', 'precio', 'margen'];
+            allFields.forEach(f => {
+                if (!activeFields.includes(f)) elements[f].value = "";
+            });
+            return;
+        }
+
+        const allFields = ['costo', 'precio', 'margen'];
+        const targetId = allFields.find(f => !activeFields.includes(f));
+        
+        resetStyles();
+        elements[targetId].classList.remove("bg-black");
+        elements[targetId].classList.add("text-success", "bg-dark", "fw-bold");
+
+        if (targetId === 'margen') {
+            if (!isNaN(c) && !isNaN(p) && p !== 0) elements[targetId].value = (((p - c) / p) * 100).toFixed(2);
+            else elements[targetId].value = "";
+        } else if (targetId === 'precio') {
+            if (!isNaN(c) && !isNaN(m) && m !== 100) elements[targetId].value = (c / (1 - (m / 100))).toFixed(2);
+            else elements[targetId].value = "";
+        } else if (targetId === 'costo') {
+            if (!isNaN(p) && !isNaN(m)) {
+                elements[targetId].value = (p * (1 - (m / 100))).toFixed(2);
+            } else {
+                elements[targetId].value = "";
+            }
+        }
+    }
+
+    inputCosto.addEventListener("input", () => updateActiveFields('costo'));
+    inputPrecio.addEventListener("input", () => updateActiveFields('precio'));
+    inputMargen.addEventListener("input", () => updateActiveFields('margen'));
+
+    btnLimpiar.addEventListener("click", () => {
+        activeFields = [];
+        inputCosto.value = ""; 
+        inputPrecio.value = ""; 
+        inputMargen.value = "";
+        resetStyles();
+    });
+
+    // --- LÓGICA CALCULADORA DE IVA ---
+    const inputNetoIva = document.getElementById("input_neto_iva");
+    const inputMontoIva = document.getElementById("input_monto_iva");
+    const inputTotalIva = document.getElementById("input_total_iva");
+    const btnLimpiarIva = document.getElementById("btn_limpiar_iva");
+
+    const TASA_IVA = 0.19;
+
+    function resetIvaStyles() {
+        [inputNetoIva, inputMontoIva, inputTotalIva].forEach(el => {
+            el.classList.remove("text-success", "bg-dark", "fw-bold");
+            el.classList.add("bg-black");
+        });
+    }
+
+    inputNetoIva.addEventListener("input", function() {
+        resetIvaStyles();
+        const val = parseFloat(this.value);
+        if (!isNaN(val)) {
+            inputMontoIva.value = (val * TASA_IVA).toFixed(0);
+            inputTotalIva.value = (val * (1 + TASA_IVA)).toFixed(0);
+            inputMontoIva.classList.add("text-success", "bg-dark", "fw-bold");
+            inputTotalIva.classList.add("text-success", "bg-dark", "fw-bold");
+        } else {
+            inputMontoIva.value = ""; inputTotalIva.value = "";
+        }
+    });
+
+    inputMontoIva.addEventListener("input", function() {
+        resetIvaStyles();
+        const val = parseFloat(this.value);
+        if (!isNaN(val)) {
+            const neto = val / TASA_IVA;
+            inputNetoIva.value = neto.toFixed(0);
+            inputTotalIva.value = (neto + val).toFixed(0);
+            inputNetoIva.classList.add("text-success", "bg-dark", "fw-bold");
+            inputTotalIva.classList.add("text-success", "bg-dark", "fw-bold");
+        } else {
+            inputNetoIva.value = ""; inputTotalIva.value = "";
+        }
+    });
+
+    inputTotalIva.addEventListener("input", function() {
+        resetIvaStyles();
+        const val = parseFloat(this.value);
+        if (!isNaN(val)) {
+            const neto = val / (1 + TASA_IVA);
+            inputNetoIva.value = neto.toFixed(0);
+            inputMontoIva.value = (val - neto).toFixed(0);
+            inputNetoIva.classList.add("text-success", "bg-dark", "fw-bold");
+            inputMontoIva.classList.add("text-success", "bg-dark", "fw-bold");
+        } else {
+            inputNetoIva.value = ""; inputMontoIva.value = "";
+        }
+    });
+
+    btnLimpiarIva.addEventListener("click", () => {
+        inputNetoIva.value = ""; inputMontoIva.value = ""; inputTotalIva.value = "";
+        resetIvaStyles();
+    });
+});
+</script>
+{% endblock %}

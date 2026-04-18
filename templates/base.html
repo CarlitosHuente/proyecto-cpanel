@@ -264,6 +264,16 @@
         </a>
         {% endif %}
         
+        {% if tiene_permiso(session.get('rol'), 'utilidades') %}
+        <div class="dropdown">
+            <a class="dropdown-toggle d-block px-3 py-2 text-white" href="#" role="button" id="utilidadesDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                <span class="texto-menu">Utilidades</span>
+            </a>
+            <ul class="dropdown-menu bg-dark border-0" aria-labelledby="utilidadesDropdown">
+                <li><a class="dropdown-item text-white" href="{{ url_for('utilidades.calculadora_margen') }}"><i class="bi bi-percent me-2 text-info"></i>Calculadoras</a></li>
+            </ul>
+        </div>
+        {% endif %}
         
         {% if session['rol'] in ['superusuario', 'admin', 'logistica', "seremi"] %}
         <li class="nav-item">
