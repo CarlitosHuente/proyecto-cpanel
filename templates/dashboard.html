@@ -17,7 +17,10 @@
     <div class="row">
         <!-- Col 1: Título -->
         <div class="col-md-3">
-            <h2 style="color: red;">Dashboard de Ventas</h2>
+            <h2 style="color: red;">
+                Dashboard de Ventas
+                <i id="calendar-icon" class="bi bi-calendar3 ms-2" style="cursor: pointer; color: #0dcaf0;" title="Ver calendario"></i>
+            </h2>
         </div>
 
         <!-- Col 2: Sucursales -->
@@ -87,21 +90,21 @@
         <!-- TARJETAS KPI ENRIQUECIDAS -->
         <div class="row g-2 mb-2">
           <div class="col-4">
-            <div class="card bg-dark text-white text-center shadow p-2 border-secondary h-100 d-flex flex-column justify-content-center">
-              <div style="font-size: 0.8rem; color:#aaa;">Neto Vendido</div>
+            <div class="card bg-dark text-white text-center shadow p-2 border-secondary h-100 d-flex flex-column justify-content-center kpi-card-clickable" onclick="abrirModalHistorico()" title="Ver comparativo histórico">
+              <div style="font-size: 0.8rem; color:#aaa;">Neto Vendido <i class="bi bi-clock-history ms-1 text-info"></i></div>
               <div id="kpi_neto" style="font-size: 1.3rem; font-weight: bold;">$0</div>
               <div id="kpi_neto_var" style="font-size: 0.75rem;">-</div>
             </div>
           </div>
           <div class="col-4">
             <div class="card bg-dark text-white text-center shadow p-2 border-secondary h-100 d-flex flex-column justify-content-center">
-              <div style="font-size: 0.8rem; color:#aaa;">Artículos</div>
+              <div style="font-size: 0.8rem; color:#aaa;">Empanadas Vendidas</div>
               <div id="kpi_cantidad" style="font-size: 1.3rem; font-weight: bold;">0</div>
               <div id="kpi_cantidad_var" style="font-size: 0.75rem;">-</div>
             </div>
           </div>
           <div class="col-4">
-            <div class="card bg-dark text-white text-center shadow p-2 border-secondary h-100 d-flex flex-column justify-content-center">
+            <div class="card bg-dark text-white text-center shadow p-2 border-secondary h-100 d-flex flex-column justify-content-center" id="kpi_card_3_content">
               <div id="kpi_carrusel_nombre" style="font-size: 0.8rem; color:#0dcaf0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: bold;" title="Top Productos">Cargando...</div>
               <div id="kpi_carrusel_cantidad" style="font-size: 1.3rem; font-weight: bold;">0</div>
               <div id="kpi_carrusel_var" style="font-size: 0.75rem;">-</div>
@@ -135,6 +138,15 @@
       <!-- SECCIÓN COMPARATIVA Y TENDENCIA -->
       <div class="row mt-4 border-top border-secondary pt-4">
         <div class="col-lg-8">
+          <div class="d-flex justify-content-between align-items-center mb-2 px-2">
+            <h6 class="text-white mb-0">Tendencia de Ventas</h6>
+            <div class="btn-group btn-group-sm" role="group">
+              <input type="radio" class="btn-check" name="btnTendencia" id="btnTendenciaAnual" autocomplete="off" checked onchange="cambiarVistaTendencia('anual')">
+              <label class="btn btn-outline-danger" for="btnTendenciaAnual">Anual</label>
+              <input type="radio" class="btn-check" name="btnTendencia" id="btnTendenciaSemanal" autocomplete="off" onchange="cambiarVistaTendencia('semanal')">
+              <label class="btn btn-outline-danger" for="btnTendenciaSemanal">Semanal</label>
+            </div>
+          </div>
           <div id="grafico_tendencia" class="w-100"></div>
         </div>
         <div class="col-lg-4">
@@ -143,6 +155,43 @@
       </div>
     </div>
   </div>
+
+<!-- MODAL DEL CALENDARIO -->
+<div class="modal fade" id="calendarModal" tabindex="-1" aria-labelledby="calendarModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content bg-dark text-white" style="border: 1px solid #444;">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title" id="calendarModalLabel">
+            <i class="bi bi-calendar3 me-2"></i> Calendario de Semanas y Feriados
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="calendar-container"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL HISTORICO NETO -->
+<div class="modal fade" id="modalHistoricoNeto" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content bg-dark text-white" style="border: 1px solid #444;">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title"><i class="bi bi-clock-history me-2 text-info"></i> Histórico Neto por Semana</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <table class="table table-dark table-hover table-bordered mb-0" style="text-align: center; font-size: 0.9rem;">
+          <thead style="position: sticky; top: 0; background: #111; z-index: 1;">
+            <tr id="head-historico-neto"></tr>
+          </thead>
+          <tbody id="body-historico-neto"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
 
 
 

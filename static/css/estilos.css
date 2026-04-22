@@ -268,3 +268,85 @@ input[type="month"]::-webkit-calendar-picker-indicator {
 .text-muted {
     color: #a0a0a0 !important; /* Un gris más claro y legible */
 }
+
+/* =========================================
+   ESTILOS PARA CALENDARIO POP-UP
+   ========================================= */
+.calendar-table {
+    table-layout: fixed;
+    border-color: #444 !important;
+}
+
+.calendar-table th, .calendar-table td {
+    text-align: center;
+    vertical-align: middle;
+    height: 60px;
+    border-color: #444 !important;
+}
+
+.week-number-header {
+    width: 50px;
+    background-color: #333;
+    font-style: italic;
+}
+
+.week-number {
+    background-color: #222;
+    font-weight: bold;
+    color: #0dcaf0 !important; /* Cyan */
+}
+
+.day-cell {
+    transition: background-color 0.2s;
+}
+
+.day-cell:hover {
+    background-color: #3a3a3a;
+}
+
+.day-cell.other-month {
+    color: #666 !important;
+}
+
+.day-cell.today {
+    background-color: #d80000; /* Rojo corporativo */
+    font-weight: bold;
+    border: 2px solid #fff;
+}
+
+.day-cell.holiday {
+    background-color: #004d00; /* Verde oscuro */
+    color: #90ee90 !important; /* Verde claro */
+    position: relative;
+    cursor: help;
+}
+
+.day-cell.holiday::after {
+    content: attr(title);
+    position: absolute;
+    bottom: 2px;
+    left: 0;
+    right: 0;
+    font-size: 0.6em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 2px;
+}
+
+/* =========================================
+   NUEVOS ESTILOS DASHBOARD INTERACTIVO
+   ========================================= */
+.kpi-card-clickable {
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.kpi-card-clickable:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 15px rgba(13, 202, 240, 0.4) !important;
+    border-color: #0dcaf0 !important;
+}
+.fila-semana-activa {
+    background-color: rgba(13, 202, 240, 0.15) !important;
+    border: 1px solid #0dcaf0;
+}

@@ -120,22 +120,33 @@ def obtener_datos(empresa="comercial", raise_errors=False):
                 df.rename(columns={
                     "DES_ARTICU": "DESCRIPCION",
                     "RUBRO": "FAMILIA",
-                    "PRECIO": "NETO",
-                    "DES_BODEGA": "SUCURSAL",
                     "N_COMP": "N_BOLETA"
                 }, inplace=True)
                 
-                # 3. Asegurar que Sucursal siempre exista (Por defecto: SALA DE VENTAS)
-                if "SUCURSAL" not in df.columns:
-                    df["SUCURSAL"] = "SALA DE VENTAS"
+                # Usamos 'SUB_RENGL' de la base de datos y lo dividimos por 1.19 para obtener el Neto real por línea.
+                df["NETO"] = pd.to_numeric(df["SUB_RENGL"], errors='coerce').fillna(0) / 1.19
+
+                # 3. Clasificar Sucursal usando DES_CLIENT
+                def clasificar_cliente(cliente):
+                    if pd.isna(cliente):
+                        return "FACTURA"
+                    cliente_str = str(cliente).upper()
+                    if "OCASIONAL" in cliente_str:
+                        return "BOLETAS"
+                    elif "TRABAJADOR" in cliente_str:
+                        return "TRABAJADOR"
+                    else:
+                        return "FACTURA"
+
+                if "DES_CLIENT" in df.columns:
+                    df["SUCURSAL"] = df["DES_CLIENT"].apply(clasificar_cliente)
                 else:
-                    df["SUCURSAL"] = df["SUCURSAL"].fillna("SALA DE VENTAS").replace("", "SALA DE VENTAS")
+                    df["SUCURSAL"] = "FACTURA"
 
                 columnas_requeridas = ["FECHA", "DESCRIPCION", "NETO", "CANTIDAD"]
                 df = df.dropna(subset=columnas_requeridas)
                 df["FECHA"] = pd.to_datetime(df["FECHA"], errors="coerce")
                 df["CANTIDAD"] = pd.to_numeric(df["CANTIDAD"], errors="coerce").fillna(0)
-                df["NETO"] = pd.to_numeric(df["NETO"], errors="coerce").fillna(0)
                 df["SEMANA"] = df["FECHA"].dt.isocalendar().week
                 df["AÑO"] = df["FECHA"].dt.year
 

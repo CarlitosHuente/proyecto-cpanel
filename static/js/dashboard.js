@@ -1,6 +1,125 @@
 let sucursalActiva = null;
 let carruselInterval = null; // Variable global para limpiar el carrusel
 
+let dataHistoricoGlobal = null;
+let tendenciaAnualGlobal = null;
+let tendenciaSemanalGlobal = null;
+let vistaTendenciaActiva = 'anual';
+
+// --- INICIO CALENDARIO ---
+const feriadosChile = {
+    "2026": {
+        "1-1": "Año Nuevo",
+        "4-3": "Viernes Santo",
+        "4-4": "Sábado Santo",
+        "5-1": "Día del Trabajador",
+        "5-21": "Día de las Glorias Navales",
+        "6-22": "Día Nacional de los Pueblos Indígenas",
+        "6-29": "San Pedro y San Pablo",
+        "7-16": "Virgen del Carmen",
+        "8-15": "Asunción de la Virgen",
+        "9-18": "Independencia Nacional",
+        "9-19": "Día de las Glorias del Ejército",
+        "10-12": "Encuentro de Dos Mundos",
+        "10-31": "Día de las Iglesias Evangélicas",
+        "11-1": "Día de Todos los Santos",
+        "12-8": "Inmaculada Concepción",
+        "12-25": "Navidad"
+    }
+};
+
+function getWeekNumber(d) {
+    d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+    var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    var weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return weekNo;
+}
+
+function generarCalendario(año, mes) {
+    const container = document.getElementById("calendar-container");
+    const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+    const hoy = new Date();
+    
+    const primerDia = new Date(año, mes, 1);
+    
+    let html = `
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <button class="btn btn-outline-light" id="prev-month">&lt;</button>
+            <h4 class="mb-0">${meses[mes]} ${año}</h4>
+            <button class="btn btn-outline-light" id="next-month">&gt;</button>
+        </div>
+        <table class="table table-bordered table-dark calendar-table">
+            <thead>
+                <tr>
+                    <th class="week-number-header">Sem</th>
+                    <th>Lun</th>
+                    <th>Mar</th>
+                    <th>Mié</th>
+                    <th>Jue</th>
+                    <th>Vie</th>
+                    <th>Sáb</th>
+                    <th>Dom</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    let fecha = new Date(primerDia);
+    let diaSemana = fecha.getDay();
+    if (diaSemana === 0) diaSemana = 7; // Sunday is 7
+    fecha.setDate(fecha.getDate() - (diaSemana - 1));
+
+    let done = false;
+    while (!done) {
+        const weekNum = getWeekNumber(fecha);
+        html += `<tr><td class="week-number">${weekNum}</td>`;
+        for (let i = 0; i < 7; i++) {
+            const diaActual = fecha.getDate();
+            const mesActual = fecha.getMonth();
+            const añoActual = fecha.getFullYear();
+            
+            let classes = "day-cell";
+            let title = "";
+            
+            if (mesActual !== mes) {
+                classes += " other-month";
+            }
+
+            const feriadoKey = `${mesActual + 1}-${diaActual}`;
+            const feriado = feriadosChile[String(añoActual)] ? feriadosChile[String(añoActual)][feriadoKey] : null;
+
+            if (feriado) {
+                classes += " holiday";
+                title = feriado;
+            }
+
+            if (diaActual === hoy.getDate() && mesActual === hoy.getMonth() && añoActual === hoy.getFullYear()) {
+                classes += " today";
+            }
+
+            html += `<td class="${classes}" title="${title}">${diaActual}</td>`;
+            fecha.setDate(fecha.getDate() + 1);
+        }
+        html += `</tr>`;
+        if (fecha.getFullYear() > año || (fecha.getFullYear() === año && fecha.getMonth() > mes)) {
+            done = true;
+        }
+    }
+
+    html += `</tbody></table>`;
+    container.innerHTML = html;
+
+    document.getElementById("prev-month").onclick = () => {
+        const nuevaFecha = new Date(año, mes - 1, 1);
+        generarCalendario(nuevaFecha.getFullYear(), nuevaFecha.getMonth());
+    };
+    document.getElementById("next-month").onclick = () => {
+        const nuevaFecha = new Date(año, mes + 1, 1);
+        generarCalendario(nuevaFecha.getFullYear(), nuevaFecha.getMonth());
+    };
+}
+
 // --- INICIO DE CAMBIOS ---
 
 // Función para mostrar/ocultar el overlay de carga de los gráficos
@@ -49,10 +168,25 @@ function actualizarDashboard() {
             // Render KPIs Enriquecidos
             if (data.kpis) {
                 renderKPI("kpi_neto", "kpi_neto_var", data.kpis.neto_actual, data.kpis.neto_anterior, true);
-                renderKPI("kpi_cantidad", "kpi_cantidad_var", data.kpis.cantidad_actual, data.kpis.cantidad_anterior, false);
                 
-                iniciarCarruselProductos(data.kpis.top_productos_cantidad);
+                // Cantidad ahora es Empanadas
+                renderKPI("kpi_cantidad", "kpi_cantidad_var", data.kpis.empanadas_actual || 0, data.kpis.empanadas_anterior || 0, false);
+                
+                // Tercera Tarjeta Dinámica
+                if (empresa === "agricola") {
+                    if (carruselInterval) clearInterval(carruselInterval);
+                    document.getElementById("kpi_carrusel_nombre").innerText = "Ticket Promedio";
+                    document.getElementById("kpi_carrusel_nombre").style.color = "#ffc107"; // Amarillo
+                    renderKPI("kpi_carrusel_cantidad", "kpi_carrusel_var", data.kpis.ticket_promedio_actual || 0, data.kpis.ticket_promedio_anterior || 0, true);
+                } else {
+                    document.getElementById("kpi_carrusel_nombre").style.color = "#0dcaf0";
+                    iniciarCarruselProductos(data.kpis.top_productos_cantidad);
+                }
             }
+
+            dataHistoricoGlobal = data.historico_semanal;
+            tendenciaAnualGlobal = data.tendencia;
+            tendenciaSemanalGlobal = data.tendencia_semanal;
 
             // Render Análisis Avanzado
             if (data.analisis_avanzado) {
@@ -62,10 +196,8 @@ function actualizarDashboard() {
             }
 
             // --- NUEVOS GRÁFICOS ---
-            // Condicionados a que el backend envíe esta información
-            if (data.tendencia) {
-                renderTendenciaVentas(data.tendencia);
-            }
+            cambiarVistaTendencia(vistaTendenciaActiva); // Renderiza anual o semanal según el botón activo
+
             if (data.comparativo_periodo) {
                 renderComparativoPeriodo(data.comparativo_periodo);
             }
@@ -87,6 +219,54 @@ function actualizarDashboard() {
             toggleChartsOverlay(false); // Ocultar overlay al finalizar
         });
 }
+
+// --- FUNCIONES NUEVAS PARA MODAL Y TENDENCIA ---
+function abrirModalHistorico() {
+    if (!dataHistoricoGlobal || !dataHistoricoGlobal.años) {
+        alert("No hay datos históricos disponibles para esta vista.");
+        return;
+    }
+    
+    const thead = document.getElementById("head-historico-neto");
+    const tbody = document.getElementById("body-historico-neto");
+    const semanaConsultada = parseInt(document.getElementById("semana").value) || 0;
+    
+    let htmlHead = `<th>Semana</th>`;
+    dataHistoricoGlobal.años.forEach(año => htmlHead += `<th>${año}</th>`);
+    thead.innerHTML = htmlHead;
+    
+    let htmlBody = "";
+    dataHistoricoGlobal.datos.forEach(fila => {
+        const isActiva = (fila.semana === semanaConsultada) ? "fila-semana-activa" : "";
+        htmlBody += `<tr class="${isActiva}" id="fila-hist-${fila.semana}">
+            <td class="fw-bold ${isActiva ? 'text-info' : ''}">Sem ${fila.semana}</td>`;
+        
+        dataHistoricoGlobal.años.forEach(año => {
+            const val = fila[año] || 0;
+            htmlBody += `<td>$${val.toLocaleString('es-CL')}</td>`;
+        });
+        htmlBody += `</tr>`;
+    });
+    tbody.innerHTML = htmlBody;
+    
+    const modal = new bootstrap.Modal(document.getElementById('modalHistoricoNeto'));
+    modal.show();
+    
+    // Scrollear a la semana activa después de abrir
+    setTimeout(() => {
+        const trActiva = document.getElementById(`fila-hist-${semanaConsultada}`);
+        if (trActiva) {
+            trActiva.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+    }, 300);
+}
+
+function cambiarVistaTendencia(tipo) {
+    vistaTendenciaActiva = tipo;
+    const dataRender = tipo === 'anual' ? tendenciaAnualGlobal : tendenciaSemanalGlobal;
+    if (dataRender) renderTendenciaVentas(dataRender);
+}
+// --- FIN NUEVAS FUNCIONES ---
 
 // Función para actualizar los gráficos de barras al hacer clic en la torta
 function actualizarGraficosBarras(familiaSeleccionada) {
@@ -130,6 +310,19 @@ document.addEventListener("DOMContentLoaded", () => {
             // 3. Cargar el dashboard con estos datos iniciales
             actualizarDashboard();
         });
+
+    // Listener para el calendario
+    const calendarIcon = document.getElementById("calendar-icon");
+    const calendarModalEl = document.getElementById('calendarModal');
+    if (calendarIcon && calendarModalEl) {
+        const calendarModal = new bootstrap.Modal(calendarModalEl);
+        calendarIcon.addEventListener("click", () => {
+            const ahora = new Date();
+            generarCalendario(ahora.getFullYear(), ahora.getMonth());
+            calendarModal.show();
+        });
+    }
+
 
     // 4. Configurar listeners para filtros
     // Filtros de fecha limpian semana/año
@@ -418,7 +611,8 @@ function renderListaTop(idContenedor, datos, isAlerta) {
 // --- NUEVAS FUNCIONES DE RENDERIZADO ---
 
 function renderTendenciaVentas(datos) {
-    // datos debe ser un objeto: { etiquetas: ['Ene', 'Feb', ...], actual: [100, 200...], anterior: [90, 180...] }
+    if (!datos) return;
+    
     const traceActual = {
         x: datos.etiquetas,
         y: datos.actual,
@@ -440,7 +634,7 @@ function renderTendenciaVentas(datos) {
     };
 
     const layout = {
-        title: "Tendencia de Ventas (Actual vs Anterior)",
+        margin: { t: 20 }, // Reducimos margen superior porque el título ahora está en HTML
         height: 350,
         paper_bgcolor: "#111",
         plot_bgcolor: "#111",

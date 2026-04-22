@@ -157,6 +157,48 @@ def api_dashboard_data():
         print(f"Error calculando tendencia: {e}")
 
     # =========================================================
+    # NUEVOS CÁLCULOS: EMPANADAS, TICKET PROMEDIO, HISTÓRICOS
+    # =========================================================
+    empanadas_actual = int(df_filtrado[df_filtrado["FAMILIA"].astype(str).str.contains("EMPANADA", case=False, na=False)]["CANTIDAD"].sum()) if not df_filtrado.empty else 0
+    empanadas_anterior = int(df_ant[df_ant["FAMILIA"].astype(str).str.contains("EMPANADA", case=False, na=False)]["CANTIDAD"].sum()) if not df_ant.empty else 0
+
+    ticket_promedio_actual = 0
+    ticket_promedio_anterior = 0
+    if empresa == "agricola":
+        if not df_filtrado.empty and "N_BOLETA" in df_filtrado.columns:
+            boletas_actual = df_filtrado.groupby("N_BOLETA")["NETO"].sum()
+            ticket_promedio_actual = int(boletas_actual.mean()) if not boletas_actual.empty else 0
+            
+        if not df_ant.empty and "N_BOLETA" in df_ant.columns:
+            boletas_anterior = df_ant.groupby("N_BOLETA")["NETO"].sum()
+            ticket_promedio_anterior = int(boletas_anterior.mean()) if not boletas_anterior.empty else 0
+
+    semana_consultada = int(semana) if semana else pd.Timestamp.now().isocalendar()[1]
+    rango_semanas = list(range(max(1, semana_consultada - 7), min(54, semana_consultada + 8)))
+    
+    tendencia_semanal = {"etiquetas": [f"Sem {s}" for s in rango_semanas], "actual": [0]*len(rango_semanas), "anterior": [0]*len(rango_semanas)}
+    historico_semanal = {"años": [], "datos": []}
+
+    try:
+        if not df_hist.empty and "AÑO" in df_hist.columns and "SEMANA" in df_hist.columns:
+            ventas_por_semana = df_hist.groupby(["AÑO", "SEMANA"])["NETO"].sum().reset_index()
+            
+            for i, sem in enumerate(rango_semanas):
+                tendencia_semanal["actual"][i] = int(ventas_por_semana[(ventas_por_semana["AÑO"] == año_referencia) & (ventas_por_semana["SEMANA"] == sem)]["NETO"].sum())
+                tendencia_semanal["anterior"][i] = int(ventas_por_semana[(ventas_por_semana["AÑO"] == año_ant) & (ventas_por_semana["SEMANA"] == sem)]["NETO"].sum())
+
+            años_disponibles = sorted(df_hist["AÑO"].dropna().unique().astype(int).tolist())
+            historico_semanal["años"] = [str(a) for a in años_disponibles]
+            
+            for sem in range(1, 54):
+                fila = {"semana": sem}
+                for anio in años_disponibles:
+                    fila[str(anio)] = int(ventas_por_semana[(ventas_por_semana["SEMANA"] == sem) & (ventas_por_semana["AÑO"] == anio)]["NETO"].sum())
+                historico_semanal["datos"].append(fila)
+    except Exception as e:
+        print(f"Error calculando tendencia/histórico semanal: {e}")
+
+    # =========================================================
     # ANÁLISIS AVANZADO: SUCURSALES Y TOP/BOTTOM PRODUCTOS
     # =========================================================
     ranking_sucursales = []
@@ -223,6 +265,8 @@ def api_dashboard_data():
         "kpis": {
             "neto_actual": total_neto, "neto_anterior": total_neto_anterior,
             "cantidad_actual": cantidad_total, "cantidad_anterior": cantidad_anterior,
+            "empanadas_actual": empanadas_actual, "empanadas_anterior": empanadas_anterior,
+            "ticket_promedio_actual": ticket_promedio_actual, "ticket_promedio_anterior": ticket_promedio_anterior,
             "top_productos_cantidad": top_productos_cantidad
         },
         "analisis_avanzado": {
@@ -238,7 +282,9 @@ def api_dashboard_data():
             "etiquetas": meses_abrev,
             "actual": tendencia_actual,
             "anterior": tendencia_anterior
-        }
+        },
+        "tendencia_semanal": tendencia_semanal,
+        "historico_semanal": historico_semanal
     })
 
 
