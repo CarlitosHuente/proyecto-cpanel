@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Administrar Permisos{% endblock %}
+
+{% block content %}
+<!-- Librería para el Drag & Drop -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
+<div class="container-fluid mt-4">
+    <h2 class="text-white mb-4"><i class="bi bi-shield-lock text-info"></i> Pizarra de Permisos</h2>
+    <p class="text-muted">Arrastra los módulos de la izquierda hacia los distintos roles. Al soltar, los permisos se actualizan al instante.</p>
+
+    <div class="row">
+        <!-- COLUMNA 1: MÓDULOS DISPONIBLES (Fuente) -->
+        <div class="col-md-3 mb-4">
+            <div class="card bg-dark border-secondary h-100 shadow">
+                <div class="card-header bg-black text-info border-secondary">
+                    <h5 class="mb-0"><i class="bi bi-box"></i> Módulos Disponibles</h5>
+                </div>
+                <div class="card-body p-2" style="background-color: #0a0a0a;">
+                    <div id="lista-modulos" class="h-100">
+                        {% for modulo in todos_modulos %}
+                        <div class="card text-white bg-secondary mb-2 p-2 shadow-sm" style="cursor: grab;" data-id="{{ modulo }}">
+                            <i class="bi bi-grip-vertical me-2 text-white-50"></i> {{ modulo|capitalize }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- COLUMNA 2: TABLERO DE ROLES -->
+        <div class="col-md-9">
+            <div class="row row-cols-1 row-cols-md-3 g-3">
+                {% for rol, modulos_rol in permisos.items() %}
+                <div class="col">
+                    <div class="card bg-dark border-secondary h-100 shadow">
+                        <div class="card-header bg-black text-warning border-secondary">
+                            <h6 class="mb-0"><i class="bi bi-person-badge"></i> {{ rol|upper }}</h6>
+                        </div>
+                        <!-- ZONA SOLTABLE PARA CADA ROL -->
+                        <div class="card-body p-2 zona-rol" data-rol="{{ rol }}" style="min-height: 150px; background-color: #1a1a1a; transition: background 0.2s;">
+                            {% if "*" in modulos_rol %}
+                                <div class="alert alert-success p-2 small text-center mb-0" style="background-color: #0f5132; color: #fff; border: none;">
+                                    <i class="bi bi-star-fill text-warning"></i> Acceso Total (*)
+                                </div>
+                            {% else %}
+                                {% for mod in modulos_rol %}
+                                <div class="card text-white bg-secondary mb-2 p-2 shadow-sm" style="cursor: grab;" data-id="{{ mod }}">
+                                    <span class="d-flex justify-content-between align-items-center">
+                                        <span><i class="bi bi-grip-vertical me-2 text-white-50"></i> {{ mod|capitalize }}</span>
+                                        <button type="button" class="btn-close btn-close-white btn-sm" style="font-size: 0.6rem;" onclick="eliminarModulo(this)"></button>
+                                    </span>
+                                </div>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // 1. Configuramos la lista de la izquierda (Módulos) para que "Clone" los elementos
+        new Sortable(document.getElementById('lista-modulos'), {
+            group: {
+                name: 'roles',
+                pull: 'clone', // Al arrastrar, deja el original y crea una copia
+                put: false     // No permite devolver elementos a esta lista
+            },
+            animation: 150,
+            sort: false // No reordenar la lista base
+        });
+
+        // 2. Configuramos las tarjetas de cada Rol
+        document.querySelectorAll('.zona-rol').forEach(function(zona) {
+            new Sortable(zona, {
+                group: 'roles',
+                animation: 150,
+                ghostClass: "bg-danger", // Color al arrastrar
+                onAdd: function (evt) {
+                    const item = evt.item;
+                    const idModulo = item.getAttribute('data-id');
+                    
+                    // Si este rol ya tiene este módulo, eliminamos el duplicado y abortamos
+                    const repetidos = Array.from(zona.children).filter(el => el !== item && el.getAttribute('data-id') === idModulo);
+                    if (repetidos.length > 0) {
+                        item.remove();
+                        return;
+                    }
+                    
+                    // Al agregar un nuevo módulo desde la izquierda, le inyectamos el botón de "X" (Cerrar)
+                    if (!item.querySelector('.btn-close')) {
+                        item.innerHTML = `
+                            <span class="d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-grip-vertical me-2 text-white-50"></i> ${idModulo.charAt(0).toUpperCase() + idModulo.slice(1)}</span>
+                                <button type="button" class="btn-close btn-close-white btn-sm" style="font-size: 0.6rem;" onclick="eliminarModulo(this)"></button>
+                            </span>`;
+                    }
+                    guardarCambiosAPI();
+                },
+                onRemove: function () { guardarCambiosAPI(); },
+                onUpdate: function () { guardarCambiosAPI(); }
+            });
+        });
+    });
+
+    // Función para eliminar con la X
+    function eliminarModulo(btn) {
+        btn.closest('.card').remove();
+        guardarCambiosAPI();
+    }
+
+    // Función que arma el nuevo diccionario y lo envía a Python silenciosamente
+    function guardarCambiosAPI() {
+        const nuevoPermisos = {};
+        
+        document.querySelectorAll('.zona-rol').forEach(function(zona) {
+            const rol = zona.getAttribute('data-rol');
+            
+            // Verificamos si tiene el permiso maestro (*)
+            if (zona.querySelector('.alert-success')) {
+                nuevoPermisos[rol] = ["*"];
+                return;
+            }
+
+            const modulosAsignados = [];
+            zona.querySelectorAll('.card[data-id]').forEach(function(card) {
+                modulosAsignados.push(card.getAttribute('data-id'));
+            });
+            nuevoPermisos[rol] = modulosAsignados;
+        });
+
+        // Enviar a la ruta API que creamos
+        fetch("{{ url_for('config.api_guardar_permisos') }}", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(nuevoPermisos)
+        }).then(res => res.json())
+        .then(data => {
+            if(!data.success) {
+                alert("Hubo un error al guardar los permisos");
+            }
+        });
+    }
+</script>
+{% endblock %}

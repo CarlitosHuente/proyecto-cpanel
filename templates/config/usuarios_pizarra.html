@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Pizarra de Usuarios{% endblock %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-white mb-0"><i class="bi bi-people text-info"></i> Asignación de Roles</h2>
+        <a href="{{ url_for('config.usuarios') }}" class="btn btn-outline-light"><i class="bi bi-table"></i> Ver como Tabla Clásica</a>
+    </div>
+    <p class="text-muted">Arrastra a los usuarios hacia las distintas columnas para cambiarles el rol de acceso al sistema. El cambio impacta inmediatamente en la Base de Datos.</p>
+
+    <!-- Buscador de Usuarios -->
+    <div class="mb-4">
+        <input type="text" id="buscadorUsuarios" class="form-control bg-dark text-white border-secondary" placeholder="🔍 Buscar usuario por correo electrónico..." onkeyup="filtrarUsuarios()">
+    </div>
+
+    <!-- Contenedor en Cuadrícula (Vertical/Envolvente) -->
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 g-3 pb-4">
+        {% for rol in roles %}
+        <div class="col">
+            <div class="card bg-dark border-secondary shadow h-100">
+                <div class="card-header bg-black text-warning border-secondary d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-person-badge"></i> {{ rol|upper }}</h6>
+                <span class="badge bg-secondary">{{ usuarios_por_rol[rol]|length }}</span>
+            </div>
+            
+            <!-- ZONA SOLTABLE PARA CADA COLUMNA -->
+            <div class="card-body p-2 zona-rol" data-rol="{{ rol }}" style="min-height: 300px; background-color: #1a1a1a; transition: background 0.2s;">
+                {% for u in usuarios_por_rol[rol] %}
+                    {% set uid = u.id if u is mapping else u[0] %}
+                    {% set uemail = u.email if u is mapping else u[1] %}
+                    {% set uactivo = u.activo if u is mapping else u[3] %}
+                    
+                    <div class="card text-white mb-2 p-2 shadow-sm usuario-card {{ 'bg-secondary' if uactivo else 'bg-danger opacity-75' }}" 
+                         style="cursor: grab;" 
+                         data-id="{{ uid }}" 
+                         title="{{ 'Activo' if uactivo else 'Usuario Inactivo' }}">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-grip-vertical me-2 text-white-50"></i>
+                            <span class="text-truncate" style="font-size: 0.85rem;">{{ uemail }}</span>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        document.querySelectorAll('.zona-rol').forEach(function(zona) {
+            new Sortable(zona, {
+                group: 'usuarios', // Todas las listas comparten el mismo grupo para poder intercambiar
+                animation: 150,
+                ghostClass: "bg-info", // Color al arrastrar
+                onEnd: function (evt) {
+                    const item = evt.item;
+                    const userId = item.getAttribute('data-id');
+                    const nuevoRol = evt.to.getAttribute('data-rol');
+                    const viejoRol = evt.from.getAttribute('data-rol');
+                    
+                    // Solo ejecutar si se soltó en una columna diferente
+                    if (nuevoRol !== viejoRol) {
+                        // Actualizar contadores visuales numéricos arriba de la columna
+                        const badgeTo = evt.to.previousElementSibling.querySelector('.badge');
+                        const badgeFrom = evt.from.previousElementSibling.querySelector('.badge');
+                        if(badgeTo) badgeTo.innerText = parseInt(badgeTo.innerText) + 1;
+                        if(badgeFrom) badgeFrom.innerText = parseInt(badgeFrom.innerText) - 1;
+
+                        // Enviar instrucción a la base de datos
+                        fetch("{{ url_for('config.api_actualizar_rol_usuario') }}", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ user_id: userId, nuevo_rol: nuevoRol })
+                        });
+                    }
+                }
+            });
+        });
+    });
+
+    // Función para el buscador en tiempo real
+    function filtrarUsuarios() {
+        const input = document.getElementById("buscadorUsuarios").value.toLowerCase();
+        const cards = document.querySelectorAll(".usuario-card");
+        
+        cards.forEach(card => {
+            const email = card.querySelector("span").innerText.toLowerCase();
+            if (email.includes(input)) {
+                card.style.display = "block";
+            } else {
+                card.style.display = "none";
+            }
+        });
+    }
+</script>
+{% endblock %}

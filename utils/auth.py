@@ -1,13 +1,15 @@
 from utils.db import get_db_connection
 import os
+import json
 from functools import wraps
 from utils.db import get_db_connection
 from werkzeug.security import check_password_hash
 from flask import session, redirect, url_for, render_template, request
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PERMISOS_FILE = os.path.join(BASE_DIR, 'permisos.json')
 
-
-PERMISOS = {
+DEFAULT_PERMISOS = {
     "superusuario": ["*"], 
     "admin": ["dashboard", "ventas", "clientes", "seremi", "contab", "reporte","sucursales","productos","categorias", "agricola", "utilidades"],
     "ventas": ["dashboard", "ventas", "clientes", "utilidades"],
@@ -18,8 +20,27 @@ PERMISOS = {
     "gerencia": ["reporte", "ventas", "utilidades"],
     "logistica":["sucursales","productos","categorias", "utilidades"],
     "invitado": []
-    
 }
+
+PERMISOS = DEFAULT_PERMISOS.copy()
+
+# Intentar cargar permisos personalizados desde el archivo JSON
+if os.path.exists(PERMISOS_FILE):
+    try:
+        with open(PERMISOS_FILE, 'r', encoding='utf-8') as f:
+            PERMISOS.update(json.load(f))
+    except Exception as e:
+        print(f"Error cargando permisos.json: {e}")
+
+def guardar_permisos_json(nuevos_permisos):
+    global PERMISOS
+    PERMISOS.clear()
+    PERMISOS.update(nuevos_permisos)
+    try:
+        with open(PERMISOS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(PERMISOS, f, indent=4, ensure_ascii=False)
+    except Exception as e:
+        print(f"Error guardando permisos: {e}")
 
 def tiene_permiso(rol, modulo):
     permisos = PERMISOS.get(rol, [])

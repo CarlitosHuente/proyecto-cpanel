@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, abort, session, jsonify, current_app
-from utils.auth import login_requerido, permiso_modulo, PERMISOS
+from utils.auth import login_requerido, permiso_modulo, PERMISOS, guardar_permisos_json
 from utils.db import get_db_connection
 from werkzeug.security import generate_password_hash
 from collections import defaultdict
@@ -153,7 +153,94 @@ def nuevo_usuario():
     conn.close()
     return redirect(url_for("config.usuarios"))
 
+# ==========================================
+# GESTIÓN KANBAN DE USUARIOS (DRAG & DROP)
+# ==========================================
+
+@config_bp.route('/usuarios_pizarra')
+@login_requerido
+@permiso_modulo("config")
+def usuarios_pizarra():
+    conn = get_db_connection()
+    with conn.cursor() as cur:
+        cur.execute("SELECT id, email, rol, activo FROM usuarios_huente ORDER BY email ASC")
+        usuarios = cur.fetchall()
+    conn.close()
+    
+    usuarios_por_rol = defaultdict(list)
+    for u in usuarios:
+        rol = u.get('rol', 'invitado') if isinstance(u, dict) else (u[2] if len(u) > 2 else 'invitado')
+        usuarios_por_rol[rol].append(u)
+        
+    roles_disponibles = list(PERMISOS.keys())
+    for r in usuarios_por_rol.keys():
+        if r not in roles_disponibles and r:
+            roles_disponibles.append(r)
+            
+    return render_template('config/usuarios_pizarra.html', 
+                           usuarios_por_rol=usuarios_por_rol, 
+                           roles=roles_disponibles)
+
+@config_bp.route('/api/actualizar_rol_usuario', methods=['POST'])
+@login_requerido
+@permiso_modulo("config")
+def api_actualizar_rol_usuario():
+    data = request.get_json()
+    user_id = data.get("user_id")
+    nuevo_rol = data.get("nuevo_rol")
+    
+    if not user_id or not nuevo_rol:
+        return jsonify({"success": False, "error": "Datos incompletos"})
+        
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE usuarios_huente SET rol = %s WHERE id = %s", (nuevo_rol, user_id))
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        conn.close()
+
 # routes/config_routes.py (AGREGAR AL FINAL)
+
+# ==========================================
+# GESTIÓN DE PERMISOS (DRAG & DROP)
+# ==========================================
+
+@config_bp.route('/permisos')
+@login_requerido
+@permiso_modulo("config")
+def gestionar_permisos():
+    # Módulos base conocidos del sistema
+    modulos_conocidos = ["dashboard", "ventas", "clientes", "seremi", "contab", "reporte", "sucursales", "productos", "categorias", "agricola", "utilidades", "config"]
+    
+    # Recuperar cualquier módulo extra que ya esté en la configuración actual
+    modulos_usados = set(modulos_conocidos)
+    for mods in PERMISOS.values():
+        for m in mods:
+            if m != "*":
+                modulos_usados.add(m)
+                
+    todos_modulos = sorted(list(modulos_usados))
+    
+    return render_template('config/permisos.html', 
+                           permisos=PERMISOS, 
+                           todos_modulos=todos_modulos)
+
+@config_bp.route('/api/guardar_permisos', methods=['POST'])
+@login_requerido
+@permiso_modulo("config")
+def api_guardar_permisos():
+    nuevos_permisos = request.get_json()
+    if not nuevos_permisos:
+        return jsonify({"success": False, "error": "Sin datos"})
+    
+    # Guardamos en el JSON y actualizamos la variable global
+    guardar_permisos_json(nuevos_permisos)
+    return jsonify({"success": True})
 
 # ==========================================
 # GESTIÓN DE CATEGORÍAS

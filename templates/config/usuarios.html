@@ -11,12 +11,14 @@
             Nuevo Usuario
         </a>
 
-        <button type="button"
-                class="btn btn-outline-info"
-                data-bs-toggle="modal"
-                data-bs-target="#modalPermisos">
-            Ver permisos de roles
-        </button>
+        <div>
+            <a href="{{ url_for('config.gestionar_permisos') }}" class="btn btn-outline-warning">
+                <i class="bi bi-shield-lock"></i> Configurar Permisos
+            </a>
+            <a href="{{ url_for('config.usuarios_pizarra') }}" class="btn btn-outline-info ms-2">
+                <i class="bi bi-kanban"></i> Ir a Pizarra de Roles
+            </a>
+        </div>
     </div>
 
     <table class="table table-dark table-striped table-bordered align-middle">
