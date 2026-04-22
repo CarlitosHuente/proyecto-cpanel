@@ -1,0 +1,66 @@
+========================================================================
+      MANUAL DE PERMISOS Y MÓDULOS - SISTEMA HUENTE
+========================================================================
+Este documento detalla qué áreas del sistema se desbloquean al asignar 
+cada "Módulo" a un Rol dentro de la Pizarra de Permisos.
+
+========================================================================
+
+1. [ * ] (Asterisco - Nivel Dios)
+   - Qué permite: Otorga acceso total, absoluto e irrestricto a TODO el sistema. Ignora cualquier otra restricción de seguridad o validación de rol.
+
+2. [ config ] (Configuración General)
+   - Gestión de Usuarios: Crear, editar, activar/desactivar accesos y asignar sucursales a trabajadores.
+   - Pizarra de Roles: Arrastrar y soltar usuarios (Drag & Drop) para cambiarles el cargo al instante.
+   - Pizarra de Permisos: Interfaz gráfica para decidir qué módulos (los de esta lista) puede ver cada Rol.
+   - Anuncios Globales: Acceso al editor de texto enriquecido para redactar noticias, subir imágenes y programar banners con fechas de inicio y fin para todo el equipo.
+
+3. [ dashboard ] (Panel Gerencial de Ventas)
+   - KPIs Principales: Visualizar recuadros de Neto Vendido, Empanadas Vendidas y Ticket Promedio (en Agrícola) con cálculos instantáneos de variación porcentual vs. año anterior.
+   - Gráficos Interactivos: Acceso al gráfico de torta de participación por familias y gráficos de barras detallados por producto.
+   - Análisis Avanzado: Ver listados automáticos de "Top 5 Crecimientos", "Top 5 Caídas" y "Ranking de participación por sucursal/semana".
+   - Análisis Temporal: Botones para alternar la vista de tendencia entre curva Anual y curva Semanal de 15 semanas.
+   - Histórico: Acceso al pop-up de la tabla matricial de ventas agrupadas por Semana y Año.
+
+4. [ ventas ] (Análisis Diario Operativo)
+   - Vistas Diarias: Analizar las cantidades y montos vendidos agrupados específicamente por "Día de la semana" (Lunes a Domingo).
+   - Filtros de Rango: Consultar cruces de información histórica detallada seleccionando fechas, semanas, años y sucursales.
+
+5. [ clientes ] (Fidelización y Entidades)
+   - Base de Datos: Visualizar el registro de entidades comerciales, trabajadores o clientes ocasionales asociados a las boletas y facturas para analizar flujos por cliente.
+
+6. [ seremi ] (Control Sanitario y de Calidad)
+   - Monitoreo en Tiempo Real: Acceso a la lectura y sincronización de Google Sheets con los registros de los locales.
+   - Formularios Críticos: Ver temperaturas de equipos de frío, control de temperatura de productos (empanadas/masas), cambio de aceite y recepción de mercadería.
+
+7. [ contab ] (Contabilidad y Gestión Financiera)
+   - Carga de Mayor: Permite la descarga automática y lectura del archivo "Libro Mayor" (mayor.xlsx) directamente desde Google Drive.
+   - Prorrateos: Acceso al tablero interactivo para asignar cuentas contables a centros de costo mediante el sistema de tarjetas arrastrables.
+
+8. [ flujo ] (Flujo de Caja y Tesorería)
+   - Dashboard de Flujo: Vista de calendario (Diaria/Semanal) de ingresos vs egresos.
+   - Movimientos: Permite registrar manualmente pagos, transferencias y recibos, asignándolos a categorías contables (Ej: Pago proveedores, Sueldos).
+   - Saldo Acumulado: Ver el arrastre y cálculo en tiempo real del saldo disponible en caja.
+
+9. [ sucursales ] (Operación en Local)
+   - Kanban de Tareas: Acceso a la "Pizarra" de post-its virtual separada por sucursales (con colores) para gestionar estados de tareas (urgentes/completadas).
+   - Administración de Personal: Seguimiento a los registros de asistencia y turnos del equipo en tienda.
+
+10. [ productos ] (Mantenedor de Catálogo)
+   - ABM (Alta, Baja, Modificación): Permite crear nuevos productos en el sistema, editar descripciones, modificar SKUs, y eliminar ítems discontinuados.
+   - Control de Inventario: Definir unidad de medida y establecer límites de "Stock Mínimo" para alertas.
+
+11. [ categorias ] (Familias y Rubros)
+   - Estructuración: Permite crear y borrar las agrupaciones mayores (Ej: Crear "Empanadas", "Bebidas", "Abarrotes").
+   - Vinculación: Estas categorías alimentan directamente los gráficos de Torta y filtros de los Dashboards.
+
+12. [ agricola ] (Carga Técnica de DB)
+   - Importación de Datos: Acceso a la subida de archivos Excel/CSV con la facturación y boletas del sistema Huente Agrícola.
+   - Procesamiento ETL: Limpieza de formatos numéricos, conversión de moneda, y categorización automática de "OCASIONAL" y "TRABAJADOR".
+   - Seguridad y Reversión: Visualizar historial de los últimos 5 archivos subidos, con la capacidad exclusiva de "Revertir" (borrar de la base de datos) una carga si el archivo contenía errores.
+
+13. [ utilidades ] (Herramientas Complementarias)
+   - Soporte: Acceso a descargas de plantillas maestras en Excel, manuales del sistema u otras utilidades secundarias de apoyo para la gestión.
+
+14. [ reporte ] (Consolidación Gerencial)
+   - Exportación: Acceso a módulos de exportación plana, donde se pueden cruzar grandes volúmenes de datos consolidados para ser descargados y manejados fuera del sistema.

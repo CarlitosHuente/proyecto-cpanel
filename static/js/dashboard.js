@@ -153,14 +153,28 @@ function actualizarDashboard() {
     const desde = document.getElementById("desde").value;
     const hasta = document.getElementById("hasta").value;
 
-    const params = new URLSearchParams({
-        empresa,
-        semana,
-        año,
-        desde,
-        hasta,
-        sucursal: sucursalActiva || "",
-    });
+    // PREVENCIÓN: Si no hay ningún filtro seleccionado, forzamos recargar la última fecha disponible
+    if (!semana && !año && !desde && !hasta) {
+        toggleChartsOverlay(true);
+        fetch(`/api/latest-date-info?empresa=${empresa}`)
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById("año").value = data.año;
+                document.getElementById("semana").value = data.semana;
+                actualizarDashboard(); 
+            });
+        return;
+    }
+
+    // Omitimos enviar parámetros vacíos en la URL para evitar que el backend anule la semana
+    const queryObj = { empresa };
+    if (semana) queryObj.semana = semana;
+    if (año) queryObj.año = año;
+    if (desde) queryObj.desde = desde;
+    if (hasta) queryObj.hasta = hasta;
+    if (sucursalActiva) queryObj.sucursal = sucursalActiva;
+
+    const params = new URLSearchParams(queryObj);
     const queryKey = params.toString();
 
     // 1. REVISAR SI LA CONSULTA YA ESTÁ EN MEMORIA (¡CARGA INSTANTÁNEA!)
@@ -295,15 +309,14 @@ function actualizarGraficosBarras(familiaSeleccionada) {
     const hasta = document.getElementById("hasta").value;
     const sucursal = sucursalActiva || "";
 
-    const params = new URLSearchParams({
-        empresa,
-        semana,
-        año,
-        desde,
-        hasta,
-        sucursal,
-        familia: familiaSeleccionada
-    });
+    const queryObj = { empresa, familia: familiaSeleccionada };
+    if (semana) queryObj.semana = semana;
+    if (año) queryObj.año = año;
+    if (desde) queryObj.desde = desde;
+    if (hasta) queryObj.hasta = hasta;
+    if (sucursal) queryObj.sucursal = sucursal;
+
+    const params = new URLSearchParams(queryObj);
     const queryKey = params.toString();
 
     // Verificamos si los productos de esta familia ya están en memoria

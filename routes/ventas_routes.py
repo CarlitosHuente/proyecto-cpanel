@@ -33,6 +33,12 @@ def ventas():
     año_actual = request.args.get("año")
     semana_actual = request.args.get("semana")
 
+    # Sanitizar explícitamente strings vacíos para evitar anulación de filtros
+    if desde == "": desde = None
+    if hasta == "": hasta = None
+    if año_actual == "": año_actual = None
+    if semana_actual == "": semana_actual = None
+
     # Si no hay fechas, aplicar semana automática solo si no se recibe por GET
     if not desde and not hasta:
         if not semana_actual:
@@ -65,7 +71,7 @@ def ventas():
 
 
     # Aplica lógica de control para evitar conflicto entre fechas y semana
-    if filtros["desde"] and filtros["hasta"]:
+    if filtros["desde"] or filtros["hasta"]:
         semana = None
         año = None
     else:
@@ -163,6 +169,12 @@ def descargar_excel():
     filtro_por = request.args.get("filtro_por", "FAMILIA")
     valor = request.args.get("valor", "TODOS")
     tab = request.args.get("tab", "detalle")
+
+    # Sanitizar explícitamente
+    if desde == "": desde = None
+    if hasta == "": hasta = None
+    if año == "": año = None
+    if semana == "": semana = None
 
     filtros = {
         "empresa": empresa,
