@@ -101,7 +101,16 @@ def obtener_datos(empresa="comercial", raise_errors=False):
                 # --- LEER DESDE LA BASE DE DATOS LOCAL ---
                 conn = get_db_connection()
                 cursor = conn.cursor()
-                cursor.execute("SELECT * FROM ventas_agricola")
+                
+                # Optimizamos la consulta para traer SOLO las columnas necesarias
+                # y filtrar directo en MySQL, reduciendo drásticamente el uso de RAM y tiempo.
+                query = """
+                    SELECT fecha, des_articu, rubro, n_comp, sub_rengl, des_client, cantidad
+                    FROM ventas_agricola
+                    WHERE UPPER(TRIM(estado)) IN ('COBRADO', 'COBRADA', 'DESPACH./COBRADA')
+                      AND fecha IS NOT NULL
+                """
+                cursor.execute(query)
                 rows = cursor.fetchall()
                 conn.close()
                 
@@ -112,11 +121,7 @@ def obtener_datos(empresa="comercial", raise_errors=False):
                 df = pd.DataFrame(rows)
                 df.columns = df.columns.str.strip().str.upper()
 
-                # 1. Filtro 'Cobrado'
-                if "ESTADO" in df.columns:
-                    df = df[df["ESTADO"].astype(str).str.strip().str.upper().isin(["COBRADO", "COBRADA", "DESPACH./COBRADA"])]
-                
-                # 2. Renombrar para el Dashboard estándar
+                # 1. Renombrar para el Dashboard estándar (El filtro de estado ya se hizo en SQL)
                 df.rename(columns={
                     "DES_ARTICU": "DESCRIPCION",
                     "RUBRO": "FAMILIA",

@@ -6,6 +6,10 @@ let tendenciaAnualGlobal = null;
 let tendenciaSemanalGlobal = null;
 let vistaTendenciaActiva = 'anual';
 
+// --- CACHÉ EN MEMORIA DEL NAVEGADOR ---
+let cacheConsultas = {};
+let cacheProductos = {};
+
 // --- INICIO CALENDARIO ---
 const feriadosChile = {
     "2026": {
@@ -143,8 +147,6 @@ function limpiarFiltrosSemana() {
 
 // Función para cargar los datos del dashboard
 function actualizarDashboard() {
-    toggleChartsOverlay(true); // Mostrar overlay al iniciar la carga
-
     const empresa = document.getElementById("empresa").value;
     const semana = document.getElementById("semana").value;
     const año = document.getElementById("año").value;
@@ -159,58 +161,22 @@ function actualizarDashboard() {
         hasta,
         sucursal: sucursalActiva || "",
     });
+    const queryKey = params.toString();
 
-    fetch(`/api/dashboard-data?${params.toString()}`)
+    // 1. REVISAR SI LA CONSULTA YA ESTÁ EN MEMORIA (¡CARGA INSTANTÁNEA!)
+    if (cacheConsultas[queryKey]) {
+        renderizarDatosDashboard(cacheConsultas[queryKey], empresa);
+        return; // Salimos sin hacer la petición al servidor
+    }
+
+    // 2. SI NO ESTÁ EN MEMORIA, BUSCAMOS EN EL SERVIDOR
+    toggleChartsOverlay(true); 
+
+    fetch(`/api/dashboard-data?${queryKey}`)
         .then(res => res.json())
         .then(data => {
-            renderTorta(data.ventas_por_familia);
-            
-            // Render KPIs Enriquecidos
-            if (data.kpis) {
-                renderKPI("kpi_neto", "kpi_neto_var", data.kpis.neto_actual, data.kpis.neto_anterior, true);
-                
-                // Cantidad ahora es Empanadas
-                renderKPI("kpi_cantidad", "kpi_cantidad_var", data.kpis.empanadas_actual || 0, data.kpis.empanadas_anterior || 0, false);
-                
-                // Tercera Tarjeta Dinámica
-                if (empresa === "agricola") {
-                    if (carruselInterval) clearInterval(carruselInterval);
-                    document.getElementById("kpi_carrusel_nombre").innerText = "Ticket Promedio";
-                    document.getElementById("kpi_carrusel_nombre").style.color = "#ffc107"; // Amarillo
-                    renderKPI("kpi_carrusel_cantidad", "kpi_carrusel_var", data.kpis.ticket_promedio_actual || 0, data.kpis.ticket_promedio_anterior || 0, true);
-                } else {
-                    document.getElementById("kpi_carrusel_nombre").style.color = "#0dcaf0";
-                    iniciarCarruselProductos(data.kpis.top_productos_cantidad);
-                }
-            }
-
-            dataHistoricoGlobal = data.historico_semanal;
-            tendenciaAnualGlobal = data.tendencia;
-            tendenciaSemanalGlobal = data.tendencia_semanal;
-
-            // Render Análisis Avanzado
-            if (data.analisis_avanzado) {
-                renderRankingSucursales(data.analisis_avanzado.ranking_sucursales);
-                renderListaTop("lista_estrellas", data.analisis_avanzado.estrellas, false);
-                renderListaTop("lista_alertas", data.analisis_avanzado.alertas, true);
-            }
-
-            // --- NUEVOS GRÁFICOS ---
-            cambiarVistaTendencia(vistaTendenciaActiva); // Renderiza anual o semanal según el botón activo
-
-            if (data.comparativo_periodo) {
-                renderComparativoPeriodo(data.comparativo_periodo);
-            }
-
-            // Si hay datos, renderizar los gráficos de barras con la primera familia
-            if (data.ventas_por_familia && data.ventas_por_familia.length > 0) {
-                const primeraFamilia = data.ventas_por_familia[0].nombre;
-                actualizarGraficosBarras(primeraFamilia);
-            } else {
-                // Si no hay datos, limpiar los gráficos de barras
-                Plotly.newPlot("grafico_barras_neto", [], {title: "Sin datos de Neto"});
-                Plotly.newPlot("grafico_barras_cantidad", [], {title: "Sin datos de Cantidad"});
-            }
+            cacheConsultas[queryKey] = data; // GUARDAMOS EN MEMORIA PARA LA PRÓXIMA VEZ
+            renderizarDatosDashboard(data, empresa);
         })
         .catch(error => {
             console.error("Error al cargar datos del dashboard:", error);
@@ -218,6 +184,58 @@ function actualizarDashboard() {
         .finally(() => {
             toggleChartsOverlay(false); // Ocultar overlay al finalizar
         });
+}
+
+// Separamos el renderizado para poder llamarlo desde la caché o desde el fetch
+function renderizarDatosDashboard(data, empresa) {
+    renderTorta(data.ventas_por_familia);
+    
+    // Render KPIs Enriquecidos
+    if (data.kpis) {
+        renderKPI("kpi_neto", "kpi_neto_var", data.kpis.neto_actual, data.kpis.neto_anterior, true);
+        
+        // Cantidad ahora es Empanadas
+        renderKPI("kpi_cantidad", "kpi_cantidad_var", data.kpis.empanadas_actual || 0, data.kpis.empanadas_anterior || 0, false);
+        
+        // Tercera Tarjeta Dinámica
+        if (empresa === "agricola") {
+            if (carruselInterval) clearInterval(carruselInterval);
+            document.getElementById("kpi_carrusel_nombre").innerText = "Ticket Promedio";
+            document.getElementById("kpi_carrusel_nombre").style.color = "#ffc107"; // Amarillo
+            renderKPI("kpi_carrusel_cantidad", "kpi_carrusel_var", data.kpis.ticket_promedio_actual || 0, data.kpis.ticket_promedio_anterior || 0, true);
+        } else {
+            document.getElementById("kpi_carrusel_nombre").style.color = "#0dcaf0";
+            iniciarCarruselProductos(data.kpis.top_productos_cantidad);
+        }
+    }
+
+    dataHistoricoGlobal = data.historico_semanal;
+    tendenciaAnualGlobal = data.tendencia;
+    tendenciaSemanalGlobal = data.tendencia_semanal;
+
+    // Render Análisis Avanzado
+    if (data.analisis_avanzado) {
+        renderRankingSucursales(data.analisis_avanzado.ranking_sucursales);
+        renderListaTop("lista_estrellas", data.analisis_avanzado.estrellas, false);
+        renderListaTop("lista_alertas", data.analisis_avanzado.alertas, true);
+    }
+
+    // --- NUEVOS GRÁFICOS ---
+    cambiarVistaTendencia(vistaTendenciaActiva); // Renderiza anual o semanal según el botón activo
+
+    if (data.comparativo_periodo) {
+        renderComparativoPeriodo(data.comparativo_periodo);
+    }
+
+    // Si hay datos, renderizar los gráficos de barras con la primera familia
+    if (data.ventas_por_familia && data.ventas_por_familia.length > 0) {
+        const primeraFamilia = data.ventas_por_familia[0].nombre;
+        actualizarGraficosBarras(primeraFamilia);
+    } else {
+        // Si no hay datos, limpiar los gráficos de barras
+        Plotly.newPlot("grafico_barras_neto", [], {title: "Sin datos de Neto"});
+        Plotly.newPlot("grafico_barras_cantidad", [], {title: "Sin datos de Cantidad"});
+    }
 }
 
 // --- FUNCIONES NUEVAS PARA MODAL Y TENDENCIA ---
@@ -286,10 +304,19 @@ function actualizarGraficosBarras(familiaSeleccionada) {
         sucursal,
         familia: familiaSeleccionada
     });
+    const queryKey = params.toString();
 
-    fetch(`/api/dashboard-productos?${params.toString()}`)
+    // Verificamos si los productos de esta familia ya están en memoria
+    if (cacheProductos[queryKey]) {
+        renderBarrasNeto(familiaSeleccionada, cacheProductos[queryKey]);
+        renderBarrasCantidad(familiaSeleccionada, cacheProductos[queryKey]);
+        return;
+    }
+
+    fetch(`/api/dashboard-productos?${queryKey}`)
         .then(res => res.json())
         .then(productos => {
+            cacheProductos[queryKey] = productos; // Guardamos en memoria
             renderBarrasNeto(familiaSeleccionada, productos);
             renderBarrasCantidad(familiaSeleccionada, productos);
         });
@@ -645,7 +672,8 @@ function renderTendenciaVentas(datos) {
         legend: { orientation: "h", y: -0.2 }
     };
 
-    Plotly.newPlot("grafico_tendencia", [traceActual, traceAnterior], layout);
+    // Usamos Plotly.react en lugar de newPlot para que la actualización sea ultra rápida sin recargar el DOM
+    Plotly.react("grafico_tendencia", [traceActual, traceAnterior], layout);
 }
 
 function renderComparativoPeriodo(datos) {

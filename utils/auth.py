@@ -119,6 +119,10 @@ def crear_sesion_para_email(email: str):
         return None
 
     session.clear()
+
+    # Activa el tiempo de vida de la sesión (45 min) configurado en app.py
+    session.permanent = True
+
     session["usuario"] = user["email"]
     session["rol"] = user["rol"]
     # Guardamos el ID de la sucursal (será un número o None)
