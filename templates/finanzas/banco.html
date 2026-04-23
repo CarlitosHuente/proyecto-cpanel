@@ -1,0 +1,378 @@
+{% extends "base.html" %}
+{% block title %}Banco - Pagos Masivos{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-bank text-danger"></i> Portal de Pagos (Banco de Chile)</h2>
+    </div>
+
+    <!-- Pestañas de Navegación -->
+    <ul class="nav nav-tabs mb-4" id="bancoTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active fw-bold" id="carrito-tab" data-bs-toggle="tab" data-bs-target="#carrito" type="button" role="tab">
+                <i class="bi bi-cart3"></i> Nómina Actual 
+                <span class="badge bg-danger rounded-pill ms-1">{{ carrito|length }} / 25</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link fw-bold" id="agenda-tab" data-bs-toggle="tab" data-bs-target="#agenda" type="button" role="tab">
+                <i class="bi bi-person-lines-fill"></i> Directorio de Destinatarios
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link fw-bold" id="historial-tab" data-bs-toggle="tab" data-bs-target="#historial" type="button" role="tab">
+                <i class="bi bi-file-earmark-text"></i> Historial de TXTs
+            </button>
+        </li>
+    </ul>
+
+    <!-- Contenido de las Pestañas -->
+    <div class="tab-content" id="bancoTabsContent">
+        
+        <!-- 1. PESTAÑA: NÓMINA ACTUAL (CARRITO) -->
+        <div class="tab-pane fade show active" id="carrito" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="m-0 text-info">Pagos Listos para Enviar al Banco</h4>
+                <div>
+                    <button class="btn btn-outline-light me-2" data-bs-toggle="modal" data-bs-target="#modalNuevoPago">
+                        <i class="bi bi-plus-lg"></i> Agregar Pago
+                    </button>
+                    {% if carrito|length > 0 %}
+                    <form method="POST" action="{{ url_for('finanzas.banco') }}" class="d-inline">
+                        <input type="hidden" name="accion" value="generar_txt">
+                        <button type="submit" class="btn btn-success btn-lg px-4 shadow" onclick="setTimeout(() => window.location.reload(), 2000);">
+                            <i class="bi bi-box-arrow-right"></i> Generar TXT Banco Chile
+                        </button>
+                    </form>
+                    {% else %}
+                    <button class="btn btn-secondary btn-lg px-4" disabled>
+                        <i class="bi bi-box-arrow-right"></i> Generar TXT Banco Chile
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if carrito|length == 0 %}
+            <div class="alert alert-secondary text-center py-5">
+                <i class="bi bi-inbox text-muted mb-3" style="font-size: 3rem;"></i>
+                <h5>La nómina está vacía</h5>
+                <p>Ve al <strong>Directorio</strong> para agregar destinatarios o presiona "Agregar Pago".</p>
+            </div>
+            {% else %}
+            <div class="table-responsive">
+                <table class="table table-dark table-hover align-middle">
+                    <thead class="table-secondary text-dark">
+                        <tr>
+                            <th>Beneficiario</th>
+                            <th>RUT</th>
+                            <th>Banco</th>
+                            <th>Motivo</th>
+                            <th>Monto</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in carrito %}
+                        <tr>
+                            <td>{{ c.proveedor_nombre }}</td>
+                            <td>{{ c.proveedor_rut }}</td>
+                            <td>{{ bancos[c.banco_codigo].nombre }}</td>
+                            <td>{{ c.motivo }}</td>
+                            <td class="text-warning fw-bold">$ {{ "{:,.0f}".format(c.monto).replace(',', '.') }}</td>
+                            <td class="text-end">
+                                <div class="d-flex gap-2 justify-content-end">
+                                    <!-- Botón Editar -->
+                                    <button class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#modalEditarPago{{ c.id }}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <!-- Botón Eliminar -->
+                                    <form method="POST" action="{{ url_for('finanzas.banco') }}" class="m-0 p-0" onsubmit="return confirm('¿Seguro que deseas eliminar este pago?');">
+                                        <input type="hidden" name="accion" value="delete_pago">
+                                        <input type="hidden" name="pago_id" value="{{ c.id }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        
+                        <!-- Modal Editar Pago Específico -->
+                        <div class="modal fade" id="modalEditarPago{{ c.id }}" tabindex="-1" aria-hidden="true">
+                          <div class="modal-dialog modal-lg">
+                            <div class="modal-content bg-dark text-light border-secondary">
+                              <form method="POST" action="{{ url_for('finanzas.banco') }}">
+                                <input type="hidden" name="accion" value="edit_pago">
+                                <input type="hidden" name="pago_id" value="{{ c.id }}">
+                                
+                                <div class="modal-header border-secondary">
+                                  <h5 class="modal-title"><i class="bi bi-pencil text-info"></i> Editar Pago: {{ c.proveedor_nombre }}</h5>
+                                  <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                
+                                <div class="modal-body text-start">
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label text-info">Monto a Pagar ($)</label>
+                                            <input type="number" name="monto" class="form-control bg-secondary text-light border-0" min="1" value="{{ c.monto }}" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label text-info">Motivo (Máx 30 caract)</label>
+                                            <input type="text" name="motivo" class="form-control bg-secondary text-light border-0" maxlength="30" value="{{ c.motivo }}" required>
+                                        </div>
+                                        <div class="col-md-12">
+                                            <label class="form-label text-info">Asunto del Email</label>
+                                            <input type="text" name="asunto_email" class="form-control bg-secondary text-light border-0" maxlength="30" value="{{ c.asunto_email }}" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="modal-footer border-secondary">
+                                  <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancelar</button>
+                                  <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Guardar Cambios</button>
+                                </div>
+                              </form>
+                            </div>
+                          </div>
+                        </div>
+                        <!-- Fin Modal Editar -->
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- 2. PESTAÑA: AGENDA / DIRECTORIO -->
+        <div class="tab-pane fade" id="agenda" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="m-0 text-info">Mis Proveedores y Contactos</h4>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoProveedor">
+                    <i class="bi bi-person-plus"></i> Nuevo Destinatario
+                </button>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-dark table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Nombre / Razón Social</th>
+                            <th>RUT</th>
+                            <th>Banco</th>
+                            <th>Tipo / Cuenta</th>
+                            <th>Email (Notificación)</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in proveedores %}
+                        <tr>
+                            <td class="fw-bold">{{ p.nombre }}</td>
+                            <td>{{ p.rut }}</td>
+                            <td>{{ bancos[p.banco_codigo].nombre }}</td>
+                            <td>{{ p.tipo_cuenta }} - {{ p.numero_cuenta }}</td>
+                            <td>{{ p.email }}</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-success disabled" title="Próximamente: Pagar directo"><i class="bi bi-cash-coin"></i> Pagar</button>
+                                <button class="btn btn-sm btn-outline-light"><i class="bi bi-pencil"></i></button>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">Aún no tienes destinatarios registrados en tu agenda.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- 3. PESTAÑA: HISTORIAL -->
+        <div class="tab-pane fade" id="historial" role="tabpanel">
+            <h4 class="text-info mb-3">Historial de Nóminas Generadas</h4>
+            
+            {% if historial|length == 0 %}
+            <div class="alert alert-dark text-center py-4">
+                <i class="bi bi-clock-history text-muted mb-2" style="font-size: 2rem;"></i>
+                <p class="m-0">Aquí aparecerán las nóminas una vez que generes tu primer archivo TXT.</p>
+            </div>
+            {% else %}
+            <div class="accordion" id="accordionHistorial">
+                {% for h in historial %}
+                <div class="accordion-item bg-dark border-secondary mb-2">
+                    <h2 class="accordion-header" id="heading{{ h.id }}">
+                        <button class="accordion-button collapsed bg-secondary text-light border-0" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ h.id }}" aria-expanded="false" aria-controls="collapse{{ h.id }}">
+                            <strong>Lote #{{ h.id }}</strong> &nbsp;|&nbsp; 
+                            <i class="bi bi-calendar3 ms-3 me-1 text-info"></i> {{ h.fecha_generacion.strftime('%d/%m/%Y %H:%M') }} &nbsp;|&nbsp; 
+                            <i class="bi bi-people ms-3 me-1 text-info"></i> {{ h.cantidad_pagos }} pagos &nbsp;|&nbsp; 
+                            <i class="bi bi-currency-dollar ms-3 text-warning"></i> <span class="text-warning fw-bold">{{ "{:,.0f}".format(h.monto_total).replace(',', '.') }}</span>
+                        </button>
+                    </h2>
+                    <div id="collapse{{ h.id }}" class="accordion-collapse collapse" aria-labelledby="heading{{ h.id }}" data-bs-parent="#accordionHistorial">
+                        <div class="accordion-body bg-black text-light border border-secondary border-top-0">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <p class="text-muted small m-0"><i class="bi bi-person"></i> Generado por: {{ h.usuario_responsable }}</p>
+                                <form method="POST" action="{{ url_for('finanzas.banco') }}" class="m-0 p-0">
+                                    <input type="hidden" name="accion" value="redescargar_txt">
+                                    <input type="hidden" name="nomina_id" value="{{ h.id }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-success">
+                                        <i class="bi bi-download"></i> Re-descargar TXT
+                                    </button>
+                                </form>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-dark table-hover align-middle m-0">
+                                    <thead class="text-info">
+                                        <tr>
+                                            <th>Beneficiario</th>
+                                            <th>RUT</th>
+                                            <th>Banco</th>
+                                            <th>Motivo</th>
+                                            <th class="text-end">Monto</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for d in h.detalles %}
+                                        <tr>
+                                            <td>{{ d.proveedor_nombre }}</td>
+                                            <td>{{ d.proveedor_rut }}</td>
+                                            <td>{{ bancos[d.banco_codigo].nombre }}</td>
+                                            <td>{{ d.motivo }}</td>
+                                            <td class="text-warning text-end">$ {{ "{:,.0f}".format(d.monto).replace(',', '.') }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+    </div>
+</div>
+
+<!-- ============================================== -->
+<!-- MODAL: AGREGAR NUEVO PROVEEDOR                 -->
+<!-- ============================================== -->
+<div class="modal fade" id="modalNuevoProveedor" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-light border-secondary">
+      <form method="POST" action="{{ url_for('finanzas.banco') }}">
+        <input type="hidden" name="accion" value="add_proveedor">
+        
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title"><i class="bi bi-person-plus text-primary"></i> Registrar Nuevo Destinatario</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        
+        <div class="modal-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label text-info">RUT (Sin puntos, con guión)</label>
+                    <input type="text" name="rut" class="form-control bg-secondary text-light border-0" placeholder="Ej: 76123456-K" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label text-info">Nombre o Razón Social</label>
+                    <input type="text" name="nombre" class="form-control bg-secondary text-light border-0" maxlength="30" placeholder="Máx 30 caracteres" required>
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label text-info">Email (Para enviar comprobante)</label>
+                    <input type="email" name="email" class="form-control bg-secondary text-light border-0" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label text-warning">Banco Destino</label>
+                    <select name="banco_codigo" class="form-select bg-secondary text-light border-0" required>
+                        {% for codigo, info in bancos.items() %}
+                        <option value="{{ codigo }}">{{ info.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label text-warning">Tipo de Cuenta</label>
+                    <select name="tipo_cuenta" class="form-select bg-secondary text-light border-0" required>
+                        <option value="CTD">Cuenta Corriente / Cuenta Vista</option>
+                        <option value="JUV">Cuenta RUT / Cuenta Ahorro</option>
+                    </select>
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label text-warning">Número de Cuenta</label>
+                    <input type="text" name="numero_cuenta" class="form-control bg-secondary text-light border-0" placeholder="Solo números" required>
+                </div>
+            </div>
+        </div>
+        
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Guardar en Agenda</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================== -->
+<!-- MODAL: AGREGAR NUEVO PAGO (AL CARRITO)         -->
+<!-- ============================================== -->
+<div class="modal fade" id="modalNuevoPago" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark text-light border-secondary">
+      <!-- Importante: enctype="multipart/form-data" para permitir subida de archivos -->
+      <form method="POST" action="{{ url_for('finanzas.banco') }}" enctype="multipart/form-data">
+        <input type="hidden" name="accion" value="add_pago">
+        
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title"><i class="bi bi-receipt text-success"></i> Agregar Pago a la Nómina</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        
+        <div class="modal-body">
+            {% if proveedores|length == 0 %}
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle"></i> No tienes destinatarios en tu agenda. Por favor, agrega uno primero en la pestaña "Directorio de Destinatarios".
+            </div>
+            {% else %}
+            <div class="row g-3">
+                <div class="col-md-12">
+                    <label class="form-label text-info">Destinatario (Proveedor / Trabajador)</label>
+                    <select name="proveedor_id" class="form-select bg-secondary text-light border-0" required>
+                        <option value="">Selecciona a quién pagar...</option>
+                        {% for p in proveedores %}
+                        <option value="{{ p.id }}">{{ p.nombre }} ({{ p.rut }}) - {{ bancos[p.banco_codigo].nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label text-info">Monto a Pagar ($)</label>
+                    <input type="number" name="monto" class="form-control bg-secondary text-light border-0" min="1" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label text-info">Motivo (Máx 30 caract)</label>
+                    <input type="text" name="motivo" class="form-control bg-secondary text-light border-0" maxlength="30" placeholder="Ej: Pago Factura 123" required>
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label text-info">Asunto del Email</label>
+                    <input type="text" name="asunto_email" class="form-control bg-secondary text-light border-0" maxlength="30" placeholder="Ej: Comprobante de Pago" value="Comprobante de Pago" required>
+                </div>
+                <div class="col-md-12 mt-4">
+                    <label class="form-label text-warning"><i class="bi bi-cloud-upload"></i> Respaldo Documental (Opcional)</label>
+                    <input type="file" name="respaldo" class="form-control bg-secondary text-light border-0" disabled>
+                    <small class="text-muted">Sincronización con OneDrive temporalmente desactivada. Esta función se habilitará próximamente.</small>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success" {% if proveedores|length == 0 %}disabled{% endif %}><i class="bi bi-cart-plus"></i> Agregar al Carrito</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

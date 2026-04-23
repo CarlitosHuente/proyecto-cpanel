@@ -46,3 +46,4 @@ git archive -o huente_app.zip HEAD
 
 # Abrir mysql desde Mac
 mysql -u root -p
+show DATABASES;

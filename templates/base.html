@@ -220,8 +220,7 @@
         </a>
         {% endif %}
 
-        <!--
-        Modulo Finanzas
+        <!-- Modulo Finanzas -->
         {% if tiene_permiso(session.get('rol'), 'flujo') %}
         <div class="dropdown">
             <a class="dropdown-toggle d-block px-3 py-2 text-white" href="#" role="button" id="finanzasDropdown" data-bs-toggle="dropdown" aria-expanded="false">
@@ -230,10 +229,11 @@
             <ul class="dropdown-menu bg-dark border-0" aria-labelledby="finanzasDropdown">
                 <li><a class="dropdown-item text-white" href="{{ url_for('finanzas.flujo') }}">📊 Flujo de Caja</a></li>
                 <li><a class="dropdown-item text-white" href="{{ url_for('finanzas.pagos') }}">💸 Registrar Pago/Ingreso</a></li>
+                <li><hr class="dropdown-divider bg-secondary"></li>
+                <li><a class="dropdown-item text-info fw-bold" href="{{ url_for('finanzas.banco') }}"><i class="bi bi-bank"></i> Pagos Masivos (TXT)</a></li>
             </ul>
         </div>
         {% endif %}
-        -->
         {% if tiene_permiso(session.get('rol'), 'contab') or tiene_permiso(session.get('rol'), 'reporte') %}
         <div class="dropdown">
             <a class="dropdown-toggle d-block px-3 py-2 text-white" href="#" role="button" id="contabDropdown" data-bs-toggle="dropdown" aria-expanded="false">
