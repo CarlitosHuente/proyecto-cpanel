@@ -76,6 +76,16 @@
                             </div>
                         </div>
 
+                        <div class="form-check form-switch mb-3 mt-2">
+                            <input class="form-check-input" type="checkbox" id="es_mayorista" name="es_mayorista">
+                            <label class="form-check-label text-warning" for="es_mayorista">¿Es producto en formato por mayor?</label>
+                        </div>
+
+                        <div class="mb-3" id="div_caja" style="display: none;">
+                            <label class="form-label text-info">Unidades por caja (Opcional)</label>
+                            <input type="number" class="form-control bg-secondary text-white border-0" name="unidades_por_caja" placeholder="Ej: 12">
+                        </div>
+
                         <div class="mb-3">
                             <label class="form-label">Descripción (Opcional)</label>
                             <textarea name="descripcion" class="form-control bg-secondary text-white border-0" rows="2"></textarea>
@@ -86,6 +96,12 @@
                             <button type="submit" class="btn btn-success fw-bold px-4">Crear Producto</button>
                         </div>
                     </form>
+
+                        <script>
+                        document.getElementById('es_mayorista').addEventListener('change', function() {
+                            document.getElementById('div_caja').style.display = this.checked ? 'block' : 'none';
+                        });
+                        </script>
 
                 </div>
             </div>

@@ -19,6 +19,7 @@ from routes.sucursales_routes import sucursales_bp
 from routes.fabrica_routes import fabrica_bp
 from routes.costeo_routes import costeo_bp
 from routes.utilidades_routes import utilidades_bp
+from routes.precios_routes import precios_bp
 import os
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -55,6 +56,7 @@ app.register_blueprint(sucursales_bp)
 app.register_blueprint(fabrica_bp)
 app.register_blueprint(costeo_bp)
 app.register_blueprint(utilidades_bp)
+app.register_blueprint(precios_bp)
 
 
 

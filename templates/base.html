@@ -192,6 +192,7 @@
             </a>
             <ul class="dropdown-menu bg-dark border-0" aria-labelledby="ventasDropdown">
                 <li><a class="dropdown-item text-white" href="{{ url_for('ventas.ventas') }}">Dashboard Ventas</a></li>
+                <li><a class="dropdown-item text-white" href="{{ url_for('precios.vista_precios') }}">Lista de Precios</a></li>
                 {% if session.get('rol') in ['superusuario', 'admin'] %}
                 <li><a class="dropdown-item text-white" href="{{ url_for('config.gestion_agricola') }}">Importar Agrícola</a></li>
                 {% endif %}

@@ -1,0 +1,264 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0 text-white">💰 Gestor de Listas de Precios</h2>
+        <div>
+            <button class="btn btn-outline-info me-2" onclick="agregarLista()">
+                <i class="fas fa-plus"></i> Nueva Lista
+            </button>
+            <button class="btn btn-success" onclick="guardarPrecios()">
+                <i class="fas fa-save"></i> Guardar Cambios
+            </button>
+        </div>
+    </div>
+
+    <!-- Barra de Filtros -->
+    <div class="row mb-3 bg-dark p-3 rounded border border-secondary mx-0">
+        <div class="col-md-4 mb-2 mb-md-0">
+            <label class="text-muted small mb-1">Filtrar por Categoría</label>
+            <select class="form-select bg-dark text-white border-secondary" id="filtro-categoria" onchange="filtrarTabla()">
+                <option value="TODAS">Todas las Categorías</option>
+                {% for cat in categorias %}
+                <option value="{{ cat }}">{{ cat }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4 d-flex align-items-end mb-2 mb-md-0">
+            <div class="form-check form-switch fs-5 mb-1">
+                <input class="form-check-input bg-dark border-secondary" type="checkbox" id="filtro-mayorista" onchange="filtrarTabla()">
+                <label class="form-check-label text-white ms-2" for="filtro-mayorista" style="font-size: 0.9rem;">Mostrar solo productos Mayoristas</label>
+            </div>
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+            <div class="form-check form-switch fs-5 mb-1">
+                <input class="form-check-input bg-dark border-secondary" type="checkbox" id="filtro-iva" onchange="toggleIVA()">
+                <label class="form-check-label text-warning ms-2" for="filtro-iva" style="font-size: 0.9rem;">Ver con IVA (+19%)</label>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary shadow">
+        <div class="card-body p-0" style="overflow-x: auto; max-height: 75vh; overflow-y: auto;">
+            <table class="table table-dark table-hover table-bordered border-secondary mb-0" style="min-width: 800px;">
+                <thead class="table-active" style="position: sticky; top: 0; z-index: 10;">
+                    <tr>
+                        <th class="bg-dark text-white align-middle" style="min-width: 250px;">Producto (Catálogo)</th>
+                        {% for lista in listas %}
+                        <th class="text-center bg-dark text-white align-middle th-lista" style="min-width: 150px; cursor: grab;" draggable="true" data-lista="{{ lista }}">
+                            <span class="nombre-lista" style="pointer-events: none;"><i class="bi bi-grip-vertical text-muted"></i> {{ lista }}</span>
+                            <button class="btn btn-sm btn-link text-danger p-0 ms-2" onclick="eliminarLista('{{ lista }}')" title="Eliminar Lista">
+                                ❌
+                            </button>
+                        </th>
+                        {% endfor %}
+                        {% if not listas %}
+                        <th class="text-center text-muted align-middle py-3">Sin listas creadas. Comienza agregando una.</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for prod in productos %}
+                    <tr class="fila-producto" data-producto="{{ prod.nombre }}" data-categoria="{{ prod.nombre_categoria or 'Sin Categoría' }}" data-mayorista="{{ '1' if prod.es_mayorista else '0' }}">
+                        <td class="align-middle fw-bold text-light" style="font-size: 0.9rem;">
+                            {{ prod.nombre }}
+                            {% if prod.es_mayorista %}
+                            <br><span class="badge bg-info text-dark mt-1" style="font-size: 0.7rem;"><i class="bi bi-box-seam"></i> Mayorista {% if prod.unidades_por_caja %}({{ prod.unidades_por_caja }}x📦){% endif %}</span>
+                            {% endif %}
+                        </td>
+                        
+                        {% for lista in listas %}
+                            {% set precio_actual = precios.get(prod.nombre, {}).get(lista, '') %}
+                        <td>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text bg-secondary text-white border-secondary">$</span>
+                                <input type="number" class="form-control bg-dark text-white border-secondary input-precio"
+                                       data-lista="{{ lista }}" value="{{ precio_actual }}" placeholder="-" step="1">
+                            </div>
+                            <div class="precio-bruto-label text-success mt-1 text-center" style="display: none; font-size: 0.75rem; font-weight: bold;"></div>
+                        </td>
+                        {% endfor %}
+                        {% if not listas %}
+                        <td></td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+// Filtros de tabla
+function filtrarTabla() {
+    const catFiltro = document.getElementById('filtro-categoria').value;
+    const soloMayorista = document.getElementById('filtro-mayorista').checked;
+    
+    document.querySelectorAll('.fila-producto').forEach(tr => {
+        const trCat = tr.dataset.categoria;
+        const isMayorista = tr.dataset.mayorista === '1';
+        
+        let mostrar = true;
+        if (catFiltro !== 'TODAS' && trCat !== catFiltro) {
+            mostrar = false;
+        }
+        if (soloMayorista && !isMayorista) {
+            mostrar = false;
+        }
+        
+        tr.style.display = mostrar ? '' : 'none';
+    });
+}
+
+// Resalta visualmente diferencias de precios en una fila
+function resaltarDiferencias(tr) {
+    const inputs = Array.from(tr.querySelectorAll('.input-precio'));
+    const valores = inputs.map(i => parseFloat(i.value)).filter(v => !isNaN(v));
+
+    // Limpiar estilos previos
+    inputs.forEach(i => { i.style.color = ''; i.style.fontWeight = ''; });
+
+    if (valores.length > 1) {
+        const max = Math.max(...valores);
+        const min = Math.min(...valores);
+
+        inputs.forEach(i => {
+            const val = parseFloat(i.value);
+            if (!isNaN(val) && max !== min) {
+                if (val === max) {
+                    i.style.color = '#ff6b6b'; // Rojo claro
+                    i.style.fontWeight = 'bold';
+                } else if (val === min) {
+                    i.style.color = '#51cf66'; // Verde claro
+                    i.style.fontWeight = 'bold';
+                }
+            }
+        });
+    }
+}
+
+// Controla la visualización del IVA
+function toggleIVA() {
+    const showIVA = document.getElementById('filtro-iva').checked;
+    document.querySelectorAll('.input-precio').forEach(input => actualizarEtiquetaIVA(input, showIVA));
+}
+
+function actualizarEtiquetaIVA(input, showIVA) {
+    const label = input.closest('td').querySelector('.precio-bruto-label');
+    if (showIVA) {
+        const val = parseFloat(input.value);
+        if (!isNaN(val)) {
+            const bruto = Math.round(val * 1.19);
+            label.textContent = `Bruto: $${bruto.toLocaleString('es-CL')}`;
+            label.style.display = 'block';
+        } else {
+            label.style.display = 'none';
+        }
+    } else {
+        label.style.display = 'none';
+    }
+}
+
+// 1. Resaltar Visualmente Diferencias de Precios al Cargar
+document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll('.fila-producto').forEach(tr => resaltarDiferencias(tr));
+
+    // 1.5. Escuchar escritura en vivo (Mejora)
+    document.querySelectorAll('.input-precio').forEach(input => {
+        input.addEventListener('input', function() {
+            const showIVA = document.getElementById('filtro-iva').checked;
+            actualizarEtiquetaIVA(this, showIVA);
+            resaltarDiferencias(this.closest('tr'));
+        });
+    });
+
+    // Lógica Drag & Drop
+    let draggedColumn = null;
+
+    document.querySelectorAll('.th-lista').forEach(th => {
+        th.addEventListener('dragstart', function(e) {
+            draggedColumn = this.dataset.lista;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', this.dataset.lista);
+            this.classList.add('opacity-50');
+        });
+
+        th.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            return false;
+        });
+
+        th.addEventListener('dragenter', function(e) {
+            e.preventDefault();
+            this.classList.add('bg-secondary');
+        });
+
+        th.addEventListener('dragleave', function(e) {
+            this.classList.remove('bg-secondary');
+        });
+
+        th.addEventListener('drop', function(e) {
+            e.stopPropagation();
+            this.classList.remove('bg-secondary');
+            const draggedLista = e.dataTransfer.getData('text/plain');
+            const targetLista = this.dataset.lista;
+            
+            if (draggedLista && draggedLista !== targetLista) {
+                reordenarListas(draggedLista, targetLista);
+            }
+            return false;
+        });
+
+        th.addEventListener('dragend', function(e) {
+            this.classList.remove('opacity-50');
+            document.querySelectorAll('.th-lista').forEach(el => el.classList.remove('bg-secondary'));
+        });
+    });
+});
+
+function reordenarListas(dragged, target) {
+    fetch('/ventas/precios/reordenar_listas', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ dragged, target })
+    }).then(r => r.json()).then(d => {
+        if(d.success) location.reload();
+    });
+}
+
+// 2. Agregar Lista
+function agregarLista() {
+    const nombre = prompt("Ingresa el nombre para la nueva lista de precios (Ej: Delivery, UberEats, Mayorista):");
+    if (!nombre) return;
+    fetch('/ventas/precios/agregar_lista', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({nombre})
+    }).then(r => r.json()).then(d => { if(d.success) location.reload(); });
+}
+
+// 3. Eliminar Lista
+function eliminarLista(nombre) {
+    if (!confirm(`¿Estás seguro de eliminar completamente la lista '${nombre}' y todos sus precios asociados?`)) return;
+    fetch('/ventas/precios/eliminar_lista', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({nombre})
+    }).then(r => r.json()).then(d => { if(d.success) location.reload(); });
+}
+
+// 4. Guardar Matriz Completa
+function guardarPrecios() {
+    const precios = {};
+    document.querySelectorAll('.fila-producto').forEach(tr => {
+        const prod = tr.dataset.producto;
+        precios[prod] = {};
+        tr.querySelectorAll('.input-precio').forEach(input => {
+            if (input.value) precios[prod][input.dataset.lista] = parseFloat(input.value);
+        });
+    });
+    fetch('/ventas/precios/guardar_matriz', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({precios})
+    }).then(r => r.json()).then(d => { if(d.success) { alert('✅ Precios guardados exitosamente'); location.reload(); }});
+}
+</script>
+{% endblock %}

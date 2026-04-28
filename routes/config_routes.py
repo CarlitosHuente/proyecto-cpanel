@@ -327,7 +327,7 @@ def productos():
     with conn.cursor() as cur:
         # Traemos productos + nombre de su categoría
         query = """
-            SELECT p.producto_id, p.sku, p.nombre, p.unidad_medida, p.stock_minimo, c.nombre_categoria
+            SELECT p.producto_id, p.sku, p.nombre, p.unidad_medida, p.stock_minimo, p.es_mayorista, c.nombre_categoria
             FROM Productos p
             LEFT JOIN Categorias c ON p.categoria_id = c.categoria_id
             ORDER BY p.nombre ASC
@@ -355,13 +355,15 @@ def nuevo_producto():
         categoria_id = request.form.get('categoria_id') 
         stock_minimo = request.form.get('stock_minimo')
         unidad = request.form.get('unidad_medida')
+        es_mayorista = 1 if request.form.get('es_mayorista') == 'on' else 0
+        unidades_por_caja = request.form.get('unidades_por_caja') or None
 
         try:
             with conn.cursor() as cur:
                 cur.execute("""
-                    INSERT INTO Productos (sku, nombre, descripcion, categoria_id, stock_minimo, unidad_medida)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                """, (sku, nombre, descripcion, categoria_id, stock_minimo, unidad))
+                    INSERT INTO Productos (sku, nombre, descripcion, categoria_id, stock_minimo, unidad_medida, es_mayorista, unidades_por_caja)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """, (sku, nombre, descripcion, categoria_id, stock_minimo, unidad, es_mayorista, unidades_por_caja))
             conn.commit()
             conn.close()
             return redirect(url_for('config.productos'))
@@ -405,13 +407,15 @@ def editar_producto(id):
         categoria_id = request.form.get('categoria_id')
         stock_minimo = request.form.get('stock_minimo')
         unidad = request.form.get('unidad_medida')
+        es_mayorista = 1 if request.form.get('es_mayorista') == 'on' else 0
+        unidades_por_caja = request.form.get('unidades_por_caja') or None
 
         with conn.cursor() as cur:
             cur.execute("""
                 UPDATE Productos 
-                SET sku=%s, nombre=%s, descripcion=%s, categoria_id=%s, stock_minimo=%s, unidad_medida=%s
+                SET sku=%s, nombre=%s, descripcion=%s, categoria_id=%s, stock_minimo=%s, unidad_medida=%s, es_mayorista=%s, unidades_por_caja=%s
                 WHERE producto_id=%s
-            """, (sku, nombre, descripcion, categoria_id, stock_minimo, unidad, id))
+            """, (sku, nombre, descripcion, categoria_id, stock_minimo, unidad, es_mayorista, unidades_por_caja, id))
         conn.commit()
         conn.close()
         return redirect(url_for('config.productos'))
@@ -459,6 +463,26 @@ def eliminar_producto(id):
     finally:
         conn.close()
     return redirect(url_for('config.productos'))
+
+@config_bp.route('/productos/toggle_mayorista', methods=['POST'])
+@login_requerido
+@permiso_modulo("productos")
+def toggle_mayorista():
+    data = request.get_json()
+    producto_id = data.get("producto_id")
+    es_mayorista = 1 if data.get("es_mayorista") else 0
+    
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE Productos SET es_mayorista = %s WHERE producto_id = %s", (es_mayorista, producto_id))
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "error": str(e)})
+    finally:
+        conn.close()
 
 
 import os

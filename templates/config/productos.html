@@ -28,6 +28,7 @@
                             <th>Categoría</th>
                             <th class="text-center">Unidad</th>
                             <th class="text-center">Stock Min</th>
+                            <th class="text-center">Mayorista</th>
                             <th class="text-end" style="min-width: 150px;">Acciones</th>
                         </tr>
                     </thead>
@@ -48,6 +49,13 @@
                                 {% else %}
                                     <span class="text-muted">-</span>
                                 {% endif %}
+                            </td>
+                            <td class="text-center align-middle">
+                                <div class="form-check form-switch d-flex justify-content-center mb-0">
+                                    <input class="form-check-input" type="checkbox" style="cursor: pointer;"
+                                           onchange="toggleMayorista('{{ p.producto_id }}', this.checked)"
+                                           {% if p.es_mayorista %}checked{% endif %}>
+                                </div>
                             </td>
                             <td class="text-end">
                                 <a href="{{ url_for('config.editar_producto', id=p.producto_id) }}" 
@@ -88,5 +96,23 @@
             }
         });
     });
+
+    function toggleMayorista(producto_id, es_mayorista) {
+        fetch("{{ url_for('config.toggle_mayorista') }}", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ producto_id: producto_id, es_mayorista: es_mayorista })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                alert("Error al actualizar estado mayorista: " + (data.error || "Desconocido"));
+            }
+        })
+        .catch(error => {
+            console.error("Error:", error);
+            alert("Ocurrió un error en la conexión.");
+        });
+    }
 </script>
 {% endblock %}
