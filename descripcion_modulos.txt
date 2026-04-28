@@ -22,9 +22,10 @@ cada "Módulo" a un Rol dentro de la Pizarra de Permisos.
    - Análisis Temporal: Botones para alternar la vista de tendencia entre curva Anual y curva Semanal de 15 semanas.
    - Histórico: Acceso al pop-up de la tabla matricial de ventas agrupadas por Semana y Año.
 
-4. [ ventas ] (Análisis Diario Operativo)
+4. [ ventas ] (Análisis Operativo y Comercial)
    - Vistas Diarias: Analizar las cantidades y montos vendidos agrupados específicamente por "Día de la semana" (Lunes a Domingo).
    - Filtros de Rango: Consultar cruces de información histórica detallada seleccionando fechas, semanas, años y sucursales.
+   - Lista de Precios: Matriz interactiva para gestionar y comparar distintas listas de precios (Local, Delivery, etc). Incluye Drag & Drop de columnas, cálculo instantáneo de IVA, y resaltado automático de precios mayores/menores.
 
 5. [ clientes ] (Fidelización y Entidades)
    - Base de Datos: Visualizar el registro de entidades comerciales, trabajadores o clientes ocasionales asociados a las boletas y facturas para analizar flujos por cliente.
@@ -49,6 +50,7 @@ cada "Módulo" a un Rol dentro de la Pizarra de Permisos.
 10. [ productos ] (Mantenedor de Catálogo)
    - ABM (Alta, Baja, Modificación): Permite crear nuevos productos en el sistema, editar descripciones, modificar SKUs, y eliminar ítems discontinuados.
    - Control de Inventario: Definir unidad de medida y establecer límites de "Stock Mínimo" para alertas.
+   - Formato Mayorista: Capacidad de catalogar un ítem como "Mayorista" (incluyendo unidades por caja) mediante un Switch rápido, diferenciándolos visualmente en catálogos y reportes.
 
 11. [ categorias ] (Familias y Rubros)
    - Estructuración: Permite crear y borrar las agrupaciones mayores (Ej: Crear "Empanadas", "Bebidas", "Abarrotes").
