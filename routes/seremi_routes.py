@@ -84,7 +84,7 @@ def temperatura_equipos():
 
     # Normalizar datos de temperatura
     df.columns = df.columns.str.strip().str.upper()
-    df["FECHA"] = pd.to_datetime(df["FECHA"], errors="coerce")
+    df["FECHA"] = pd.to_datetime(df["FECHA"], dayfirst=True, errors="coerce")
     df = df.dropna(subset=["FECHA"])
     df["DIA"] = df["FECHA"].dt.day
     df["MES"] = df["FECHA"].dt.month
@@ -361,7 +361,7 @@ def imprimir_temperatura_equipos():
     mapa_nombre = dict(zip(df_equipos["ID_EQUIPO"], df_equipos["NOMBRE_EQUIPO"]))
 
     df.columns = df.columns.str.strip().str.upper()
-    df["FECHA"] = pd.to_datetime(df["FECHA"], errors="coerce")
+    df["FECHA"] = pd.to_datetime(df["FECHA"], dayfirst=True, errors="coerce")
     df = df.dropna(subset=["FECHA"])
     df["DIA"] = df["FECHA"].dt.day
     df["MES"] = df["FECHA"].dt.month
