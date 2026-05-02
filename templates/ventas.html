@@ -19,7 +19,7 @@
 
   <div class="col-md-3">
     <label for="sucursal" class="form-label">Sucursal</label>
-    <select name="sucursal" class="form-select">
+    <select id="sucursal" name="sucursal" class="form-select">
       {% for s in sucursales %}
         <option value="{{ s }}" {% if s == sucursal %}selected{% endif %}>{{ s }}</option>
       {% endfor %}
@@ -39,14 +39,15 @@
   <div class="col-md-2">
   <label for="dia_semana" class="form-label">Día de Semana</label>
   <select id="dia_semana" name="dia_semana" class="form-select">
-    <option value="TODOS">Todos</option>
-    <option value="1">Lunes</option>
-    <option value="2">Martes</option>
-    <option value="3">Miércoles</option>
-    <option value="4">Jueves</option>
-    <option value="5">Viernes</option>
-    <option value="6">Sábado</option>
-    <option value="7">Domingo</option>
+    {% set dia_sel = filtros.dia_semana|string if filtros.dia_semana is not none else 'TODOS' %}
+    <option value="TODOS" {% if dia_sel == 'TODOS' %}selected{% endif %}>Todos</option>
+    <option value="1" {% if dia_sel == '1' %}selected{% endif %}>Lunes</option>
+    <option value="2" {% if dia_sel == '2' %}selected{% endif %}>Martes</option>
+    <option value="3" {% if dia_sel == '3' %}selected{% endif %}>Miércoles</option>
+    <option value="4" {% if dia_sel == '4' %}selected{% endif %}>Jueves</option>
+    <option value="5" {% if dia_sel == '5' %}selected{% endif %}>Viernes</option>
+    <option value="6" {% if dia_sel == '6' %}selected{% endif %}>Sábado</option>
+    <option value="7" {% if dia_sel == '7' %}selected{% endif %}>Domingo</option>
   </select>
 </div>
 
@@ -235,12 +236,18 @@
 
 <script>
   function actualizarLinkDescarga() {
-    const form = document.querySelector("form");
-    const params = new URLSearchParams(new FormData(form)).toString();
-    document.getElementById("descargar-link").href = `/descargar_excel?${params}`;
+    const form = document.getElementById("form-filtros");
+    const params = new URLSearchParams(new FormData(form));
+    const activeTabElement = document.querySelector(".nav-link.active");
+    if (activeTabElement) {
+      const activeTabHref = activeTabElement.getAttribute("href");
+      if (activeTabHref && activeTabHref.startsWith("#")) {
+        params.set("tab", activeTabHref.replace("#", ""));
+      }
+    }
+    document.getElementById("descargar-link").href = `/descargar_excel?${params.toString()}`;
   }
 
-  // Guardar pestaña activa al hacer clic
   document.querySelectorAll('.nav-link[data-bs-toggle="tab"]').forEach(tab => {
     tab.addEventListener("click", function () {
       const href = tab.getAttribute("href").replace("#", "");
@@ -248,13 +255,30 @@
     });
   });
 
-  window.onload = actualizarLinkDescarga;
+  document.getElementById("empresa").addEventListener("change", () => {
+    const form = document.getElementById("form-filtros");
+    const sucSel = document.getElementById("sucursal");
+    const valSel = document.getElementById("valor");
+    if (sucSel) sucSel.value = "TODAS";
+    if (valSel) valSel.value = "TODOS";
+    document.getElementById("semana").value = "";
+    document.getElementById("año").value = "";
+    document.getElementById("desde").value = "";
+    document.getElementById("hasta").value = "";
+    document.getElementById("dia_semana").value = "TODOS";
+    form.submit();
+  });
 
-  document.querySelectorAll("form select, form input").forEach(el => {
+  window.addEventListener("load", actualizarLinkDescarga);
+
+  document.querySelectorAll("#form-filtros select, #form-filtros input").forEach(el => {
     el.addEventListener("change", actualizarLinkDescarga);
   });
 
-  // Limpieza cruzada fechas-semana
+  document.querySelectorAll('.nav-link').forEach(tab => {
+    tab.addEventListener('shown.bs.tab', actualizarLinkDescarga);
+  });
+
   document.getElementById("desde").addEventListener("input", () => {
     document.getElementById("semana").value = "";
     document.getElementById("año").value = "";
@@ -270,37 +294,6 @@
   document.getElementById("año").addEventListener("input", () => {
     document.getElementById("desde").value = "";
     document.getElementById("hasta").value = "";
-  });
-</script>
-
-<script>
-  function actualizarLinkDescarga() {
-    const form = document.querySelector("form");
-    const params = new URLSearchParams(new FormData(form));
-
-    // Identifica la pestaña activa (href="#detalle" o href="#resumen")
-    const activeTabElement = document.querySelector(".nav-link.active");
-    if (activeTabElement) {
-        const activeTabHref = activeTabElement.getAttribute("href");
-        const activeTab = activeTabHref.replace("#", ""); // "detalle" o "resumen"
-        params.set("tab", activeTab);  // Agrega el parámetro tab
-    }
-
-    // Aplica los parámetros al href del botón de descarga
-    document.getElementById("descargar-link").href = `/descargar_excel?${params.toString()}`;
-  }
-
-  // Ejecutar al cargar
-  window.onload = actualizarLinkDescarga;
-
-  // Ejecutar cuando se modifique algún filtro
-  document.querySelectorAll("form select, form input").forEach(el => {
-    el.addEventListener("change", actualizarLinkDescarga);
-  });
-
-  // Ejecutar también al cambiar de pestaña
-  document.querySelectorAll('.nav-link').forEach(tab => {
-    tab.addEventListener('shown.bs.tab', actualizarLinkDescarga);
   });
 </script>
 

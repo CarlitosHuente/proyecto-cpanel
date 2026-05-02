@@ -1,7 +1,35 @@
 let sucursalActiva = null;
 let carruselInterval = null; // Variable global para limpiar el carrusel
 
+/** Filtros guardados por empresa para no perderlos al alternar Comercial / Agrícola */
+let estadoPorEmpresa = {};
+let empresaSeleccionada = "comercial";
+
+function leerEstadoFormulario() {
+    return {
+        semana: document.getElementById("semana").value,
+        año: document.getElementById("año").value,
+        desde: document.getElementById("desde").value,
+        hasta: document.getElementById("hasta").value,
+        sucursal: sucursalActiva
+    };
+}
+
+function escribirEstadoFormulario(est) {
+    if (!est) return;
+    document.getElementById("semana").value = est.semana || "";
+    document.getElementById("año").value = est.año || "";
+    document.getElementById("desde").value = est.desde || "";
+    document.getElementById("hasta").value = est.hasta || "";
+    sucursalActiva = est.sucursal || null;
+}
+
+function guardarEstadoEmpresa(empresa) {
+    if (empresa) estadoPorEmpresa[empresa] = leerEstadoFormulario();
+}
+
 let dataHistoricoGlobal = null;
+let dataHistoricoTicketGlobal = null;
 let tendenciaAnualGlobal = null;
 let tendenciaSemanalGlobal = null;
 let vistaTendenciaActiva = 'anual';
@@ -145,8 +173,33 @@ function limpiarFiltrosSemana() {
     document.getElementById("año").value = "";
 }
 
+/** URL del Excel de origen/diagnóstico (mismos filtros que la vista actual). Solo Comercial. */
+function actualizarLinkExportOrigen() {
+    const a = document.getElementById("link-export-origen");
+    if (!a) return;
+    const empresa = document.getElementById("empresa").value;
+    if (empresa !== "comercial") {
+        a.classList.add("d-none");
+        return;
+    }
+    a.classList.remove("d-none");
+    const p = new URLSearchParams();
+    p.set("empresa", empresa);
+    const sem = document.getElementById("semana").value;
+    const an = document.getElementById("año").value;
+    const d0 = document.getElementById("desde").value;
+    const d1 = document.getElementById("hasta").value;
+    if (sem) p.set("semana", sem);
+    if (an) p.set("año", an);
+    if (d0) p.set("desde", d0);
+    if (d1) p.set("hasta", d1);
+    if (sucursalActiva) p.set("sucursal", sucursalActiva);
+    a.href = `/api/dashboard-export-origen?${p.toString()}`;
+}
+
 // Función para cargar los datos del dashboard
 function actualizarDashboard() {
+    actualizarLinkExportOrigen();
     const empresa = document.getElementById("empresa").value;
     const semana = document.getElementById("semana").value;
     const año = document.getElementById("año").value;
@@ -211,19 +264,22 @@ function renderizarDatosDashboard(data, empresa) {
         // Cantidad ahora es Empanadas
         renderKPI("kpi_cantidad", "kpi_cantidad_var", data.kpis.empanadas_actual || 0, data.kpis.empanadas_anterior || 0, false);
         
-        // Tercera Tarjeta Dinámica
-        if (empresa === "agricola") {
-            if (carruselInterval) clearInterval(carruselInterval);
-            document.getElementById("kpi_carrusel_nombre").innerText = "Ticket Promedio";
-            document.getElementById("kpi_carrusel_nombre").style.color = "#ffc107"; // Amarillo
-            renderKPI("kpi_carrusel_cantidad", "kpi_carrusel_var", data.kpis.ticket_promedio_actual || 0, data.kpis.ticket_promedio_anterior || 0, true);
-        } else {
-            document.getElementById("kpi_carrusel_nombre").style.color = "#0dcaf0";
-            iniciarCarruselProductos(data.kpis.top_productos_cantidad);
-        }
+        // Tercera tarjeta: ticket promedio (misma lógica comercial / agrícola: suma por N_BOLETA, luego promedio)
+        if (carruselInterval) clearInterval(carruselInterval);
+        document.getElementById("kpi_carrusel_nombre").innerHTML =
+            'Ticket Promedio <i class="bi bi-clock-history ms-1 text-info"></i>';
+        document.getElementById("kpi_carrusel_nombre").style.color = "#ffc107";
+        renderKPI(
+            "kpi_carrusel_cantidad",
+            "kpi_carrusel_var",
+            data.kpis.ticket_promedio_actual || 0,
+            data.kpis.ticket_promedio_anterior || 0,
+            true
+        );
     }
 
     dataHistoricoGlobal = data.historico_semanal;
+    dataHistoricoTicketGlobal = data.historico_semanal_ticket || { años: [], datos: [] };
     tendenciaAnualGlobal = data.tendencia;
     tendenciaSemanalGlobal = data.tendencia_semanal;
 
@@ -253,6 +309,37 @@ function renderizarDatosDashboard(data, empresa) {
 }
 
 // --- FUNCIONES NUEVAS PARA MODAL Y TENDENCIA ---
+function abrirModalHistoricoTicket() {
+    if (!dataHistoricoTicketGlobal || !dataHistoricoTicketGlobal.años || dataHistoricoTicketGlobal.años.length === 0) {
+        alert("No hay datos históricos de ticket para esta vista.");
+        return;
+    }
+    const thead = document.getElementById("head-historico-ticket");
+    const tbody = document.getElementById("body-historico-ticket");
+    const semanaConsultada = parseInt(document.getElementById("semana").value) || 0;
+    let htmlHead = `<th>Semana</th>`;
+    dataHistoricoTicketGlobal.años.forEach((año) => (htmlHead += `<th>${año}</th>`));
+    thead.innerHTML = htmlHead;
+    let htmlBody = "";
+    dataHistoricoTicketGlobal.datos.forEach((fila) => {
+        const isActiva = fila.semana === semanaConsultada ? "fila-semana-activa" : "";
+        htmlBody += `<tr class="${isActiva}" id="fila-hist-ticket-${fila.semana}">
+            <td class="fw-bold ${isActiva ? "text-info" : ""}">Sem ${fila.semana}</td>`;
+        dataHistoricoTicketGlobal.años.forEach((año) => {
+            const val = fila[año] || 0;
+            htmlBody += `<td>$${Number(val).toLocaleString("es-CL")}</td>`;
+        });
+        htmlBody += `</tr>`;
+    });
+    tbody.innerHTML = htmlBody;
+    const modal = new bootstrap.Modal(document.getElementById("modalHistoricoTicket"));
+    modal.show();
+    setTimeout(() => {
+        const trActiva = document.getElementById(`fila-hist-ticket-${semanaConsultada}`);
+        if (trActiva) trActiva.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 300);
+}
+
 function abrirModalHistorico() {
     if (!dataHistoricoGlobal || !dataHistoricoGlobal.años) {
         alert("No hay datos históricos disponibles para esta vista.");
@@ -337,18 +424,13 @@ function actualizarGraficosBarras(familiaSeleccionada) {
 
 // Carga inicial al cargar la página
 document.addEventListener("DOMContentLoaded", () => {
-    // 1. Cargar sucursales
-    cargarSucursales();
-
-    // 2. Obtener la última semana y año del backend
-    const empresa = document.getElementById("empresa").value;
-    fetch(`/api/latest-date-info?empresa=${empresa}`)
+    empresaSeleccionada = document.getElementById("empresa").value;
+    fetch(`/api/latest-date-info?empresa=${empresaSeleccionada}`)
         .then(res => res.json())
         .then(data => {
             document.getElementById("año").value = data.año;
             document.getElementById("semana").value = data.semana;
-            // 3. Cargar el dashboard con estos datos iniciales
-            actualizarDashboard();
+            cargarSucursales(null);
         });
 
     // Listener para el calendario
@@ -373,16 +455,36 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("semana").addEventListener("input", limpiarFiltrosFecha);
     document.getElementById("año").addEventListener("input", limpiarFiltrosFecha);
 
-    // Listener para el botón de empresa
-    document.getElementById("empresa").addEventListener("change", () => {
-        cargarSucursales();
-        actualizarDashboard();
+    document.getElementById("empresa").addEventListener("change", (e) => {
+        const prev = empresaSeleccionada;
+        const nuevo = e.target.value;
+        guardarEstadoEmpresa(prev);
+        empresaSeleccionada = nuevo;
+
+        if (estadoPorEmpresa[nuevo]) {
+            escribirEstadoFormulario(estadoPorEmpresa[nuevo]);
+            cargarSucursales(estadoPorEmpresa[nuevo].sucursal || null);
+        } else {
+            fetch(`/api/latest-date-info?empresa=${nuevo}`)
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById("año").value = data.año;
+                    document.getElementById("semana").value = data.semana;
+                    document.getElementById("desde").value = "";
+                    document.getElementById("hasta").value = "";
+                    sucursalActiva = null;
+                    cargarSucursales(null);
+                })
+                .catch(err => console.error("Error latest-date empresa:", err));
+        }
     });
     
     // Listener para los filtros principales que actualizan todo
      ["semana", "año", "desde", "hasta"].forEach(id => {
         document.getElementById(id).addEventListener("change", actualizarDashboard);
     });
+
+    actualizarLinkExportOrigen();
 });
 
 // --- FIN DE CAMBIOS ---
@@ -392,7 +494,10 @@ document.addEventListener("DOMContentLoaded", () => {
 // pueden tener pequeñas modificaciones para adaptarse a la nueva lógica.
 // Aquí está la versión completa y funcional de todo el archivo.
 
-function cargarSucursales() {
+/**
+ * @param {string|null|undefined} sucursalPreferida - nombre exacto de sucursal o null para TODAS
+ */
+function cargarSucursales(sucursalPreferida) {
     const empresa = document.getElementById("empresa").value;
     fetch(`/api/sucursales?empresa=${empresa}`)
         .then(res => res.json())
@@ -404,10 +509,10 @@ function cargarSucursales() {
             btnTodas.className = "btn btn-outline-light m-1";
             btnTodas.innerText = "TODAS";
             btnTodas.onclick = () => {
-                sucursalActiva = null;
-                resaltarBoton(cont, btnTodas);
-                actualizarDashboard();
-            };
+            sucursalActiva = null;
+            resaltarBoton(cont, btnTodas);
+            actualizarDashboard();
+        };
             cont.appendChild(btnTodas);
 
             data.forEach((suc) => {
@@ -422,7 +527,22 @@ function cargarSucursales() {
                 cont.appendChild(btn);
             });
 
-            btnTodas.click();
+            const usarPref =
+                sucursalPreferida &&
+                typeof sucursalPreferida === "string" &&
+                data.includes(sucursalPreferida);
+            if (usarPref) {
+                const btn = [...cont.children].find((b) => b.innerText === sucursalPreferida);
+                if (btn) {
+                    sucursalActiva = sucursalPreferida;
+                    resaltarBoton(cont, btn);
+                    actualizarDashboard();
+                    return;
+                }
+            }
+            sucursalActiva = null;
+            resaltarBoton(cont, btnTodas);
+            actualizarDashboard();
         });
 }
 
@@ -463,53 +583,67 @@ function renderTorta(data) {
     });
 }
 
-function renderBarrasNeto(familia, productos) {
-    const nombres = productos.map(p => p.descripcion);
-    const valores = productos.map(p => p.neto);
-
-    const trace = {
-        x: nombres,
-        y: valores,
-        type: "bar",
-        marker: { color: "#e60000" },
-        hovertemplate: "<b>%{x}</b><br>$%{y:,.0f}<extra></extra>"
-    };
-
-    const layout = {
-        title: `Detalle Neto: ${familia}`,
-        height: 300,
+/** Barras horizontales: el API ordena por neto desc; al revertir, el mayor queda arriba. */
+function _layoutBarrasProductos(titleText, xAxisTitle, nombres, marginLeft) {
+    const n = Math.max(1, nombres.length);
+    const h = Math.min(560, Math.max(260, 20 * n + 110));
+    return {
+        title: titleText,
+        height: h,
         paper_bgcolor: "#111",
         plot_bgcolor: "#111",
-        xaxis: { showticklabels: false },
+        yaxis: { automargin: true, tickfont: { size: 10 } },
+        xaxis: {
+            automargin: true,
+            tickfont: { size: 10 },
+            title: { text: xAxisTitle, font: { size: 11 } },
+        },
         font: { color: "#fff" },
-        hovermode: 'closest'
+        hovermode: "closest",
+        margin: { l: marginLeft, r: 24, t: 48, b: 40 },
+    };
+}
+
+function _margenIzqPorEtiquetas(nombres) {
+    const maxLen = nombres.reduce((m, s) => Math.max(m, String(s).length), 10);
+    return Math.min(460, Math.max(120, Math.round(maxLen * 5.8 + 28)));
+}
+
+function renderBarrasNeto(familia, productos) {
+    const rev = [...productos].reverse();
+    const nombres = rev.map((p) => String(p.descripcion));
+    const valores = rev.map((p) => p.neto);
+    const marginL = _margenIzqPorEtiquetas(nombres);
+
+    const trace = {
+        y: nombres,
+        x: valores,
+        type: "bar",
+        orientation: "h",
+        marker: { color: "#e60000" },
+        hovertemplate: "<b>%{y}</b><br>$%{x:,.0f}<extra></extra>",
     };
 
+    const layout = _layoutBarrasProductos(`Detalle Neto: ${familia}`, "Neto ($)", nombres, marginL);
     Plotly.newPlot("grafico_barras_neto", [trace], layout);
 }
 
 function renderBarrasCantidad(familia, productos) {
-    const nombres = productos.map(p => p.descripcion);
-    const cantidades = productos.map(p => p.cantidad);
+    const rev = [...productos].reverse();
+    const nombres = rev.map((p) => String(p.descripcion));
+    const cantidades = rev.map((p) => p.cantidad);
+    const marginL = _margenIzqPorEtiquetas(nombres);
 
     const trace = {
-        x: nombres,
-        y: cantidades,
+        y: nombres,
+        x: cantidades,
         type: "bar",
+        orientation: "h",
         marker: { color: "#17a2b8" },
-        hovertemplate: "<b>%{x}</b><br>%{y:,.0f} unidades<extra></extra>"
+        hovertemplate: "<b>%{y}</b><br>%{x:,.0f} unidades<extra></extra>",
     };
 
-    const layout = {
-        title: `Detalle Cantidad: ${familia}`,
-        height: 300,
-        paper_bgcolor: "#111",
-        plot_bgcolor: "#111",
-        xaxis: { showticklabels: false },
-        font: { color: "#fff" },
-        hovermode: 'closest'
-    };
-
+    const layout = _layoutBarrasProductos(`Detalle Cantidad: ${familia}`, "Cantidad (u.)", nombres, marginL);
     Plotly.newPlot("grafico_barras_cantidad", [trace], layout);
 }
 

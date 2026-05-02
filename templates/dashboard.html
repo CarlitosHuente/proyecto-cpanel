@@ -21,6 +21,9 @@
                 Dashboard de Ventas
                 <i id="calendar-icon" class="bi bi-calendar3 ms-2" style="cursor: pointer; color: #0dcaf0;" title="Ver calendario"></i>
             </h2>
+            <a id="link-export-origen" class="btn btn-sm btn-outline-info mt-2" href="#" title="Excel con líneas de BD y columnas de diagnóstico (misma lógica NETO que los gráficos)">
+                <i class="bi bi-file-earmark-spreadsheet"></i> Descargar origen (Excel)
+            </a>
         </div>
 
         <!-- Col 2: Sucursales -->
@@ -35,7 +38,7 @@
         <!-- Col 1: Empresa -->
         <div class="col-md-3">
             <label style="color:white;">Empresa:</label>
-            <select id="empresa" onchange="cargarSucursales()" class="form-select mb-2">
+            <select id="empresa" class="form-select mb-2">
                 <option value="comercial">Huente Comercial</option>
                 <option value="agricola">Huente Agrícola</option>
             </select>
@@ -104,9 +107,9 @@
             </div>
           </div>
           <div class="col-4">
-            <div class="card bg-dark text-white text-center shadow p-2 border-secondary h-100 d-flex flex-column justify-content-center" id="kpi_card_3_content">
-              <div id="kpi_carrusel_nombre" style="font-size: 0.8rem; color:#0dcaf0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: bold;" title="Top Productos">Cargando...</div>
-              <div id="kpi_carrusel_cantidad" style="font-size: 1.3rem; font-weight: bold;">0</div>
+            <div class="card bg-dark text-white text-center shadow p-2 border-secondary h-100 d-flex flex-column justify-content-center kpi-card-clickable" id="kpi_card_3_content" onclick="abrirModalHistoricoTicket()" title="Ver ticket promedio por semana">
+              <div id="kpi_carrusel_nombre" style="font-size: 0.8rem; color:#ffc107; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: bold;">Ticket Promedio <i class="bi bi-clock-history ms-1 text-info"></i></div>
+              <div id="kpi_carrusel_cantidad" style="font-size: 1.3rem; font-weight: bold;">$0</div>
               <div id="kpi_carrusel_var" style="font-size: 0.75rem;">-</div>
             </div>
           </div>
@@ -173,6 +176,26 @@
   </div>
 </div>
 
+<!-- MODAL HISTORICO TICKET PROMEDIO -->
+<div class="modal fade" id="modalHistoricoTicket" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content bg-dark text-white" style="border: 1px solid #444;">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title"><i class="bi bi-clock-history me-2 text-info"></i> Ticket promedio por semana</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <table class="table table-dark table-hover table-bordered mb-0" style="text-align: center; font-size: 0.9rem;">
+          <thead style="position: sticky; top: 0; background: #111; z-index: 1;">
+            <tr id="head-historico-ticket"></tr>
+          </thead>
+          <tbody id="body-historico-ticket"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL HISTORICO NETO -->
 <div class="modal fade" id="modalHistoricoNeto" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
@@ -202,5 +225,5 @@
 
 
 <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-<script src="{{ url_for('static', filename='js/dashboard.js') }}?v=2.0"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}?v=2.5"></script>
 {% endblock %}

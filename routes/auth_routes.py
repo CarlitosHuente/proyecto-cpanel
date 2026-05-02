@@ -1,16 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, session, url_for
-from supabase import create_client, Client
-import os
 from utils.auth import autenticar_huente, crear_sesion_para_email
 from utils.logger import registrar_acceso
-
-# --- Configuración del Cliente Supabase ---
-url: str = os.environ.get("SUPABASE_URL")
-key: str = os.environ.get("SUPABASE_KEY")
-
-supabase = None
-if url and key:
-    supabase = create_client(url, key)
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -64,55 +54,7 @@ def login():
     return render_template("login.html")
 
 
-@auth_bp.route("/google-login")
-def google_login():
-    if not supabase:
-        return "Inicio de sesión con Google deshabilitado temporalmente.", 400
-    data = supabase.auth.sign_in_with_oauth({
-        "provider": "google",
-        "options": {
-            "redirect_to": url_for("auth.callback", _external=True)
-        }
-    })
-    return redirect(data.url)
-
-
-@auth_bp.route("/callback")
-def callback():
-    if not supabase:
-        return "Supabase no está configurado.", 400
-    try:
-        code = request.args.get("code")
-        supabase.auth.exchange_code_for_session({"auth_code": code})
-
-        user = supabase.auth.get_user().user
-        user_email = user.email
-
-        usuario_local = crear_sesion_para_email(user_email)
-
-        if not usuario_local:
-            supabase.auth.sign_out()
-            registrar_acceso(user_email, "DENEGADO", "Login Google OK pero correo no existe en usuarios_huente")
-            return (
-                "Acceso denegado. Tu correo no está autorizado para usar esta aplicación. "
-                "Contactar con soporte.",
-                403,
-            )
-
-        rol = usuario_local.get("rol", "invitado")
-        registrar_acceso(user_email, "OK", "Login Google")
-        
-        # Redirección inteligente
-        return redirect(obtener_ruta_inicio(rol))
-
-    except Exception as e:
-        registrar_acceso("desconocido", "ERROR", f"Error en callback Google: {e}")
-        return f"Ha ocurrido un error durante el inicio de sesión: {e}", 500
-
-
 @auth_bp.route("/logout")
 def logout():
-    if supabase:
-        supabase.auth.sign_out()
     session.clear()
     return redirect(url_for("auth.login"))

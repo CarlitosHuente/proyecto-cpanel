@@ -1,9 +1,34 @@
-from flask import Blueprint, render_template, session, redirect, url_for, request, jsonify
-from utils.sheet_cache import obtener_datos, forzar_actualizacion, obtener_fecha_actualizacion
+import io
+from datetime import datetime
+
+from flask import Blueprint, render_template, session, redirect, url_for, request, jsonify, send_file
+from utils.sheet_cache import (
+    obtener_datos,
+    forzar_actualizacion,
+    obtener_fecha_actualizacion,
+    obtener_dataframe_comercial_export_diagnostico,
+)
 from utils.filters import filtrar_dataframe
 from utils.auth import login_requerido, permiso_modulo # ← importar el decorador
 import pandas as pd
 
+
+def _ticket_promedio_desde_df(df_slice: pd.DataFrame) -> int:
+    """
+    Ticket promedio: por cada N_BOLETA se suma el NETO de todas las líneas (mismo comprobante repetido),
+    luego el promedio de esos totales por documento. Misma lógica comercial / agrícola.
+    """
+    if df_slice is None or getattr(df_slice, "empty", True):
+        return 0
+    if "N_BOLETA" not in df_slice.columns or "NETO" not in df_slice.columns:
+        return 0
+    sub = df_slice.dropna(subset=["N_BOLETA"])
+    if sub.empty:
+        return 0
+    por_doc = sub.groupby("N_BOLETA", dropna=False)["NETO"].sum()
+    if por_doc.empty:
+        return 0
+    return int(por_doc.mean())
 
 
 dashboard_bp = Blueprint('dashboard', __name__)
@@ -17,9 +42,11 @@ def dashboard():
     
     fecha_actualizacion = obtener_fecha_actualizacion("comercial")
 
-    return render_template("dashboard.html", 
-                           usuario=session["usuario"],
-                           fecha_actualizacion=fecha_actualizacion)
+    return render_template(
+        "dashboard.html",
+        usuario=session["usuario"],
+        fecha_actualizacion=fecha_actualizacion,
+    )
 
 # ===========================
 # RUTAS PARA CARGA DINÁMICA
@@ -142,6 +169,7 @@ def api_dashboard_data():
     tendencia_anterior = [0]*12
     meses_abrev = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
     
+    df_hist = pd.DataFrame()
     try:
         df_hist = filtrar_dataframe(df, tipo="FAMILIA", valor=familia or "TODOS", sucursal=sucursal, semana=None, año=None, desde=None, hasta=None).copy()
         if not df_hist.empty and "FECHA" in df_hist.columns:
@@ -162,22 +190,15 @@ def api_dashboard_data():
     empanadas_actual = int(df_filtrado[df_filtrado["FAMILIA"].astype(str).str.contains("EMPANADA", case=False, na=False)]["CANTIDAD"].sum()) if not df_filtrado.empty else 0
     empanadas_anterior = int(df_ant[df_ant["FAMILIA"].astype(str).str.contains("EMPANADA", case=False, na=False)]["CANTIDAD"].sum()) if not df_ant.empty else 0
 
-    ticket_promedio_actual = 0
-    ticket_promedio_anterior = 0
-    if empresa == "agricola":
-        if not df_filtrado.empty and "N_BOLETA" in df_filtrado.columns:
-            boletas_actual = df_filtrado.groupby("N_BOLETA")["NETO"].sum()
-            ticket_promedio_actual = int(boletas_actual.mean()) if not boletas_actual.empty else 0
-            
-        if not df_ant.empty and "N_BOLETA" in df_ant.columns:
-            boletas_anterior = df_ant.groupby("N_BOLETA")["NETO"].sum()
-            ticket_promedio_anterior = int(boletas_anterior.mean()) if not boletas_anterior.empty else 0
+    ticket_promedio_actual = _ticket_promedio_desde_df(df_filtrado)
+    ticket_promedio_anterior = _ticket_promedio_desde_df(df_ant)
 
     semana_consultada = int(semana) if semana else pd.Timestamp.now().isocalendar()[1]
     rango_semanas = list(range(max(1, semana_consultada - 7), min(54, semana_consultada + 8)))
     
     tendencia_semanal = {"etiquetas": [f"Sem {s}" for s in rango_semanas], "actual": [0]*len(rango_semanas), "anterior": [0]*len(rango_semanas)}
     historico_semanal = {"años": [], "datos": []}
+    historico_semanal_ticket = {"años": [], "datos": []}
 
     try:
         if not df_hist.empty and "AÑO" in df_hist.columns and "SEMANA" in df_hist.columns:
@@ -189,12 +210,26 @@ def api_dashboard_data():
 
             años_disponibles = sorted(df_hist["AÑO"].dropna().unique().astype(int).tolist())
             historico_semanal["años"] = [str(a) for a in años_disponibles]
-            
+            historico_semanal_ticket["años"] = [str(a) for a in años_disponibles]
+
+            sem_hist = pd.to_numeric(df_hist["SEMANA"], errors="coerce").fillna(-1).astype(int)
+            anio_hist = pd.to_numeric(df_hist["AÑO"], errors="coerce").fillna(-1).astype(int)
+            df_hist_lineas = df_hist.assign(_SEM=sem_hist, _ANIO=anio_hist)
+
             for sem in range(1, 54):
                 fila = {"semana": sem}
+                fila_t = {"semana": sem}
                 for anio in años_disponibles:
-                    fila[str(anio)] = int(ventas_por_semana[(ventas_por_semana["SEMANA"] == sem) & (ventas_por_semana["AÑO"] == anio)]["NETO"].sum())
+                    mask = (df_hist_lineas["_SEM"] == sem) & (df_hist_lineas["_ANIO"] == anio)
+                    sub_sem = df_hist_lineas.loc[mask]
+                    fila[str(anio)] = int(
+                        ventas_por_semana[
+                            (ventas_por_semana["SEMANA"] == sem) & (ventas_por_semana["AÑO"] == anio)
+                        ]["NETO"].sum()
+                    )
+                    fila_t[str(anio)] = _ticket_promedio_desde_df(sub_sem)
                 historico_semanal["datos"].append(fila)
+                historico_semanal_ticket["datos"].append(fila_t)
     except Exception as e:
         print(f"Error calculando tendencia/histórico semanal: {e}")
 
@@ -284,7 +319,8 @@ def api_dashboard_data():
             "anterior": tendencia_anterior
         },
         "tendencia_semanal": tendencia_semanal,
-        "historico_semanal": historico_semanal
+        "historico_semanal": historico_semanal,
+        "historico_semanal_ticket": historico_semanal_ticket,
     })
 
 
@@ -329,7 +365,141 @@ def api_dashboard_productos():
     ]
     return jsonify(data)
 
-# ... (al final de dashboard_routes.py)
+def _param_vacio_a_none(val):
+    if val is None or val == "":
+        return None
+    return val
+
+
+@dashboard_bp.route("/api/dashboard-export-origen")
+@login_requerido
+@permiso_modulo("ventas")
+def api_dashboard_export_origen():
+    """
+    Excel: líneas comerciales con columnas de diagnóstico (misma lógica NETO que el Dashboard).
+    Respeta filtros actuales: sucursal, semana+año, desde/hasta, familia.
+    """
+    empresa = request.args.get("empresa", "comercial")
+    if empresa != "comercial":
+        return jsonify({"ok": False, "error": "Export detallado solo para Huente Comercial."}), 400
+
+    df = obtener_dataframe_comercial_export_diagnostico()
+    if df.empty:
+        return "No hay datos en ventas_comercial para exportar.", 404
+
+    familia = _param_vacio_a_none(request.args.get("familia")) or "TODOS"
+    sucursal = _param_vacio_a_none(request.args.get("sucursal"))
+    semana = _param_vacio_a_none(request.args.get("semana"))
+    año = _param_vacio_a_none(request.args.get("año"))
+    desde = _param_vacio_a_none(request.args.get("desde"))
+    hasta = _param_vacio_a_none(request.args.get("hasta"))
+
+    if semana is not None:
+        try:
+            semana = int(semana)
+        except (TypeError, ValueError):
+            semana = None
+    if año is not None:
+        try:
+            año = int(año)
+        except (TypeError, ValueError):
+            año = None
+
+    df_filtrado = filtrar_dataframe(
+        df,
+        tipo="FAMILIA",
+        valor=familia,
+        sucursal=sucursal,
+        semana=semana,
+        año=año,
+        desde=desde,
+        hasta=hasta,
+    )
+
+    rename_cols = {
+        "SUB_RENGL": "SUB_RENGL_en_BD",
+        "_d_bruto_cant_x_precio": "Bruto_ref_LISTA_x_cant",
+        "_d_bruto_final_iva": "Bruto_final_usado_con_IVA",
+        "_d_flag_queso_pieza_kg": "Flag_queso_pieza_kg",
+        "_d_flag_empanada_cruda_precio_fact": "Flag_empanada_cruda_usa_PRECIO",
+        "_d_ratio_bruto_vs_sub_rengl": "Ratio_bruto_vs_SUB_RENGL",
+        "_d_sin_iva_despacho_web": "Flag_sin_IVA_DESPACHO_WEB",
+        "_d_neto_solo_sub_rengl_div_119": "NETO_ref_SUB_RENGL_Ajust_ref",
+        "_d_descripcion_articulo_bd": "Descripcion_articulo_en_BD",
+    }
+    out = df_filtrado.rename(columns={k: v for k, v in rename_cols.items() if k in df_filtrado.columns})
+
+    pref = [
+        "FECHA",
+        "AÑO",
+        "SEMANA",
+        "SUCURSAL",
+        "FAMILIA",
+        "N_BOLETA",
+        "DESCRIPCION",
+        "Descripcion_articulo_en_BD",
+        "CANTIDAD",
+        "PRECIO",
+        "PRECIO_LIS",
+        "SUB_RENGL_en_BD",
+        "Bruto_ref_LISTA_x_cant",
+        "Bruto_final_usado_con_IVA",
+        "NETO",
+        "NETO_ref_SUB_RENGL_Ajust_ref",
+        "Flag_queso_pieza_kg",
+        "Flag_empanada_cruda_usa_PRECIO",
+        "Ratio_bruto_vs_SUB_RENGL",
+        "Flag_sin_IVA_DESPACHO_WEB",
+    ]
+    first = [c for c in pref if c in out.columns]
+    rest = [c for c in out.columns if c not in first]
+    out = out[first + rest]
+
+    leyenda = pd.DataFrame(
+        {
+            "Campo": [
+                "(Nota) Familia Promoción",
+                "NETO",
+                "Bruto_ref_LISTA_x_cant",
+                "Bruto_final_usado_con_IVA",
+                "SUB_RENGL_en_BD",
+                "NETO_ref_SUB_RENGL_Ajust_ref",
+                "Flag_sin_IVA_DESPACHO_WEB",
+                "Flags 0/1 (queso / empanadas)",
+                "Descripcion_articulo_en_BD",
+                "Ratio_bruto_vs_SUB_RENGL",
+                "Filtros",
+            ],
+            "Significado": [
+                "No se exportan ni suman líneas cuya FAMILIA contiene 'Promoción' (evita duplicar valor).",
+                "Bruto_final / 1,19; sólo DESPACHO WEB (sin IVA en BD) → NETO = bruto línea sin /1,19.",
+                "Referencia: CANTIDAD × PRECIO_LIS (sin aplicar la excepción de empanada cruda a PRECIO).",
+                "Bruto usado para el NETO: en general lista × cant; empanadas crudas docs. abajo usan precio × cant.",
+                "SUB_RENGL en base (POS / importación). No gobierna el neto del dashboard (solo referencia / ratio).",
+                "SUB_RENGL/1,19; DESPACHO WEB = SUB_RENGL tal cual.",
+                "1 = línea DESPACHO WEB (no se divide el neto por 1,19).",
+                "Flag_queso: QUESO PIEZA (KG) con lista si existe. Flag_empanada: MEDIA o DOCENA EMPANADA CRUDA → usa PRECIO.",
+                "Texto orig. en MySQL (Web, POS docena, etc.) cuando DESCRIPCION unificada es «EMPANADA DE QUESO CRUDA».",
+                "Bruto_final / SUB_RENGL (útil para cotejar con POS; vacío si SUB_RENGL = 0).",
+                "Mismos filtros que el Dashboard (sucursal, semana+año o fechas, familia).",
+            ],
+        }
+    )
+
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        out.to_excel(writer, sheet_name="Lineas", index=False)
+        leyenda.to_excel(writer, sheet_name="Como_leer", index=False)
+    buf.seek(0)
+
+    nombre = f"dashboard_origen_comercial_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+    return send_file(
+        buf,
+        as_attachment=True,
+        download_name=nombre,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
 
 @dashboard_bp.route("/api/latest-date-info")
 @login_requerido
@@ -339,12 +509,11 @@ def api_latest_date_info():
         df = obtener_datos(empresa)
         if not df.empty and "FECHA" in df.columns:
             fecha_mas_reciente = df["FECHA"].max()
-            año = fecha_mas_reciente.year
-            semana = fecha_mas_reciente.isocalendar().week
-            return jsonify({"año": año, "semana": semana})
-    except Exception as e:
-        #print(f"Error obteniendo la última fecha: {e}")
-        # Devolver valores por defecto en caso de error
-        from datetime import datetime
-        hoy = datetime.now()
-        return jsonify({"año": hoy.year, "semana": hoy.isocalendar().week})
+            if pd.notna(fecha_mas_reciente):
+                año = fecha_mas_reciente.year
+                semana = fecha_mas_reciente.isocalendar().week
+                return jsonify({"año": año, "semana": semana})
+    except Exception:
+        pass
+    hoy = datetime.now()
+    return jsonify({"año": hoy.year, "semana": hoy.isocalendar().week})

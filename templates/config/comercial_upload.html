@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Importar Ventas Comercial{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="text-white mb-4">
+        <i class="fas fa-store text-danger me-2"></i> Importar Ventas Comercial (desde Excel a base de datos)
+    </h2>
+    <p class="text-muted">Formato habitual: hoja <strong>Resumen</strong> del POS (columnas tipo DES_ARTICU, SUB_RENGL).</p>
+    <p class="text-muted">Export tipo <strong>página web</strong>: el Excel trae <strong>NETO</strong> y precio unitario como valor neto/tributable habitual; al cargar se convierten a <strong>bruto</strong> (×1,19 en <code>SUB_RENGL</code> y precio), igual que el POS. <strong>Excepción:</strong> artículo <em>DESPACHO WEB</em> (sin IVA) — se guarda igual que en el Excel.</p>
+    <p class="text-muted"><a href="{{ url_for('config.gestion_agricola') }}" class="text-info">Ir a carga Agrícola</a></p>
+
+    <div class="card bg-dark border-light mb-4">
+        <div class="card-body">
+            <form id="uploadFormComercial" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <input class="form-control bg-secondary text-white border-secondary" type="file" id="archivos_comercial" name="archivos_comercial" accept=".xlsx,.xls,.csv" multiple required>
+                </div>
+                <button type="submit" class="btn btn-danger" id="btnUploadComercial">
+                    <i class="fas fa-cloud-upload-alt me-2"></i> Procesar archivos
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <h4 class="text-white mb-3">Historial de cargas (últimas 15)</h4>
+    <div class="table-responsive">
+        <table class="table table-dark table-hover table-striped">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Fecha de Carga</th>
+                    <th>Archivo</th>
+                    <th>Registros</th>
+                    <th>Usuario</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for carga in cargas %}
+                <tr>
+                    <td>{{ carga.carga_id if carga is mapping else carga[0] }}</td>
+                    <td>{{ carga.fecha_carga if carga is mapping else carga[1] }}</td>
+                    <td>{{ carga.nombre_archivo if carga is mapping else carga[2] }}</td>
+                    <td>{{ carga.registros_insertados if carga is mapping else carga[3] }}</td>
+                    <td>{{ carga.usuario if carga is mapping else carga[4] }}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-danger btn-revertir-com" data-id="{{ carga.carga_id if carga is mapping else carga[0] }}">
+                            <i class="fas fa-undo me-1"></i> Revertir
+                        </button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted">No hay cargas comerciales registradas.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    document.getElementById('uploadFormComercial').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const inp = document.getElementById('archivos_comercial');
+        if (inp.files.length === 0) return;
+        const btn = document.getElementById('btnUploadComercial');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Procesando...';
+        const fd = new FormData();
+        for (const f of inp.files) fd.append('archivos_comercial', f);
+        try {
+            const res = await fetch("{{ url_for('config.upload_comercial') }}", { method: 'POST', body: fd });
+            const data = await res.json();
+            let msg = data.mensaje || '';
+            if (data.reporte && data.reporte.length) {
+                msg += '\n' + data.reporte.map(r => r.archivo + ': ' + (r.estado === 'ok' ? r.registros + ' filas' : r.error)).join('\n');
+            }
+            alert(data.success ? msg : ('Error: ' + (data.error || JSON.stringify(data))));
+            if (data.success) location.reload();
+        } catch (err) {
+            alert(err);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-cloud-upload-alt me-2"></i> Procesar archivos';
+        }
+    });
+    document.querySelectorAll('.btn-revertir-com').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            if (!confirm('¿Revertir esta carga comercial?')) return;
+            const res = await fetch(`/config/comercial/revertir/${this.getAttribute('data-id')}`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) location.reload();
+            else alert(data.error);
+        });
+    });
+</script>
+{% endblock %}
