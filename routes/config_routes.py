@@ -678,6 +678,62 @@ def gestion_comercial():
     return render_template("config/comercial_upload.html", cargas=cargas, max_comercial=MAX_ARCHIVOS_COMERCIAL)
 
 
+@config_bp.route("/comercial/cargas")
+@login_requerido
+@permiso_modulo("agricola")
+def historial_cargas_comercial():
+    """
+    Listado paginado de todas las cargas comerciales (revertir cualquier ID).
+    Query: page (default 1), per (10–100, default 30), q (opcional: ID exacto o texto en nombre de archivo).
+    """
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        per = int(request.args.get("per", 30))
+    except (TypeError, ValueError):
+        per = 30
+    per = max(10, min(100, per))
+    q = (request.args.get("q") or "").strip()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    where_sql = ""
+    params = []
+    if q:
+        if q.isdigit():
+            where_sql = "WHERE (carga_id = %s OR nombre_archivo LIKE %s)"
+            params = [int(q), f"%{q}%"]
+        else:
+            where_sql = "WHERE nombre_archivo LIKE %s"
+            params = [f"%{q}%"]
+
+    cursor.execute(f"SELECT COUNT(*) AS n FROM cargas_comercial {where_sql}", params)
+    total = int(cursor.fetchone()["n"])
+    total_pages = max(1, (total + per - 1) // per) if total else 1
+    if page > total_pages:
+        page = total_pages
+
+    offset = (page - 1) * per
+    cursor.execute(
+        f"SELECT * FROM cargas_comercial {where_sql} ORDER BY fecha_carga DESC LIMIT %s OFFSET %s",
+        params + [per, offset],
+    )
+    cargas = cursor.fetchall()
+    conn.close()
+
+    return render_template(
+        "config/comercial_cargas_historial.html",
+        cargas=cargas,
+        page=page,
+        per_page=per,
+        total=total,
+        total_pages=total_pages,
+        q=q,
+    )
+
+
 @config_bp.route("/comercial/upload", methods=["POST"])
 @login_requerido
 @permiso_modulo("agricola")

@@ -68,7 +68,11 @@
     </div>
 </div>
 
-<div id="charts-loading-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1021; display: none; justify-content: center; align-items: center; flex-direction: column;">
+<div id="initial-loading-overlay" style="position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 2000; display: flex; justify-content: center; align-items: center; flex-direction: column;">
+    <div class="spinner" style="border: 8px solid #f3f3f3; border-top: 8px solid #d80000; border-radius: 50%; width: 60px; height: 60px; animation: spin 1.5s linear infinite;"></div>
+    <p style="color: white; margin-top: 20px;">Cargando dashboard...</p>
+</div>
+<div id="charts-loading-overlay" style="position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1021; display: none; justify-content: center; align-items: center; flex-direction: column;">
     <div class="spinner" style="border: 8px solid #f3f3f3; border-top: 8px solid #d80000; border-radius: 50%; width: 60px; height: 60px; animation: spin 1.5s linear infinite;"></div>
     <p style="color: white; margin-top: 20px;">Cargando datos...</p>
 </div>
@@ -225,5 +229,5 @@
 
 
 <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-<script src="{{ url_for('static', filename='js/dashboard.js') }}?v=2.5"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}?v=2.6"></script>
 {% endblock %}

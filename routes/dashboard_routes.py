@@ -10,6 +10,7 @@ from utils.sheet_cache import (
 )
 from utils.filters import filtrar_dataframe
 from utils.auth import login_requerido, permiso_modulo # ← importar el decorador
+from utils.db import get_db_connection
 import pandas as pd
 
 
@@ -56,8 +57,29 @@ def dashboard():
 @login_requerido
 def api_sucursales():
     empresa = request.args.get("empresa", "comercial")
+    tabla = "ventas_comercial" if empresa == "comercial" else "ventas_agricola" if empresa == "agricola" else None
+    if tabla:
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT DISTINCT sucursal
+                    FROM {tabla}
+                    WHERE sucursal IS NOT NULL AND TRIM(sucursal) <> ''
+                    ORDER BY sucursal
+                    """
+                )
+                rows = cur.fetchall()
+            return jsonify([str(r["sucursal"]) for r in rows if r.get("sucursal")])
+        except Exception:
+            pass
+        finally:
+            conn.close()
+
+    # Fallback al cache de datos si falla consulta liviana
     df = obtener_datos(empresa)
-    sucursales = sorted(df["SUCURSAL"].dropna().unique().tolist())
+    sucursales = sorted(df["SUCURSAL"].dropna().unique().tolist()) if "SUCURSAL" in df.columns else []
     return jsonify(sucursales)
 
 
@@ -505,6 +527,38 @@ def api_dashboard_export_origen():
 @login_requerido
 def api_latest_date_info():
     empresa = request.args.get("empresa", "comercial")
+    tabla = "ventas_comercial" if empresa == "comercial" else "ventas_agricola" if empresa == "agricola" else None
+
+    # Camino rápido: sólo MAX(fecha) directo en DB (sin cargar dataframe completo).
+    if tabla:
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT MAX(fecha) AS fecha_max
+                    FROM {tabla}
+                    WHERE UPPER(TRIM(estado)) IN ('COBRADO', 'COBRADA', 'DESPACH./COBRADA')
+                      AND fecha IS NOT NULL
+                    """
+                )
+                row = cur.fetchone()
+            fecha_mas_reciente = row.get("fecha_max") if row else None
+            if pd.notna(fecha_mas_reciente):
+                if not isinstance(fecha_mas_reciente, datetime):
+                    fecha_mas_reciente = pd.to_datetime(fecha_mas_reciente, errors="coerce")
+                if pd.notna(fecha_mas_reciente):
+                    return jsonify(
+                        {
+                            "año": int(fecha_mas_reciente.year),
+                            "semana": int(fecha_mas_reciente.isocalendar().week),
+                        }
+                    )
+        except Exception:
+            pass
+        finally:
+            conn.close()
+
     try:
         df = obtener_datos(empresa)
         if not df.empty and "FECHA" in df.columns:

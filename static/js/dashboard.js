@@ -162,6 +162,13 @@ function toggleChartsOverlay(show) {
     }
 }
 
+function toggleInitialOverlay(show) {
+    const overlay = document.getElementById("initial-loading-overlay");
+    if (overlay) {
+        overlay.style.display = show ? "flex" : "none";
+    }
+}
+
 // Función para limpiar filtros de fecha/semana
 function limpiarFiltrosFecha() {
     document.getElementById("desde").value = "";
@@ -233,6 +240,7 @@ function actualizarDashboard() {
     // 1. REVISAR SI LA CONSULTA YA ESTÁ EN MEMORIA (¡CARGA INSTANTÁNEA!)
     if (cacheConsultas[queryKey]) {
         renderizarDatosDashboard(cacheConsultas[queryKey], empresa);
+        toggleChartsOverlay(false);
         return; // Salimos sin hacer la petición al servidor
     }
 
@@ -247,14 +255,17 @@ function actualizarDashboard() {
         })
         .catch(error => {
             console.error("Error al cargar datos del dashboard:", error);
+            toggleInitialOverlay(false);
         })
         .finally(() => {
+            toggleInitialOverlay(false);
             toggleChartsOverlay(false); // Ocultar overlay al finalizar
         });
 }
 
 // Separamos el renderizado para poder llamarlo desde la caché o desde el fetch
 function renderizarDatosDashboard(data, empresa) {
+    toggleInitialOverlay(false);
     renderTorta(data.ventas_por_familia);
     
     // Render KPIs Enriquecidos
@@ -424,6 +435,7 @@ function actualizarGraficosBarras(familiaSeleccionada) {
 
 // Carga inicial al cargar la página
 document.addEventListener("DOMContentLoaded", () => {
+    toggleInitialOverlay(true);
     empresaSeleccionada = document.getElementById("empresa").value;
     fetch(`/api/latest-date-info?empresa=${empresaSeleccionada}`)
         .then(res => res.json())
@@ -431,6 +443,10 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("año").value = data.año;
             document.getElementById("semana").value = data.semana;
             cargarSucursales(null);
+        })
+        .catch((err) => {
+            console.error("Error latest-date inicial:", err);
+            toggleInitialOverlay(false);
         });
 
     // Listener para el calendario
@@ -475,7 +491,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     sucursalActiva = null;
                     cargarSucursales(null);
                 })
-                .catch(err => console.error("Error latest-date empresa:", err));
+                .catch(err => {
+                    console.error("Error latest-date empresa:", err);
+                    toggleInitialOverlay(false);
+                });
         }
     });
     
@@ -543,6 +562,11 @@ function cargarSucursales(sucursalPreferida) {
             sucursalActiva = null;
             resaltarBoton(cont, btnTodas);
             actualizarDashboard();
+        })
+        .catch((err) => {
+            console.error("Error cargando sucursales:", err);
+            toggleInitialOverlay(false);
+            toggleChartsOverlay(false);
         });
 }
 
