@@ -2,7 +2,7 @@
 
 **Objetivo:** registrar cambios recientes, reglas de negocio y **cómo trabajar en este repo** para que cualquier persona (o IA) que lea este archivo sepa **qué tocar**, **qué no romper** y **dónde seguir el hilo**.
 
-**Última actualización (contenido):** 2026-05-11 — incluye vista Acumulado de Gestión, optimización de arranque del dashboard, historial de cargas comercial y cachés.
+**Última actualización (contenido):** 2026-05-11 — incluye Histórico de Productos, vista Acumulado de Gestión, optimización de arranque del dashboard, historial de cargas comercial y cachés.
 
 ---
 
@@ -154,6 +154,22 @@
 
 ---
 
+## H-ter. Histórico de Productos (nuevo 2026-05-11)
+
+**Problema:** no existía forma de ver la evolución histórica de un producto específico (neto, cantidad, precio) comparando año actual vs anterior, ni identificar productos con mayor crecimiento o caída.
+
+**Solución:**
+
+- **Nueva ruta:** `/ventas/historico` en `routes/ventas_routes.py` — función `ventas_historico()`.
+- **APIs:** `/api/historico-resumen` (cards top neto, crecimiento, caída) y `/api/historico-producto` (series semanales + resumen mensual de un producto).
+- **Nuevo template:** `templates/ventas_historico.html` + `static/js/ventas_historico.js`.
+- **Lógica:** reutiliza `obtener_datos(empresa)` + `filtrar_dataframe()`. Gráficos Plotly (CDN).
+- **Filtros:** Empresa (Comercial/Agrícola), Sucursal, Familia.
+- **Interacción:** cards clickeables + selector de producto → muestra 3 gráficos (neto semanal, cantidad, precio unitario) y tabla resumen mensual.
+- **Sidebar:** enlace "Histórico Productos" agregado en dropdown Ventas de `base.html`.
+
+---
+
 ## I. Archivos clave tocados en esta línea (referencia)
 
 | Archivo | Tema |
@@ -162,10 +178,13 @@
 | `utils/ventas_excel_import.py` | Import Excel/CSV, notas de crédito |
 | `routes/dashboard_routes.py` | API dashboard, ticket, históricos, export Excel, **latest-date/sucursales livianos** |
 | `routes/contab_routes.py` | Informe gerencial, comparativo, dashboard gestión, **acumulado gestión** |
+| `routes/ventas_routes.py` | Ventas detalle/resumen, **histórico de productos** |
 | `routes/config_routes.py` | Comercial upload, revertir, **historial paginado** |
 | `templates/config/comercial_upload.html` | UI import + enlaces |
 | `templates/config/comercial_cargas_historial.html` | Lista completa de cargas |
 | `templates/contab/acumulado_gestion.html` | **Vista acumulado de gestión (nueva)** |
+| `templates/ventas_historico.html` | **Vista histórico de productos (nueva)** |
+| `static/js/ventas_historico.js` | **JS histórico: cards, gráficos Plotly, tabla** |
 | `templates/dashboard.html` | Overlays, modales ticket/neto, versión JS |
 | `static/js/dashboard.js` | KPIs, caché navegador, modales, barras, **overlay inicial** |
 | `docs/QUERY_CAMBIOS_PRODUCCION.sql` | DDL / rollbacks comercial |

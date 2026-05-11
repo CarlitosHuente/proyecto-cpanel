@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request
+from flask import Blueprint, render_template, request, jsonify
 from utils.sheet_cache import obtener_datos
 from utils.filters import filtrar_dataframe
 from services.resumen_service import obtener_resumen_mensual_tabular, MESES
@@ -241,3 +241,182 @@ def descargar_excel():
                      download_name=f"ventas_{tab}.xlsx",
                      as_attachment=True,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+# =====================================================================
+# VISTA HISTÓRICO DE PRODUCTOS
+# =====================================================================
+
+@ventas_bp.route("/ventas/historico")
+@login_requerido
+@permiso_modulo("ventas")
+def ventas_historico():
+    return render_template("ventas_historico.html")
+
+
+@ventas_bp.route("/api/historico-resumen")
+@login_requerido
+def api_historico_resumen():
+    """Cards de productos significativos: top neto, mayor crecimiento, mayor caída."""
+    empresa = request.args.get("empresa", "comercial")
+    sucursal = request.args.get("sucursal")
+    familia = request.args.get("familia")
+
+    df = obtener_datos(empresa)
+    if df.empty:
+        return jsonify({"top_neto": [], "top_crecimiento": [], "top_caida": [],
+                        "sucursales": [], "familias": []})
+
+    sucursales = sorted(df["SUCURSAL"].dropna().unique().tolist()) if "SUCURSAL" in df.columns else []
+    familias = sorted(df["FAMILIA"].dropna().unique().tolist()) if "FAMILIA" in df.columns else []
+
+    df_f = filtrar_dataframe(df, tipo="FAMILIA", valor=familia or "TODOS",
+                             sucursal=sucursal, semana=None, año=None, desde=None, hasta=None)
+    if df_f.empty:
+        return jsonify({"top_neto": [], "top_crecimiento": [], "top_caida": [],
+                        "sucursales": sucursales, "familias": familias})
+
+    año_max = int(df_f["AÑO"].max())
+    año_ant = año_max - 1
+
+    curr = df_f[df_f["AÑO"] == año_max].groupby("DESCRIPCION").agg(
+        neto=("NETO", "sum"), cantidad=("CANTIDAD", "sum")).reset_index()
+    prev = df_f[df_f["AÑO"] == año_ant].groupby("DESCRIPCION").agg(
+        neto=("NETO", "sum"), cantidad=("CANTIDAD", "sum")).reset_index()
+
+    merged = pd.merge(curr, prev, on="DESCRIPCION", how="outer", suffixes=("_act", "_ant")).fillna(0)
+    merged["variacion"] = merged["neto_act"] - merged["neto_ant"]
+    merged["var_pct"] = merged.apply(
+        lambda r: round((r["variacion"] / abs(r["neto_ant"])) * 100, 1) if abs(r["neto_ant"]) > 0 else 0, axis=1)
+
+    # Sparkline: neto semanal del año actual (últimas 12 semanas con datos)
+    semanas_disp = sorted(df_f[df_f["AÑO"] == año_max]["SEMANA"].dropna().unique())
+    ultimas_sem = semanas_disp[-12:] if len(semanas_disp) > 12 else semanas_disp
+    spark_base = df_f[(df_f["AÑO"] == año_max) & (df_f["SEMANA"].isin(ultimas_sem))]
+    spark_data = spark_base.groupby(["DESCRIPCION", "SEMANA"])["NETO"].sum().reset_index()
+
+    def build_spark(desc):
+        s = spark_data[spark_data["DESCRIPCION"] == desc].sort_values("SEMANA")
+        return s["NETO"].tolist()
+
+    def to_cards(subset, n=5):
+        cards = []
+        for _, r in subset.head(n).iterrows():
+            cards.append({
+                "producto": str(r["DESCRIPCION"]),
+                "neto_actual": int(r["neto_act"]),
+                "neto_anterior": int(r["neto_ant"]),
+                "variacion": int(r["variacion"]),
+                "var_pct": float(r["var_pct"]),
+                "cantidad_actual": int(r["cantidad_act"]),
+                "sparkline": build_spark(r["DESCRIPCION"])
+            })
+        return cards
+
+    top_neto = to_cards(merged.sort_values("neto_act", ascending=False))
+    top_crec = to_cards(merged[merged["variacion"] > 0].sort_values("variacion", ascending=False))
+    top_caida = to_cards(merged[merged["variacion"] < 0].sort_values("variacion", ascending=True))
+
+    productos_lista = sorted(df_f["DESCRIPCION"].dropna().unique().tolist())
+
+    return jsonify({
+        "top_neto": top_neto,
+        "top_crecimiento": top_crec,
+        "top_caida": top_caida,
+        "sucursales": sucursales,
+        "familias": familias,
+        "productos": productos_lista,
+        "año_actual": año_max,
+        "año_anterior": año_ant,
+    })
+
+
+@ventas_bp.route("/api/historico-producto")
+@login_requerido
+def api_historico_producto():
+    """Detalle histórico de un producto: series semanales de neto, cantidad y precio."""
+    empresa = request.args.get("empresa", "comercial")
+    sucursal = request.args.get("sucursal")
+    familia = request.args.get("familia")
+    producto = request.args.get("producto")
+
+    if not producto:
+        return jsonify({"error": "Falta parámetro producto"}), 400
+
+    df = obtener_datos(empresa)
+    df_f = filtrar_dataframe(df, tipo="FAMILIA", valor=familia or "TODOS",
+                             sucursal=sucursal, semana=None, año=None, desde=None, hasta=None)
+
+    df_prod = df_f[df_f["DESCRIPCION"] == producto].copy()
+    if df_prod.empty:
+        return jsonify({"semanas": [], "neto_actual": [], "neto_anterior": [],
+                        "cant_actual": [], "cant_anterior": [],
+                        "precio_actual": [], "precio_anterior": [], "resumen_mensual": []})
+
+    año_max = int(df_prod["AÑO"].max())
+    año_ant = año_max - 1
+
+    def serie_semanal(df_año, año):
+        d = df_año[df_año["AÑO"] == año]
+        grp = d.groupby("SEMANA").agg(neto=("NETO", "sum"), cantidad=("CANTIDAD", "sum")).reset_index()
+        grp["precio"] = grp.apply(lambda r: round(r["neto"] / r["cantidad"]) if r["cantidad"] != 0 else 0, axis=1)
+        return grp.sort_values("SEMANA")
+
+    act = serie_semanal(df_prod, año_max)
+    ant = serie_semanal(df_prod, año_ant)
+
+    all_sems = sorted(set(act["SEMANA"].tolist() + ant["SEMANA"].tolist()))
+
+    act_idx = act.set_index("SEMANA")
+    ant_idx = ant.set_index("SEMANA")
+
+    semanas = [int(s) for s in all_sems]
+    neto_act = [int(act_idx.loc[s, "neto"]) if s in act_idx.index else 0 for s in all_sems]
+    neto_ant = [int(ant_idx.loc[s, "neto"]) if s in ant_idx.index else 0 for s in all_sems]
+    cant_act = [int(act_idx.loc[s, "cantidad"]) if s in act_idx.index else 0 for s in all_sems]
+    cant_ant = [int(ant_idx.loc[s, "cantidad"]) if s in ant_idx.index else 0 for s in all_sems]
+    prec_act = [int(act_idx.loc[s, "precio"]) if s in act_idx.index else 0 for s in all_sems]
+    prec_ant = [int(ant_idx.loc[s, "precio"]) if s in ant_idx.index else 0 for s in all_sems]
+
+    # Resumen mensual
+    _MESES_ES = {1: "Ene", 2: "Feb", 3: "Mar", 4: "Abr", 5: "May", 6: "Jun",
+                 7: "Jul", 8: "Ago", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dic"}
+    df_prod["FECHA_DT"] = pd.to_datetime(df_prod["FECHA"], errors="coerce")
+    df_prod["MES"] = df_prod["FECHA_DT"].dt.month
+
+    resumen = []
+    for mes in range(1, 13):
+        d_act = df_prod[(df_prod["AÑO"] == año_max) & (df_prod["MES"] == mes)]
+        d_ant = df_prod[(df_prod["AÑO"] == año_ant) & (df_prod["MES"] == mes)]
+        n_act = int(d_act["NETO"].sum())
+        n_ant = int(d_ant["NETO"].sum())
+        c_act = int(d_act["CANTIDAD"].sum())
+        c_ant = int(d_ant["CANTIDAD"].sum())
+        resumen.append({
+            "mes": _MESES_ES[mes],
+            "neto_actual": n_act, "neto_anterior": n_ant,
+            "cantidad_actual": c_act, "cantidad_anterior": c_ant,
+            "precio_actual": round(n_act / c_act) if c_act else 0,
+            "precio_anterior": round(n_ant / c_ant) if c_ant else 0,
+        })
+
+    total_neto_act = int(df_prod[df_prod["AÑO"] == año_max]["NETO"].sum())
+    total_neto_ant = int(df_prod[df_prod["AÑO"] == año_ant]["NETO"].sum())
+    total_cant_act = int(df_prod[df_prod["AÑO"] == año_max]["CANTIDAD"].sum())
+    total_cant_ant = int(df_prod[df_prod["AÑO"] == año_ant]["CANTIDAD"].sum())
+
+    return jsonify({
+        "producto": producto,
+        "año_actual": año_max, "año_anterior": año_ant,
+        "semanas": semanas,
+        "neto_actual": neto_act, "neto_anterior": neto_ant,
+        "cant_actual": cant_act, "cant_anterior": cant_ant,
+        "precio_actual": prec_act, "precio_anterior": prec_ant,
+        "resumen_mensual": resumen,
+        "totales": {
+            "neto_actual": total_neto_act, "neto_anterior": total_neto_ant,
+            "cantidad_actual": total_cant_act, "cantidad_anterior": total_cant_ant,
+            "precio_actual": round(total_neto_act / total_cant_act) if total_cant_act else 0,
+            "precio_anterior": round(total_neto_ant / total_cant_ant) if total_cant_ant else 0,
+        }
+    })

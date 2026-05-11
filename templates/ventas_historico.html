@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Histórico de Productos{% endblock %}
+
+{% block content %}
+<style>
+    .card-producto { cursor: pointer; transition: all 0.2s; border: 1px solid #333; }
+    .card-producto:hover { border-color: #d80000; transform: translateY(-2px); }
+    .card-producto.selected { border-color: #d80000; box-shadow: 0 0 12px rgba(216,0,0,0.4); }
+    .spark-canvas { height: 35px; width: 100%; }
+    .section-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
+    #detalle-producto { display: none; }
+</style>
+
+<div class="container-fluid">
+    <!-- Filtros -->
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h2 class="text-white m-0">Histórico de Productos</h2>
+        <div class="d-flex align-items-center gap-2 bg-dark p-2 rounded border border-secondary flex-wrap">
+            <div class="d-flex align-items-center gap-2">
+                <label class="text-white small m-0">Empresa:</label>
+                <select id="fil-empresa" class="form-select form-select-sm bg-secondary text-white border-0" style="min-width:160px;">
+                    <option value="comercial">Huente Comercial</option>
+                    <option value="agricola">Huente Agrícola</option>
+                </select>
+            </div>
+            <div class="vr bg-secondary mx-1 d-none d-md-block"></div>
+            <div class="d-flex align-items-center gap-2">
+                <label class="text-white small m-0">Sucursal:</label>
+                <select id="fil-sucursal" class="form-select form-select-sm bg-secondary text-white border-0" style="min-width:140px;">
+                    <option value="">TODAS</option>
+                </select>
+            </div>
+            <div class="vr bg-secondary mx-1 d-none d-md-block"></div>
+            <div class="d-flex align-items-center gap-2">
+                <label class="text-white small m-0">Familia:</label>
+                <select id="fil-familia" class="form-select form-select-sm bg-secondary text-white border-0" style="min-width:140px;">
+                    <option value="">TODAS</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading overlay -->
+    <div id="loading-hist" style="display:none;" class="text-center py-5">
+        <div class="spinner-border text-danger" role="status"></div>
+        <p class="text-white mt-2">Cargando datos...</p>
+    </div>
+
+    <!-- Cards de productos significativos -->
+    <div id="cards-container">
+        <div class="mb-4">
+            <h6 class="section-title text-danger mb-2">Top Ventas (Neto)</h6>
+            <div id="cards-top-neto" class="row row-cols-1 row-cols-md-5 g-2"></div>
+        </div>
+        <div class="mb-4">
+            <h6 class="section-title text-success mb-2">Mayor Crecimiento vs Año Anterior</h6>
+            <div id="cards-top-crec" class="row row-cols-1 row-cols-md-5 g-2"></div>
+        </div>
+        <div class="mb-4">
+            <h6 class="section-title text-warning mb-2">Mayor Caída vs Año Anterior</h6>
+            <div id="cards-top-caida" class="row row-cols-1 row-cols-md-5 g-2"></div>
+        </div>
+    </div>
+
+    <!-- Selector manual + detalle del producto -->
+    <div class="bg-dark p-3 rounded border border-secondary mb-3">
+        <div class="row align-items-end">
+            <div class="col-md-8">
+                <label class="text-white small">Buscar producto específico:</label>
+                <select id="sel-producto" class="form-select bg-secondary text-white border-0">
+                    <option value="">— Seleccionar producto —</option>
+                </select>
+            </div>
+            <div class="col-md-4 text-end">
+                <span id="label-producto-sel" class="text-muted small"></span>
+            </div>
+        </div>
+    </div>
+
+    <div id="detalle-producto">
+        <div id="detalle-loading" style="display:none;" class="text-center py-4">
+            <div class="spinner-border spinner-border-sm text-danger" role="status"></div>
+            <span class="text-white ms-2">Cargando detalle...</span>
+        </div>
+
+        <!-- KPIs del producto -->
+        <div class="row row-cols-1 row-cols-md-4 g-2 mb-4" id="producto-kpis"></div>
+
+        <!-- Gráficos -->
+        <div class="row g-3 mb-4">
+            <div class="col-lg-12">
+                <div class="card bg-dark border-secondary shadow">
+                    <div class="card-header bg-black border-secondary">
+                        <h6 class="m-0 text-white">Evolución Semanal del Neto</h6>
+                    </div>
+                    <div class="card-body p-2"><div id="chart-neto" style="height:320px;"></div></div>
+                </div>
+            </div>
+        </div>
+        <div class="row g-3 mb-4">
+            <div class="col-lg-6">
+                <div class="card bg-dark border-secondary shadow">
+                    <div class="card-header bg-black border-secondary">
+                        <h6 class="m-0 text-white">Cantidad Vendida por Semana</h6>
+                    </div>
+                    <div class="card-body p-2"><div id="chart-cantidad" style="height:280px;"></div></div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card bg-dark border-secondary shadow">
+                    <div class="card-header bg-black border-secondary">
+                        <h6 class="m-0 text-white">Precio Unitario Promedio por Semana</h6>
+                    </div>
+                    <div class="card-body p-2"><div id="chart-precio" style="height:280px;"></div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabla resumen mensual -->
+        <div class="card bg-dark border-secondary shadow mb-5">
+            <div class="card-header bg-black border-secondary">
+                <h6 class="m-0 text-white">Resumen Mensual</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-dark table-bordered table-hover table-sm text-end mb-0">
+                        <thead class="bg-black text-center">
+                            <tr>
+                                <th class="text-start ps-3" rowspan="2">Mes</th>
+                                <th colspan="2">Neto ($)</th>
+                                <th colspan="2">Cantidad</th>
+                                <th colspan="2">Precio Unit. ($)</th>
+                            </tr>
+                            <tr>
+                                <th id="th-año-act" class="text-info">Actual</th>
+                                <th id="th-año-ant" class="text-secondary">Anterior</th>
+                                <th id="th-año-act2" class="text-info">Actual</th>
+                                <th id="th-año-ant2" class="text-secondary">Anterior</th>
+                                <th id="th-año-act3" class="text-info">Actual</th>
+                                <th id="th-año-ant3" class="text-secondary">Anterior</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-resumen-body"></tbody>
+                        <tfoot id="tabla-resumen-foot" class="border-top border-light"></tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script src="{{ url_for('static', filename='js/ventas_historico.js') }}?v=1"></script>
+{% endblock %}
