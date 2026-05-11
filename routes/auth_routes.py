@@ -22,8 +22,9 @@ def obtener_ruta_inicio(rol):
         return url_for("sucursales.pizarra")
     elif rol == "invitado":
         return url_for("config.gestion_agricola")
+    elif rol == "superusuario":
+        return url_for("contab.dashboard_gestion")
     else:
-        # admin, superusuario o rol desconocido van al dashboard principal
         return url_for("dashboard.dashboard")
 
 @auth_bp.route("/", methods=["GET", "POST"])

@@ -859,6 +859,186 @@ def comparativo_gestion():
     todos_cc = sorted(list(set(obtener_datos("mayor")["CENTRO COSTO"].dropna().unique())))
     return render_template("contab/comparativo_gestion.html", reporte=reporte, columnas=cols, todos_cc=todos_cc, comp_cc=comp_cc, comp_modo=comp_modo, switch_sg=switch_sg, switch_fab=switch_fab, mes_anual=mes_base)
 
+
+@contab_bp.route("/acumulado_gestion")
+@login_requerido
+@permiso_modulo("reporte")
+def acumulado_gestion():
+    df = obtener_datos("mayor")
+    data_config = {"config_cuentas": cargar_prorrateos().get("config_cuentas", {}),
+                   "reglas_mensuales": cargar_prorrateos().get("reglas_mensuales", {}),
+                   "fabrica_empanadas": cargar_prorrateos().get("fabrica_empanadas", {})}
+    data_clasif = cargar_clasificaciones()
+
+    df["FECHA"] = pd.to_datetime(df["FECHA"], errors="coerce")
+
+    if not df.empty:
+        fecha_max = df["FECHA"].max()
+    else:
+        fecha_max = datetime.now()
+
+    periodo_hasta = request.args.get("periodo_hasta")
+    periodo_desde = request.args.get("periodo_desde")
+
+    if not periodo_hasta:
+        periodo_hasta = fecha_max.strftime("%Y-%m")
+    if not periodo_desde:
+        periodo_desde = f"{periodo_hasta[:4]}-01"
+
+    desde_dt = pd.to_datetime(periodo_desde + "-01")
+    hasta_dt = pd.to_datetime(periodo_hasta + "-01") + pd.offsets.MonthEnd(0)
+
+    n_meses = (hasta_dt.year - desde_dt.year) * 12 + (hasta_dt.month - desde_dt.month) + 1
+
+    periodos_actual = []
+    for i in range(n_meses):
+        p = (desde_dt + pd.DateOffset(months=i)).strftime("%Y-%m")
+        periodos_actual.append(p)
+
+    periodos_anterior = []
+    for i in range(n_meses):
+        p = (desde_dt + pd.DateOffset(months=i) - pd.DateOffset(years=1)).strftime("%Y-%m")
+        periodos_anterior.append(p)
+
+    todos_periodos = list(set(periodos_actual + periodos_anterior))
+
+    acum_cc = request.args.get("acum_cc", "Total Empresa")
+
+    df["SALDO_REAL"] = (df["DEBE"] - df["HABER"]) * -1
+    df["PERIODO_STR"] = df["FECHA"].dt.strftime("%Y-%m")
+    df["CENTRO COSTO"] = df["CENTRO COSTO"].astype(str).str.strip()
+    df["CUENTA"] = df["CUENTA"].astype(str).str.strip()
+    df["NOMBRE"] = df["NOMBRE"].astype(str).str.strip()
+    df = df[df["CUENTA"].str.startswith(('3', '4'))]
+    df = df[df["PERIODO_STR"].isin(todos_periodos)]
+
+    if request.args.get("form_enviado"):
+        switch_sg = request.args.get("distribuir_sg") == "on"
+        switch_fab = request.args.get("ajuste_fabrica") == "on"
+    else:
+        switch_sg = True
+        switch_fab = True
+
+    df_final = calcular_matriz_gestion(df, None, switch_sg, switch_fab, data_config)
+
+    if acum_cc != "Total Empresa":
+        df_final = df_final[df_final["CENTRO COSTO"] == acum_cc]
+
+    COL_ACT = "Acumulado Actual"
+    COL_ANT = "Acumulado Anterior"
+    columnas = [COL_ACT, COL_ANT]
+
+    matriz = {}
+    for _, row in df_final.iterrows():
+        cta = row["CUENTA"]
+        p = row["PERIODO_STR"]
+        if cta not in matriz:
+            matriz[cta] = {"nombre": row["NOMBRE"], "montos": {COL_ACT: 0.0, COL_ANT: 0.0}}
+        if p in periodos_actual:
+            matriz[cta]["montos"][COL_ACT] += row["SALDO_REAL"]
+        elif p in periodos_anterior:
+            matriz[cta]["montos"][COL_ANT] += row["SALDO_REAL"]
+
+    macros_data = {}
+    for grp in data_clasif.get("grupos", []):
+        m = grp.get("macro_categoria", "Otros")
+        if m not in macros_data:
+            macros_data[m] = {"grupos": [], "totales_col": {c: 0.0 for c in columnas}}
+        fg = {"nombre": grp["nombre"], "tipo": grp["tipo"],
+              "totales_col": {c: 0.0 for c in columnas}, "detalle_cuentas": []}
+        for cta_id in grp["cuentas"]:
+            cid = str(cta_id)
+            if cid in matriz:
+                data_cta = matriz[cid]
+                for c in columnas:
+                    val = data_cta["montos"].get(c, 0)
+                    fg["totales_col"][c] += val
+                    macros_data[m]["totales_col"][c] += val
+                fg["detalle_cuentas"].append({"codigo": cid, "nombre": data_cta["nombre"],
+                                              "montos_col": data_cta["montos"]})
+        macros_data[m]["grupos"].append(fg)
+
+    sin_clasif = {"nombre": "Pendientes", "totales_col": {c: 0.0 for c in columnas}, "detalle_cuentas": []}
+    procesadas = set([str(c) for g in data_clasif.get("grupos", []) for c in g["cuentas"]])
+    hay_pend = False
+    for cta, data in matriz.items():
+        if cta not in procesadas and sum(abs(v) for v in data["montos"].values()) > 1:
+            hay_pend = True
+            for c in columnas:
+                sin_clasif["totales_col"][c] += data["montos"].get(c, 0)
+            sin_clasif["detalle_cuentas"].append({"codigo": cta, "nombre": data["nombre"],
+                                                   "montos_col": data["montos"]})
+    if hay_pend:
+        if "Sin Clasificar" not in macros_data:
+            macros_data["Sin Clasificar"] = {"grupos": [], "totales_col": {c: 0.0 for c in columnas}}
+        macros_data["Sin Clasificar"]["grupos"].append(sin_clasif)
+        for c in columnas:
+            macros_data["Sin Clasificar"]["totales_col"][c] += sin_clasif["totales_col"][c]
+
+    ESTRUCTURA = [
+        {"id": "ingresos_op", "titulo": "INGRESOS DE EXPLOTACIÓN", "tipo": "macro",
+         "fuente": ["Ingresos Operacionales", "Ingresos Venta"]},
+        {"id": "costo_directo", "titulo": "COSTO DIRECTO (COSTO DE VENTA)", "tipo": "macro",
+         "fuente": ["Costo Venta"]},
+        {"id": "margen_op", "titulo": "MARGEN OPERACIONAL (BRUTO)", "tipo": "calculo",
+         "color": "primary", "operacion": ["ingresos_op", "costo_directo"]},
+        {"id": "costos_fijos", "titulo": "GASTOS FIJOS LOCALES", "tipo": "macro",
+         "fuente": ["Costos de Explotación"]},
+        {"id": "margen", "titulo": "MARGEN DE EXPLOTACIÓN", "tipo": "calculo",
+         "color": "warning", "operacion": ["margen_op", "costos_fijos"]},
+        {"id": "gastos_adm", "titulo": "GASTOS DE ADMINISTRACIÓN Y VENTAS", "tipo": "macro",
+         "fuente": ["Gastos de Administración y Ventas"]},
+        {"id": "res_op", "titulo": "RESULTADO OPERACIONAL", "tipo": "calculo",
+         "color": "info", "operacion": ["margen", "gastos_adm"]},
+        {"id": "no_op", "titulo": "INGRESOS Y EGRESOS NO OPERACIONALES", "tipo": "macro",
+         "fuente": ["Ingresos No Operacionales"]},
+        {"id": "res_final", "titulo": "RESULTADO ANTES DE IMPTO", "tipo": "calculo",
+         "color": "success", "operacion": ["res_op", "no_op"]},
+        {"id": "otros", "titulo": "SIN CLASIFICAR / OTROS", "tipo": "macro",
+         "fuente": ["Sin Clasificar", "Otros"]}
+    ]
+
+    reporte = []
+    cache = {}
+    for l in ESTRUCTURA:
+        f = {"titulo": l["titulo"], "tipo": l["tipo"], "color": l.get("color", "secondary"),
+             "grupos": [], "totales_col": {c: 0.0 for c in columnas}}
+        if l["tipo"] == "macro":
+            enc = False
+            for src in l["fuente"]:
+                if src in macros_data:
+                    d = macros_data[src]
+                    f["grupos"].extend(d["grupos"])
+                    for c in columnas:
+                        f["totales_col"][c] += d["totales_col"][c]
+                    enc = True
+            cache[l["id"]] = f["totales_col"]
+            if enc or l["id"] == "otros":
+                reporte.append(f)
+        elif l["tipo"] == "calculo":
+            for op in l["operacion"]:
+                tot = cache.get(op, {})
+                for c in columnas:
+                    f["totales_col"][c] += tot.get(c, 0)
+            cache[l["id"]] = f["totales_col"]
+            reporte.append(f)
+
+    _MESES_ES = {1: "Ene", 2: "Feb", 3: "Mar", 4: "Abr", 5: "May", 6: "Jun",
+                 7: "Jul", 8: "Ago", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dic"}
+    desde_ant = desde_dt - pd.DateOffset(years=1)
+    hasta_ant = hasta_dt - pd.DateOffset(years=1)
+    etiqueta_actual = f"{_MESES_ES[desde_dt.month]} {desde_dt.year} — {_MESES_ES[hasta_dt.month]} {hasta_dt.year}"
+    etiqueta_anterior = f"{_MESES_ES[desde_ant.month]} {desde_ant.year} — {_MESES_ES[hasta_ant.month]} {hasta_ant.year}"
+
+    todos_cc = sorted(list(set(obtener_datos("mayor")["CENTRO COSTO"].dropna().unique())))
+    return render_template("contab/acumulado_gestion.html",
+                           reporte=reporte, columnas=columnas, todos_cc=todos_cc,
+                           acum_cc=acum_cc, switch_sg=switch_sg, switch_fab=switch_fab,
+                           periodo_desde=periodo_desde, periodo_hasta=periodo_hasta,
+                           etiqueta_actual=etiqueta_actual, etiqueta_anterior=etiqueta_anterior,
+                           COL_ACT=COL_ACT, COL_ANT=COL_ANT)
+
+
 @contab_bp.route("/dashboard_gestion")
 @login_requerido
 @permiso_modulo("reporte")

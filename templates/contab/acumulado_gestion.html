@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}Acumulado de Gestión{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h2 class="text-white m-0">Estado de Resultados Acumulado</h2>
+    
+    <form method="GET" class="d-flex align-items-center gap-2 bg-dark p-2 rounded border border-secondary flex-wrap">
+        <input type="hidden" name="form_enviado" value="1">
+
+        <div class="d-flex align-items-center gap-2">
+            <label class="text-white small m-0">Desde:</label>
+            <input type="month" name="periodo_desde" class="form-control form-control-sm bg-secondary text-white border-0 fw-bold" 
+                   value="{{ periodo_desde }}" onchange="this.form.submit()">
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <label class="text-white small m-0">Hasta:</label>
+            <input type="month" name="periodo_hasta" class="form-control form-control-sm bg-secondary text-white border-0 fw-bold" 
+                   value="{{ periodo_hasta }}" onchange="this.form.submit()">
+        </div>
+
+        <div class="vr bg-secondary mx-1 d-none d-md-block"></div>
+
+        <select name="acum_cc" class="form-select form-select-sm bg-secondary text-white border-0" style="min-width: 150px;" onchange="this.form.submit()">
+            <option value="Total Empresa" {% if acum_cc == 'Total Empresa' %}selected{% endif %}>Total Empresa</option>
+            {% for cc in todos_cc %}
+                <option value="{{ cc }}" {% if acum_cc == cc %}selected{% endif %}>{{ cc }}</option>
+            {% endfor %}
+        </select>
+
+        <div class="vr bg-secondary mx-1 d-none d-md-block"></div>
+
+        <div class="form-check form-switch m-0">
+            <input class="form-check-input" type="checkbox" role="switch" id="switchSG" name="distribuir_sg" 
+                   {% if switch_sg %}checked{% endif %} onchange="this.form.submit()">
+            <label class="form-check-label text-white small" for="switchSG">Dist. SG</label>
+        </div>
+
+        <div class="form-check form-switch m-0">
+            <input class="form-check-input" type="checkbox" role="switch" id="switchFab" name="ajuste_fabrica" 
+                   {% if switch_fab %}checked{% endif %} onchange="this.form.submit()">
+            <label class="form-check-label text-white small" for="switchFab">Aj. Fca</label>
+        </div>
+        
+        <button type="submit" class="d-none"></button>
+    </form>
+</div>
+
+<ul class="nav nav-tabs mb-3 border-secondary">
+    <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('contab.dashboard_gestion') }}" style="color: #bbb; border: 1px solid transparent;">
+            Dashboard
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('contab.informe_gerencial') }}" style="color: #bbb; border: 1px solid transparent;">
+            Vista Mensual
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('contab.comparativo_gestion') }}" style="color: #bbb; border: 1px solid transparent;">
+            Comparativo
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link active fw-bold" href="#" 
+        style="background-color: #d80000; color: white; border-color: #d80000 #d80000 #000 #d80000;">
+            Acumulado
+        </a>
+    </li>
+</ul>
+
+<div class="table-responsive shadow-sm" style="max-height: 75vh; overflow-y: auto;">
+    <table class="table table-dark table-bordered table-hover align-middle table-sm" style="table-layout: fixed; width: 100%;">
+        <thead class="sticky-top bg-black" style="z-index: 10;">
+            <tr class="text-center small text-uppercase">
+                <th class="bg-black text-start" style="width: 300px; min-width: 300px;">Concepto</th>
+                <th class="bg-black" style="min-width: 140px;">
+                    <span class="d-block text-info">{{ etiqueta_actual }}</span>
+                </th>
+                <th class="bg-black" style="min-width: 140px;">
+                    <span class="d-block text-secondary">{{ etiqueta_anterior }}</span>
+                </th>
+                <th class="bg-black" style="min-width: 100px;">Var %</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for seccion in reporte %}
+                {% if seccion.tipo == 'macro' %}
+                    {% set val_act = seccion.totales_col[COL_ACT] %}
+                    {% set val_ant = seccion.totales_col[COL_ANT] %}
+                    <tr class="border-bottom border-secondary">
+                        <td class="text-start fw-bold text-uppercase ps-3 text-light" style="background-color: #222;">
+                            {{ seccion.titulo }}
+                        </td>
+                        <td class="text-end fw-bold text-light" style="background-color: #222;">
+                            {{ "{:,.0f}".format(val_act).replace(",", ".") }}
+                        </td>
+                        <td class="text-end fw-bold text-secondary" style="background-color: #222;">
+                            {{ "{:,.0f}".format(val_ant).replace(",", ".") }}
+                        </td>
+                        <td class="text-end fw-bold" style="background-color: #222;">
+                            {% if val_ant != 0 %}
+                                {% set var_pct = ((val_act - val_ant) / val_ant | abs) * 100 %}
+                                <span class="{% if val_act >= val_ant %}text-success{% else %}text-danger{% endif %}">
+                                    {% if val_act >= val_ant %}&#9650;{% else %}&#9660;{% endif %}
+                                    {{ "{:.1f}".format(var_pct) }}%
+                                </span>
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+
+                    {% for fila in seccion.grupos %}
+                        {% set row_id = "acum_" ~ loop.index ~ "_" ~ seccion.titulo|replace(" ", "")|replace("/", "")|lower %}
+                        {% set f_act = fila.totales_col.get(COL_ACT, 0) %}
+                        {% set f_ant = fila.totales_col.get(COL_ANT, 0) %}
+                        
+                        <tr class="grupo-row" style="cursor: pointer;" onclick="toggleFila('{{ row_id }}')">
+                            <td class="text-start ps-4 text-nowrap" style="overflow: hidden; text-overflow: ellipsis;">
+                                <span class="text-muted small me-1">&#9654;</span>
+                                {% if fila.tipo == 'INGRESO' %}
+                                    <span class="text-success me-1 small">&#9650;</span>
+                                {% else %}
+                                    <span class="text-danger me-1 small">&#9660;</span>
+                                {% endif %}
+                                {{ fila.nombre }}
+                            </td>
+                            <td class="text-end text-light {% if f_act == 0 %}text-muted{% endif %}">
+                                {% if f_act != 0 %}{{ "{:,.0f}".format(f_act).replace(",", ".") }}{% else %}-{% endif %}
+                            </td>
+                            <td class="text-end text-secondary {% if f_ant == 0 %}text-muted{% endif %}">
+                                {% if f_ant != 0 %}{{ "{:,.0f}".format(f_ant).replace(",", ".") }}{% else %}-{% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if f_ant != 0 %}
+                                    {% set fvar = ((f_act - f_ant) / f_ant | abs) * 100 %}
+                                    <span class="{% if f_act >= f_ant %}text-success{% else %}text-danger{% endif %} small">
+                                        {{ "{:.1f}".format(fvar) }}%
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted small">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+
+                        <tr id="{{ row_id }}" class="d-none">
+                            <td colspan="4" class="p-0 border-0">
+                                <table class="table table-sm table-dark table-hover mb-0" style="table-layout: fixed; width: 100%; background-color: #2c2c2c;">
+                                    <tbody>
+                                        {% for cta in fila.detalle_cuentas %}
+                                            {% set c_act = cta.montos_col.get(COL_ACT, 0) %}
+                                            {% set c_ant = cta.montos_col.get(COL_ANT, 0) %}
+                                            <tr>
+                                                <td class="text-start ps-5 text-white" style="width: 300px; min-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                                    <span class="font-monospace text-info me-2 small">{{ cta.codigo }}</span>
+                                                    <span>{{ cta.nombre }}</span>
+                                                </td>
+                                                <td class="text-end text-white" style="min-width: 140px;">
+                                                    {% if c_act != 0 %}{{ "{:,.0f}".format(c_act).replace(",", ".") }}{% else %}<span class="text-muted small">.</span>{% endif %}
+                                                </td>
+                                                <td class="text-end text-secondary" style="min-width: 140px;">
+                                                    {% if c_ant != 0 %}{{ "{:,.0f}".format(c_ant).replace(",", ".") }}{% else %}<span class="text-muted small">.</span>{% endif %}
+                                                </td>
+                                                <td class="text-end" style="min-width: 100px;">
+                                                    {% if c_ant != 0 %}
+                                                        {% set cvar = ((c_act - c_ant) / c_ant | abs) * 100 %}
+                                                        <span class="{% if c_act >= c_ant %}text-success{% else %}text-danger{% endif %} small">
+                                                            {{ "{:.1f}".format(cvar) }}%
+                                                        </span>
+                                                    {% else %}
+                                                        <span class="text-muted small">—</span>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </td>
+                        </tr>
+                    {% endfor %}
+
+                {% elif seccion.tipo == 'calculo' %}
+                    {% set r_act = seccion.totales_col[COL_ACT] %}
+                    {% set r_ant = seccion.totales_col[COL_ANT] %}
+                    <tr class="border-top border-bottom border-white">
+                        <td class="text-start fw-bold text-uppercase ps-3 bg-{{ seccion.color }} text-dark">
+                            {{ seccion.titulo }}
+                        </td>
+                        <td class="text-end fw-bold bg-{{ seccion.color }} text-dark">
+                            {{ "{:,.0f}".format(r_act).replace(",", ".") }}
+                        </td>
+                        <td class="text-end fw-bold bg-{{ seccion.color }} text-dark opacity-75">
+                            {{ "{:,.0f}".format(r_ant).replace(",", ".") }}
+                        </td>
+                        <td class="text-end fw-bold bg-{{ seccion.color }} text-dark">
+                            {% if r_ant != 0 %}
+                                {% set rvar = ((r_act - r_ant) / r_ant | abs) * 100 %}
+                                {% if r_act >= r_ant %}&#9650;{% else %}&#9660;{% endif %}
+                                {{ "{:.1f}".format(rvar) }}%
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr><td colspan="4" class="bg-black border-0" style="height: 15px;"></td></tr>
+                {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() { restoreState(); });
+    function toggleFila(id) {
+        const filaDetalle = document.getElementById(id);
+        if (filaDetalle) {
+            const isHidden = filaDetalle.classList.contains('d-none');
+            if (isHidden) { filaDetalle.classList.remove('d-none'); saveState(id, true); } 
+            else { filaDetalle.classList.add('d-none'); saveState(id, false); }
+        }
+    }
+    function saveState(id, isOpen) {
+        let state = JSON.parse(localStorage.getItem('acum_estado_filas') || '{}');
+        if (isOpen) state[id] = true; else delete state[id];
+        localStorage.setItem('acum_estado_filas', JSON.stringify(state));
+    }
+    function restoreState() {
+        const state = JSON.parse(localStorage.getItem('acum_estado_filas') || '{}');
+        for (const id in state) {
+            const fila = document.getElementById(id);
+            if (fila) fila.classList.remove('d-none');
+        }
+    }
+</script>
+
+{% endblock %}
