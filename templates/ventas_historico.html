@@ -49,15 +49,15 @@
     <!-- Cards de productos significativos -->
     <div id="cards-container">
         <div class="mb-4">
-            <h6 class="section-title text-danger mb-2">Top Ventas (Neto)</h6>
+            <h6 class="section-title text-danger mb-2" id="lbl-top-neto">Top Ventas (Neto)</h6>
             <div id="cards-top-neto" class="row row-cols-1 row-cols-md-5 g-2"></div>
         </div>
         <div class="mb-4">
-            <h6 class="section-title text-success mb-2">Mayor Crecimiento vs Año Anterior</h6>
+            <h6 class="section-title text-success mb-2" id="lbl-top-crec">Mayor Crecimiento vs Año Anterior</h6>
             <div id="cards-top-crec" class="row row-cols-1 row-cols-md-5 g-2"></div>
         </div>
         <div class="mb-4">
-            <h6 class="section-title text-warning mb-2">Mayor Caída vs Año Anterior</h6>
+            <h6 class="section-title text-warning mb-2" id="lbl-top-caida">Mayor Caída vs Año Anterior</h6>
             <div id="cards-top-caida" class="row row-cols-1 row-cols-md-5 g-2"></div>
         </div>
     </div>
@@ -150,5 +150,5 @@
 </div>
 
 <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-<script src="{{ url_for('static', filename='js/ventas_historico.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='js/ventas_historico.js') }}?v=3"></script>
 {% endblock %}

@@ -1,5 +1,8 @@
 (function () {
     const $ = id => document.getElementById(id);
+    const cacheResumen = {};
+    const cacheProducto = {};
+
     const plotlyLayout = {
         paper_bgcolor: "transparent", plot_bgcolor: "transparent",
         font: { color: "#ccc" }, margin: { t: 30, b: 50, l: 70, r: 20 },
@@ -26,26 +29,45 @@
         if (sucursal) params.set("sucursal", sucursal);
         if (familia) params.set("familia", familia);
 
-        $("loading-hist").style.display = "block";
-        $("cards-container").style.display = "none";
         $("detalle-producto").style.display = "none";
         productoActual = null;
+
+        const cacheKey = params.toString();
+        if (cacheResumen[cacheKey]) {
+            renderResumen(cacheResumen[cacheKey], sucursal, familia);
+            return;
+        }
+
+        $("loading-hist").style.display = "block";
+        $("cards-container").style.display = "none";
 
         fetch("/api/historico-resumen?" + params)
             .then(r => r.json())
             .then(data => {
-                $("loading-hist").style.display = "none";
-                $("cards-container").style.display = "block";
-
-                poblarSelect($("fil-sucursal"), data.sucursales, sucursal);
-                poblarSelect($("fil-familia"), data.familias, familia);
-                poblarSelect($("sel-producto"), data.productos || [], "");
-
-                renderCards("cards-top-neto", data.top_neto, "danger");
-                renderCards("cards-top-crec", data.top_crecimiento, "success");
-                renderCards("cards-top-caida", data.top_caida, "warning");
+                cacheResumen[cacheKey] = data;
+                renderResumen(data, sucursal, familia);
             })
             .catch(() => { $("loading-hist").style.display = "none"; });
+    }
+
+    function renderResumen(data, sucursal, familia) {
+        $("loading-hist").style.display = "none";
+        $("cards-container").style.display = "block";
+
+        poblarSelect($("fil-sucursal"), data.sucursales, sucursal);
+        poblarSelect($("fil-familia"), data.familias, familia);
+        poblarSelect($("sel-producto"), data.productos || [], "");
+
+        const periodoTxt = data.semana_limite
+            ? ` <span class="text-muted small fw-normal">(Sem 1-${data.semana_limite} — ${data.año_actual} vs ${data.año_anterior})</span>`
+            : "";
+        $("lbl-top-neto").innerHTML = "Top Ventas (Neto)" + periodoTxt;
+        $("lbl-top-crec").innerHTML = "Mayor Crecimiento" + periodoTxt;
+        $("lbl-top-caida").innerHTML = "Mayor Ca\u00edda" + periodoTxt;
+
+        renderCards("cards-top-neto", data.top_neto, "danger");
+        renderCards("cards-top-crec", data.top_crecimiento, "success");
+        renderCards("cards-top-caida", data.top_caida, "warning");
     }
 
     function poblarSelect(sel, opciones, valorActual) {
@@ -138,7 +160,6 @@
         }
         productoActual = producto;
         $("detalle-producto").style.display = "block";
-        $("detalle-loading").style.display = "block";
         $("label-producto-sel").textContent = producto;
 
         const empresa = $("fil-empresa").value;
@@ -148,15 +169,27 @@
         if (sucursal) params.set("sucursal", sucursal);
         if (familia) params.set("familia", familia);
 
+        const cacheKey = params.toString();
+        if (cacheProducto[cacheKey]) {
+            renderDetalle(cacheProducto[cacheKey]);
+            return;
+        }
+
+        $("detalle-loading").style.display = "block";
         fetch("/api/historico-producto?" + params)
             .then(r => r.json())
             .then(data => {
-                $("detalle-loading").style.display = "none";
-                renderKPIs(data);
-                renderCharts(data);
-                renderTabla(data);
+                cacheProducto[cacheKey] = data;
+                renderDetalle(data);
             })
             .catch(() => { $("detalle-loading").style.display = "none"; });
+    }
+
+    function renderDetalle(data) {
+        $("detalle-loading").style.display = "none";
+        renderKPIs(data);
+        renderCharts(data);
+        renderTabla(data);
     }
 
     function renderKPIs(data) {

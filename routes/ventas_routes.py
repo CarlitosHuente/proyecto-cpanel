@@ -262,16 +262,21 @@ def api_historico_resumen():
     sucursal = request.args.get("sucursal")
     familia = request.args.get("familia")
 
-    df = obtener_datos(empresa)
-    if df.empty:
+    df_base = obtener_datos(empresa)
+    if df_base.empty:
         return jsonify({"top_neto": [], "top_crecimiento": [], "top_caida": [],
                         "sucursales": [], "familias": []})
 
-    sucursales = sorted(df["SUCURSAL"].dropna().unique().tolist()) if "SUCURSAL" in df.columns else []
-    familias = sorted(df["FAMILIA"].dropna().unique().tolist()) if "FAMILIA" in df.columns else []
+    sucursales = sorted(df_base["SUCURSAL"].dropna().unique().tolist()) if "SUCURSAL" in df_base.columns else []
+    familias = sorted(df_base["FAMILIA"].dropna().unique().tolist()) if "FAMILIA" in df_base.columns else []
 
-    df_f = filtrar_dataframe(df, tipo="FAMILIA", valor=familia or "TODOS",
-                             sucursal=sucursal, semana=None, año=None, desde=None, hasta=None)
+    # Filtrar sin copiar el DF completo cuando no hay filtros de fecha
+    df_f = df_base
+    if sucursal and sucursal != "TODAS":
+        df_f = df_f[df_f["SUCURSAL"] == sucursal]
+    if familia and familia != "TODOS":
+        df_f = df_f[df_f["FAMILIA"] == familia]
+
     if df_f.empty:
         return jsonify({"top_neto": [], "top_crecimiento": [], "top_caida": [],
                         "sucursales": sucursales, "familias": familias})
@@ -279,9 +284,14 @@ def api_historico_resumen():
     año_max = int(df_f["AÑO"].max())
     año_ant = año_max - 1
 
-    curr = df_f[df_f["AÑO"] == año_max].groupby("DESCRIPCION").agg(
+    # Comparar solo las mismas semanas: si 2026 llega hasta semana 18, solo comparar sem 1-18 de ambos años
+    semana_max_actual = int(df_f[df_f["AÑO"] == año_max]["SEMANA"].max())
+    df_curr = df_f[(df_f["AÑO"] == año_max)]
+    df_prev = df_f[(df_f["AÑO"] == año_ant) & (df_f["SEMANA"] <= semana_max_actual)]
+
+    curr = df_curr.groupby("DESCRIPCION").agg(
         neto=("NETO", "sum"), cantidad=("CANTIDAD", "sum")).reset_index()
-    prev = df_f[df_f["AÑO"] == año_ant].groupby("DESCRIPCION").agg(
+    prev = df_prev.groupby("DESCRIPCION").agg(
         neto=("NETO", "sum"), cantidad=("CANTIDAD", "sum")).reset_index()
 
     merged = pd.merge(curr, prev, on="DESCRIPCION", how="outer", suffixes=("_act", "_ant")).fillna(0)
@@ -328,6 +338,7 @@ def api_historico_resumen():
         "productos": productos_lista,
         "año_actual": año_max,
         "año_anterior": año_ant,
+        "semana_limite": semana_max_actual,
     })
 
 
@@ -356,12 +367,16 @@ def api_historico_producto():
     año_max = int(df_prod["AÑO"].max())
     año_ant = año_max - 1
 
-    def serie_semanal(df_año, año):
-        d = df_año[df_año["AÑO"] == año]
+    # Limitar año anterior a las mismas semanas que existen en el año actual
+    semana_max_actual = int(df_prod[df_prod["AÑO"] == año_max]["SEMANA"].max())
+
+    def serie_semanal(df_src, año):
+        d = df_src[df_src["AÑO"] == año]
         grp = d.groupby("SEMANA").agg(neto=("NETO", "sum"), cantidad=("CANTIDAD", "sum")).reset_index()
         grp["precio"] = grp.apply(lambda r: round(r["neto"] / r["cantidad"]) if r["cantidad"] != 0 else 0, axis=1)
         return grp.sort_values("SEMANA")
 
+    # Gráficos: año anterior COMPLETO (para ver proyección/tendencia)
     act = serie_semanal(df_prod, año_max)
     ant = serie_semanal(df_prod, año_ant)
 
@@ -378,11 +393,12 @@ def api_historico_producto():
     prec_act = [int(act_idx.loc[s, "precio"]) if s in act_idx.index else 0 for s in all_sems]
     prec_ant = [int(ant_idx.loc[s, "precio"]) if s in ant_idx.index else 0 for s in all_sems]
 
-    # Resumen mensual
+    # Resumen mensual - limitar año anterior al último mes con datos del año actual
     _MESES_ES = {1: "Ene", 2: "Feb", 3: "Mar", 4: "Abr", 5: "May", 6: "Jun",
                  7: "Jul", 8: "Ago", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dic"}
     df_prod["FECHA_DT"] = pd.to_datetime(df_prod["FECHA"], errors="coerce")
     df_prod["MES"] = df_prod["FECHA_DT"].dt.month
+    mes_max_actual = int(df_prod[df_prod["AÑO"] == año_max]["MES"].max())
 
     resumen = []
     for mes in range(1, 13):
@@ -400,14 +416,19 @@ def api_historico_producto():
             "precio_anterior": round(n_ant / c_ant) if c_ant else 0,
         })
 
-    total_neto_act = int(df_prod[df_prod["AÑO"] == año_max]["NETO"].sum())
-    total_neto_ant = int(df_prod[df_prod["AÑO"] == año_ant]["NETO"].sum())
-    total_cant_act = int(df_prod[df_prod["AÑO"] == año_max]["CANTIDAD"].sum())
-    total_cant_ant = int(df_prod[df_prod["AÑO"] == año_ant]["CANTIDAD"].sum())
+    # Totales comparables: solo los meses que existen en el año actual
+    df_act_total = df_prod[(df_prod["AÑO"] == año_max)]
+    df_ant_total = df_prod[(df_prod["AÑO"] == año_ant) & (df_prod["MES"] <= mes_max_actual)]
+    total_neto_act = int(df_act_total["NETO"].sum())
+    total_neto_ant = int(df_ant_total["NETO"].sum())
+    total_cant_act = int(df_act_total["CANTIDAD"].sum())
+    total_cant_ant = int(df_ant_total["CANTIDAD"].sum())
 
+    _M = {1:"Ene",2:"Feb",3:"Mar",4:"Abr",5:"May",6:"Jun",7:"Jul",8:"Ago",9:"Sep",10:"Oct",11:"Nov",12:"Dic"}
     return jsonify({
         "producto": producto,
         "año_actual": año_max, "año_anterior": año_ant,
+        "periodo_comparado": f"Sem 1-{semana_max_actual} ({_M[1]}-{_M.get(mes_max_actual,'?')})",
         "semanas": semanas,
         "neto_actual": neto_act, "neto_anterior": neto_ant,
         "cant_actual": cant_act, "cant_anterior": cant_ant,
