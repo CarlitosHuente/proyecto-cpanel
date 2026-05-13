@@ -2,7 +2,7 @@
 
 **Objetivo:** registrar cambios recientes, reglas de negocio y **cómo trabajar en este repo** para que cualquier persona (o IA) que lea este archivo sepa **qué tocar**, **qué no romper** y **dónde seguir el hilo**.
 
-**Última actualización (contenido):** 2026-05-11 — incluye Histórico de Productos, vista Acumulado de Gestión, optimización de arranque del dashboard, historial de cargas comercial y cachés.
+**Última actualización (contenido):** 2026-05-12 — incluye Histórico de Productos (comparación justa + proyección en gráficos, caché navegador), vista Acumulado de Gestión, optimización de arranque del dashboard, historial de cargas comercial y cachés.
 
 ---
 
@@ -67,7 +67,7 @@
 | Capa | Dónde | Cuándo se invalida |
 |------|--------|---------------------|
 | **Servidor** | `_cache` en `utils/sheet_cache.py` dentro de `obtener_datos` | Tras `forzar_actualizacion(empresa)` (p. ej. tras import/revertir comercial) o reinicio del proceso WSGI. |
-| **Navegador** | `cacheConsultas` / `cacheProductos` en `static/js/dashboard.js` | Recarga fuerte de página o cambio de query string; no es persistente entre dispositivos. |
+| **Navegador** | `cacheConsultas` / `cacheProductos` en `static/js/dashboard.js`; `cacheResumen` / `cacheProducto` en `static/js/ventas_historico.js` | Recarga fuerte de página o cambio de query string; no es persistente entre dispositivos. |
 | **Manual** | GET `/refresh` | Recarga todo el caché del servidor definido en `refrescar_todo_el_cache`. |
 
 **Nota para IA:** si el usuario dice “no veo la última carga”, revisar **import + forzar_actualizacion** y **/refresh** antes de depurar lógica.
@@ -154,7 +154,7 @@
 
 ---
 
-## H-ter. Histórico de Productos (nuevo 2026-05-11)
+## H-ter. Histórico de Productos (nuevo 2026-05-11; reglas finales 2026-05-12)
 
 **Problema:** no existía forma de ver la evolución histórica de un producto específico (neto, cantidad, precio) comparando año actual vs anterior, ni identificar productos con mayor crecimiento o caída.
 
@@ -162,11 +162,18 @@
 
 - **Nueva ruta:** `/ventas/historico` en `routes/ventas_routes.py` — función `ventas_historico()`.
 - **APIs:** `/api/historico-resumen` (cards top neto, crecimiento, caída) y `/api/historico-producto` (series semanales + resumen mensual de un producto).
-- **Nuevo template:** `templates/ventas_historico.html` + `static/js/ventas_historico.js`.
-- **Lógica:** reutiliza `obtener_datos(empresa)` + `filtrar_dataframe()`. Gráficos Plotly (CDN).
+- **Nuevo template:** `templates/ventas_historico.html` + `static/js/ventas_historico.js` (cache-bust `?v=...` en el template al cambiar el JS).
+- **Lógica:** reutiliza `obtener_datos(empresa)`; en resumen se filtra sucursal/familia sin copiar el DataFrame completo cuando basta un slice. Gráficos Plotly (CDN).
 - **Filtros:** Empresa (Comercial/Agrícola), Sucursal, Familia.
 - **Interacción:** cards clickeables + selector de producto → muestra 3 gráficos (neto semanal, cantidad, precio unitario) y tabla resumen mensual.
 - **Sidebar:** enlace "Histórico Productos" agregado en dropdown Ventas de `base.html`.
+
+**Comparación año actual vs anterior (comportamiento final):**
+
+- **Cards (`/api/historico-resumen`):** el % de variación compara **las mismas semanas** del año actual y del anterior (según la última semana con datos del año actual, p. ej. Sem 1–18 en ambos años). Así no se penaliza un año parcial frente a un año completo.
+- **Etiqueta en pantalla:** los títulos de sección muestran el rango de semanas comparado (ej. `Sem 1-18 — 2026 vs 2025`).
+- **Detalle de producto (`/api/historico-producto`):** los **gráficos** usan el año anterior **completo** (52 semanas) para ver tendencia y “proyección”; los **KPIs / totales** de variación siguen alineados al periodo comparable (mismas semanas y totales por meses comparables en la fila de totales).
+- **Caché en navegador:** `static/js/ventas_historico.js` guarda en memoria las respuestas de resumen y de detalle por combinación de filtros/producto; repetir la misma consulta no vuelve a llamar al servidor hasta recargar la página.
 
 ---
 
