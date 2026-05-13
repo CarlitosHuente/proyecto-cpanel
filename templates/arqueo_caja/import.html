@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Importar arqueo de caja{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h2 class="text-white mb-3"><i class="bi bi-upload text-info me-2"></i> Importar arqueo de caja</h2>
+  <p class="text-muted small"><a href="{{ url_for('arqueo_caja.index') }}" class="text-secondary">← Volver</a></p>
+  {% include "arqueo_caja/_flashes.html" %}
+
+  <div class="card bg-dark border-secondary mb-4">
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data">
+        <div class="mb-3">
+          <label class="form-label text-white">Sucursal</label>
+          <select name="sucursal_id" class="form-select bg-secondary text-white border-secondary" required>
+            <option value="">— Elegir —</option>
+            {% for s in sucursales %}
+              <option value="{{ s.sucursal_id }}">{{ s.nombre_sucursal }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label text-white">Archivo (.xlsx, .xls, .csv)</label>
+          <input type="file" name="archivo" class="form-control bg-secondary text-white border-secondary" accept=".xlsx,.xls,.csv" required>
+        </div>
+        <button type="submit" class="btn btn-warning"><i class="bi bi-cloud-upload me-1"></i> Procesar</button>
+      </form>
+    </div>
+  </div>
+
+  <h4 class="text-white mb-2">Últimas cargas</h4>
+  <div class="table-responsive">
+    <table class="table table-dark table-striped table-hover">
+      <thead>
+        <tr><th>ID</th><th>Fecha</th><th>Archivo</th><th>Sucursal</th><th>Filas</th><th>Usuario</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for c in cargas %}
+        <tr>
+          <td>{{ c.carga_id }}</td>
+          <td>{{ c.fecha_carga }}</td>
+          <td>{{ c.nombre_archivo }}</td>
+          <td>{{ c.nombre_sucursal }}</td>
+          <td>{{ c.registros_insertados }}</td>
+          <td>{{ c.usuario or '—' }}</td>
+          <td>
+            <form method="post" action="{{ url_for('arqueo_caja.revertir', carga_id=c.carga_id) }}" class="d-inline" onsubmit="return confirm('¿Revertir esta carga? Se borrarán todas sus líneas.');">
+              <button type="submit" class="btn btn-sm btn-outline-danger">Revertir</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted">Sin cargas aún.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

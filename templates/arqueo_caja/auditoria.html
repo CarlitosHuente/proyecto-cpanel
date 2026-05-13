@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Auditoría arqueo{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h2 class="text-white mb-2">Auditoría — {{ nombre_suc }} · Caja {{ caja }}</h2>
+  <p class="text-muted mb-3">Fecha: <strong>{{ fecha }}</strong></p>
+  <p class="text-muted small">
+    <a href="{{ url_for('arqueo_caja.cuadratura', sucursal_id=sucursal_id, fecha=fecha, caja=caja) }}" class="text-secondary">← Volver a cuadratura</a>
+    · <a class="text-warning" href="{{ url_for('arqueo_caja.export_auditoria_xlsx', sucursal_id=sucursal_id, fecha=fecha, caja=caja) }}">Descargar Excel</a>
+  </p>
+
+  <h4 class="text-white mt-4">Resumen por canal</h4>
+  <p class="text-muted small">Encabezados clicables para ordenar (vuelve a clicar para invertir).</p>
+  <div class="table-responsive mb-4">
+    <table class="table table-dark table-sm">
+      <thead>
+        <tr>
+          <th><a class="text-white text-decoration-none" href="{{ url_for('arqueo_caja.auditoria', sucursal_id=sucursal_id, fecha=fecha, caja=caja, ord_res='etiqueta', dir_res=('desc' if ord_res=='etiqueta' and dir_res=='asc' else 'asc'), ord_det=ord_det, dir_det=dir_det) }}">Mostrado{% if ord_res=='etiqueta' %} <small class="text-warning">{% if dir_res=='asc' %}▲{% else %}▼{% endif %}</small>{% endif %}</a></th>
+          <th><a class="text-white text-decoration-none" href="{{ url_for('arqueo_caja.auditoria', sucursal_id=sucursal_id, fecha=fecha, caja=caja, ord_res='norm', dir_res=('desc' if ord_res=='norm' and dir_res=='asc' else 'asc'), ord_det=ord_det, dir_det=dir_det) }}">Norm{% if ord_res=='norm' %} <small class="text-warning">{% if dir_res=='asc' %}▲{% else %}▼{% endif %}</small>{% endif %}</a></th>
+          <th class="text-end"><a class="text-white text-decoration-none" href="{{ url_for('arqueo_caja.auditoria', sucursal_id=sucursal_id, fecha=fecha, caja=caja, ord_res='sistema', dir_res=('desc' if ord_res=='sistema' and dir_res=='asc' else 'asc'), ord_det=ord_det, dir_det=dir_det) }}">Sistema{% if ord_res=='sistema' %} <small class="text-warning">{% if dir_res=='asc' %}▲{% else %}▼{% endif %}</small>{% endif %}</a></th>
+          <th class="text-end"><a class="text-white text-decoration-none" href="{{ url_for('arqueo_caja.auditoria', sucursal_id=sucursal_id, fecha=fecha, caja=caja, ord_res='terreno', dir_res=('desc' if ord_res=='terreno' and dir_res=='asc' else 'asc'), ord_det=ord_det, dir_det=dir_det) }}">Terreno{% if ord_res=='terreno' %} <small class="text-warning">{% if dir_res=='asc' %}▲{% else %}▼{% endif %}</small>{% endif %}</a></th>
+          <th class="text-end"><a class="text-white text-decoration-none" href="{{ url_for('arqueo_caja.auditoria', sucursal_id=sucursal_id, fecha=fecha, caja=caja, ord_res='propina', dir_res=('desc' if ord_res=='propina' and dir_res=='asc' else 'asc'), ord_det=ord_det, dir_det=dir_det) }}">Propina{% if ord_res=='propina' %} <small class="text-warning">{% if dir_res=='asc' %}▲{% else %}▼{% endif %}</small>{% endif %}</a></th>
+          <th class="text-end"><a class="text-white text-decoration-none" href="{{ url_for('arqueo_caja.auditoria', sucursal_id=sucursal_id, fecha=fecha, caja=caja, ord_res='diff', dir_res=('desc' if ord_res=='diff' and dir_res=='asc' else 'asc'), ord_det=ord_det, dir_det=dir_det) }}">Diff{% if ord_res=='diff' %} <small class="text-warning">{% if dir_res=='asc' %}▲{% else %}▼{% endif %}</small>{% endif %}</a></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in data.filas %}
+        <tr class="{% if f.descuadrado %}table-danger{% endif %}">
+          <td class="fw-semibold">{{ f.etiqueta }}</td>
+          <td><code>{{ f.canal_norm }}</code> <small class="text-muted">{{ f.sistema_muestra }}</small></td>
+          <td class="text-end">{{ f.sistema|dinero }}</td>
+          <td class="text-end">{{ f.terreno|dinero }}</td>
+          <td class="text-end">{% if f.propina is not none %}{{ f.propina|dinero }}{% else %}—{% endif %}</td>
+          <td class="text-end">{{ f.diff|dinero }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <h4 class="text-white">Detalle sistema (línea a línea)</h4>
+  <p class="text-muted small">Buscá duplicados de <code>N_COMP</code> con distinto canal o montos que expliquen la diferencia.</p>
+  <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
+    <table class="table table-dark table-sm table-striped">
+      <thead class="sticky-top bg-black">
+        <tr>
+          <th><a class="text-white text-decoration-none" href="{{ url_for('arqueo_caja.auditoria', sucursal_id=sucursal_id, fecha=fecha, caja=caja, ord_res=ord_res, dir_res=dir_res, ord_det='fecha', dir_det=('desc' if ord_det=='fecha' and dir_det=='asc' else 'asc')) }}">Fecha{% if ord_det=='fecha' %} <small class="text-warning">{% if dir_det=='asc' %}▲{% else %}▼{% endif %}</small>{% endif %}</a></th>
+          <th><a class="text-white text-decoration-none" href="{{ url_for('arqueo_caja.auditoria', sucursal_id=sucursal_id, fecha=fecha, caja=caja, ord_res=ord_res, dir_res=dir_res, ord_det='tipo', dir_det=('desc' if ord_det=='tipo' and dir_det=='asc' else 'asc')) }}">Tipo{% if ord_det=='tipo' %} <small class="text-warning">{% if dir_det=='asc' %}▲{% else %}▼{% endif %}</small>{% endif %}</a></th>
+          <th><a class="text-white text-decoration-none" href="{{ url_for('arqueo_caja.auditoria', sucursal_id=sucursal_id, fecha=fecha, caja=caja, ord_res=ord_res, dir_res=dir_res, ord_det='n_comp', dir_det=('desc' if ord_det=='n_comp' and dir_det=='asc' else 'asc')) }}">N_COMP{% if ord_det=='n_comp' %} <small class="text-warning">{% if dir_det=='asc' %}▲{% else %}▼{% endif %}</small>{% endif %}</a></th>
+          <th><a class="text-white text-decoration-none" href="{{ url_for('arqueo_caja.auditoria', sucursal_id=sucursal_id, fecha=fecha, caja=caja, ord_res=ord_res, dir_res=dir_res, ord_det='desc', dir_det=('desc' if ord_det=='desc' and dir_det=='asc' else 'asc')) }}">DESC_CTA{% if ord_det=='desc' %} <small class="text-warning">{% if dir_det=='asc' %}▲{% else %}▼{% endif %}</small>{% endif %}</a></th>
+          <th class="text-end"><a class="text-white text-decoration-none" href="{{ url_for('arqueo_caja.auditoria', sucursal_id=sucursal_id, fecha=fecha, caja=caja, ord_res=ord_res, dir_res=dir_res, ord_det='debe', dir_det=('desc' if ord_det=='debe' and dir_det=='asc' else 'asc')) }}">DEBE{% if ord_det=='debe' %} <small class="text-warning">{% if dir_det=='asc' %}▲{% else %}▼{% endif %}</small>{% endif %}</a></th>
+          <th class="text-end"><a class="text-white text-decoration-none" href="{{ url_for('arqueo_caja.auditoria', sucursal_id=sucursal_id, fecha=fecha, caja=caja, ord_res=ord_res, dir_res=dir_res, ord_det='haber', dir_det=('desc' if ord_det=='haber' and dir_det=='asc' else 'asc')) }}">HABER{% if ord_det=='haber' %} <small class="text-warning">{% if dir_det=='asc' %}▲{% else %}▼{% endif %}</small>{% endif %}</a></th>
+          <th class="text-end"><a class="text-white text-decoration-none" href="{{ url_for('arqueo_caja.auditoria', sucursal_id=sucursal_id, fecha=fecha, caja=caja, ord_res=ord_res, dir_res=dir_res, ord_det='neto', dir_det=('desc' if ord_det=='neto' and dir_det=='asc' else 'asc')) }}">Neto{% if ord_det=='neto' %} <small class="text-warning">{% if dir_det=='asc' %}▲{% else %}▼{% endif %}</small>{% endif %}</a></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in data.detalle_sistema %}
+        <tr>
+          <td>{{ r.fec_compr }}</td>
+          <td>{{ r.cod_comp or '—' }}</td>
+          <td>{{ r.n_comp }}</td>
+          <td>{{ r.desc_cta }}</td>
+          <td class="text-end">{{ r.debe|dinero }}</td>
+          <td class="text-end">{{ r.haber|dinero }}</td>
+          <td class="text-end">{{ (r.debe|float - r.haber|float)|dinero }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-muted">Sin líneas.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

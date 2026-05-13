@@ -2,7 +2,7 @@
 
 **Objetivo:** registrar cambios recientes, reglas de negocio y **cómo trabajar en este repo** para que cualquier persona (o IA) que lea este archivo sepa **qué tocar**, **qué no romper** y **dónde seguir el hilo**.
 
-**Última actualización (contenido):** 2026-05-12 — incluye Histórico de Productos (comparación justa + proyección en gráficos, caché navegador), vista Acumulado de Gestión, optimización de arranque del dashboard, historial de cargas comercial y cachés.
+**Última actualización (contenido):** 2026-05-10 — documentado módulo **Arqueo de caja** (sección M): terreno, cuadratura, auditoría, notas, presentación monetaria, archivos y rutas.
 
 ---
 
@@ -194,7 +194,14 @@
 | `static/js/ventas_historico.js` | **JS histórico: cards, gráficos Plotly, tabla** |
 | `templates/dashboard.html` | Overlays, modales ticket/neto, versión JS |
 | `static/js/dashboard.js` | KPIs, caché navegador, modales, barras, **overlay inicial** |
-| `docs/QUERY_CAMBIOS_PRODUCCION.sql` | DDL / rollbacks comercial |
+| `routes/arqueo_caja_routes.py` | Blueprint arqueo: import, terreno, cuadratura, auditoría, export, canales UI, bundles eliminar/notas |
+| `utils/arqueo_caja_import.py` | Lectura Excel arqueo, normalización de canal, parse montos |
+| `utils/arqueo_caja_canal_ui_config.py` | Etiquetas/orden canales → JSON en `instance/` |
+| `utils/formato_dinero.py` | Presentación monetaria sin decimales (`dinero_presentacion`) |
+| `utils/arqueo_caja_canales.py` | Lista legacy (puede quedar sin uso; canales “admin” salen de `arqueo_caja_lineas`) |
+| `templates/arqueo_caja/*.html` | UI arqueo (terreno, cuadratura, auditoría, import, canales, flashes) |
+| `docs/QUERY_CAMBIOS_PRODUCCION.sql` | DDL `arqueo_caja_*` (cargas, líneas, terreno; índices, `cod_comp`, caja/propina) |
+| `instance/arqueo_canales_ui.json` | Preferencias UI canales; **no versionar** si es local; se crea al guardar en “Administrar nombres de canales” |
 
 ---
 
@@ -206,7 +213,68 @@
 
 ---
 
-## K. Pendiente / datos que debe completar el equipo
+## K. Presentación de dinero (regla de proyecto)
+
+- **En pantalla y exportes orientados a usuarios**, los montos en **pesos chilenos** se muestran **sin decimales** (redondeo HALF_UP al entero más cercano). Separador de miles: punto (ej. `12.345.678`).
+- **Implementación:** `utils/formato_dinero.py` (`dinero_presentacion`) y filtro Jinja `{{ valor|dinero }}` registrado en `app.py`.
+- **Cálculos internos** (cuadratura, import, BD) siguen usando `Decimal` con la precisión que defina el esquema; solo cambia la **presentación** salvo que se indique lo contrario en una pantalla específica.
+
+---
+
+## M. Módulo Arqueo de caja (`/arqueo-caja`)
+
+**Objetivo:** importar movimientos **sistema** (Excel) por sucursal, cargar totales **terreno** por día/caja/canal, **cuadrar** terreno vs sistema por canal, revisar **auditoría** y exportar Excel.
+
+### Datos (MySQL)
+
+| Tabla | Rol |
+|--------|-----|
+| `arqueo_caja_cargas` | Cabecera de carga (archivo, sucursal, usuario, contador líneas). Borrar carga en cascada borra líneas. |
+| `arqueo_caja_lineas` | Líneas import: `fec_compr`, `n_comp`, `cod_comp`, `desc_cta`, `debe`, `haber`, `sucursal_id`, `carga_id`. Base para **canales** (texto único `desc_cta` normalizado). |
+| `arqueo_caja_terreno` | Una fila por `(sucursal_id, fecha, canal_norm, caja)`: `monto`, `propina` (info), `notas` (hasta 500), `canal_raw` (etiqueta mostrada). **UK** por sucursal+fecha+canal_norm+caja. |
+
+Esquema y migraciones comentadas: `docs/QUERY_CAMBIOS_PRODUCCION.sql`.
+
+### Rutas principales
+
+| Ruta | Descripción |
+|------|----------------|
+| `GET/POST …/import` | Subir Excel sistema → `cargas` + `lineas`. |
+| `POST …/revertir/<carga_id>` | Elimina carga y líneas asociadas. |
+| `GET/POST …/terreno` | Barra sucursal+caja+fecha (GET al cambiar barra); **grilla** de montos por canal; POST masivo `bulk_terreno`. |
+| `POST …/terreno/bundle/eliminar` | Borra **todas** las filas terreno de un día/sucursal/caja. |
+| `POST …/terreno/bundle/notas` | `UPDATE` el mismo `notas` en **todas** las filas terreno de ese día/caja (no inserta filas si no hay captura). |
+| `GET …/terreno/editar/<id>` | **GET** redirige a terreno con sucursal/fecha/caja (edición vía grilla). POST reservado por compatibilidad. |
+| `GET/POST …/canales-ui` | Admin **presentación**: etiqueta por canal canónico + orden; persiste en `instance/arqueo_canales_ui.json` (**sin tabla nueva**). Canales listados = `DISTINCT` de `arqueo_caja_lineas` (global). |
+| `GET …/cuadratura` | **Vista día** o **vista semana** (`?vista=semana`): semana lun–dom que contiene la fecha elegida. |
+| `GET …/cuadratura/auditoria` | Resumen por canal + detalle líneas; **orden** por columnas (`ord_res`/`dir_res`, `ord_det`/`dir_det`). |
+| `GET …/cuadratura/export.xlsx` | Excel resumen + detalle + terreno (montos enteros en hojas exportadas). |
+
+### Terreno — UX
+
+- **Canales en grilla:** unión de (1) `desc_cta` distintos de **toda** la BD en `arqueo_caja_lineas` y (2) canales ya guardados en terreno para esa sucursal/fecha/caja. Orden: JSON `sort` + nombre.
+- **Esperado sistema:** neto import (DEBE−HABER) **solo** para la sucursal y fecha elegidas (columna informativa).
+- **Etiquetas visibles:** configurables en “Administrar nombres de canales”; la conciliación sigue por `canal_norm` (hidden en el POST).
+- **Capturas guardadas:** tabla **agrupada** por día·sucursal·caja. Filtros de lista: **solo sucursal y caja** (sin filtro por fecha en la consulta; orden por fecha descendente). El formulario inferior lleva `fecha` **oculta** para conservar la fecha de la grilla superior al filtrar la lista.
+- **Enter:** foco monto → propina → siguiente fila.
+
+### Cuadratura — día y semana
+
+- **Día:** por canal; totales **diferencia** y **propinas** terreno; observación del día/caja vía `terreno/bundle/notas`.
+- **Semana:** por cada día, **Caja 1 y Caja 2** (hasta 14 filas): diferencia total día/caja, suma propinas, estado, observación, enlaces a cuadratura día y auditoría. **Pie:** suma semanal de diferencias y propinas (solo días/caja con datos).
+- **Conciliado:** `total_diff == 0` y hay sistema o terreno.
+
+### Presentación monetaria
+
+Ver **sección K** (`|dinero` en plantillas y reglas de export).
+
+### Permisos
+
+Rutas con `@permiso_modulo("arqueo_caja")` (detalle de roles según tu `utils/auth` / BD).
+
+---
+
+## L. Pendiente / datos que debe completar el equipo
 
 - [ ] Plan exacto HostChile (compartido vs VPS) y límites de workers / PHP no aplica — **Python WSGI**.
 - [ ] URL de producción y si hay staging.

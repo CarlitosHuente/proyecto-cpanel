@@ -11,7 +11,7 @@ PERMISOS_FILE = os.path.join(BASE_DIR, 'permisos.json')
 
 DEFAULT_PERMISOS = {
     "superusuario": ["*"], 
-    "admin": ["dashboard", "ventas", "clientes", "seremi", "contab", "reporte","sucursales","productos","categorias", "agricola", "utilidades"],
+    "admin": ["dashboard", "ventas", "clientes", "seremi", "contab", "reporte","sucursales","productos","categorias", "agricola", "utilidades", "arqueo_caja"],
     "ventas": ["dashboard", "ventas", "clientes", "utilidades"],
     "seremi2":["seremi"],
     "seremi": ["sucursales","seremi","productos","categorias"],

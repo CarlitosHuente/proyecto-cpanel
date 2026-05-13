@@ -20,9 +20,12 @@ from routes.fabrica_routes import fabrica_bp
 from routes.costeo_routes import costeo_bp
 from routes.utilidades_routes import utilidades_bp
 from routes.precios_routes import precios_bp
+from routes.arqueo_caja_routes import arqueo_caja_bp
 import os
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
+from utils.formato_dinero import dinero_presentacion
 
 app = Flask(__name__, template_folder=os.path.join(BASE_DIR, 'templates'))
 app.permanent_session_lifetime = timedelta(minutes=45) #Tiempo Maximo de inactividad.
@@ -57,6 +60,7 @@ app.register_blueprint(fabrica_bp)
 app.register_blueprint(costeo_bp)
 app.register_blueprint(utilidades_bp)
 app.register_blueprint(precios_bp)
+app.register_blueprint(arqueo_caja_bp)
 
 
 
@@ -70,6 +74,12 @@ app.config['UPLOAD_FOLDER_CONTAB'] = UPLOAD_FOLDER
 def utility_processor():
     """Esto permite usar la función tiene_permiso dentro de los HTML"""
     return dict(tiene_permiso=tiene_permiso)
+
+
+@app.template_filter("dinero")
+def filtro_dinero(val):
+    """Montos en pantalla sin decimales (pesos). Ver `utils/formato_dinero.py` y bitácora."""
+    return dinero_presentacion(val)
 
 @app.route("/refresh")
 def refresh_global():

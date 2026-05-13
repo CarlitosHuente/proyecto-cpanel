@@ -99,7 +99,40 @@ thead th {
   }
 
     
-/* Alertas adaptadas al tema oscuro */
+/* Alertas adaptadas al tema oscuro (sobrescribe regla global div/span en blanco) */
+.alert,
+.alert *:not(.btn-close) {
+    color: inherit !important;
+}
+.alert .btn-close {
+    filter: invert(1);
+    opacity: 0.85;
+}
+.alert-success {
+    background-color: #14532d !important;
+    color: #ecfdf5 !important;
+    border-color: #22c55e !important;
+}
+.alert-info {
+    background-color: #164e63 !important;
+    color: #ecfeff !important;
+    border-color: #22d3ee !important;
+}
+.alert-danger {
+    background-color: #7f1d1d !important;
+    color: #fef2f2 !important;
+    border-color: #f87171 !important;
+}
+.alert-primary {
+    background-color: #1e3a5f !important;
+    color: #eff6ff !important;
+    border-color: #60a5fa !important;
+}
+.alert-secondary {
+    background-color: #374151 !important;
+    color: #f3f4f6 !important;
+    border-color: #9ca3af !important;
+}
 .alert-warning {
     background-color: #5a3d00 !important;   /* café/amarillo oscuro */
     color: #ffffff !important;             /* texto blanco */

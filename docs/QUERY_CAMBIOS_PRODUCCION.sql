@@ -94,6 +94,82 @@ CREATE TABLE IF NOT EXISTS ventas_comercial (
 -- DROP TABLE IF EXISTS cargas_comercial;
 
 
+-- [2026-05-10] [IA] [arqueo_caja]
+-- Motivo: Módulo cuadratura diaria caja sucursal — import Excel (FEC_COMPR, N_COMP, DESC_CTA, DEBE, HABER opcional)
+--         y captura terreno por día/canal; revertir por carga_id.
+-- Entorno probado: local (aplicar en prod antes de usar rutas /arqueo-caja).
+-- SQL:
+
+CREATE TABLE IF NOT EXISTS arqueo_caja_cargas (
+    carga_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    sucursal_id INT NOT NULL,
+    fecha_carga TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    nombre_archivo VARCHAR(255) NOT NULL,
+    registros_insertados INT DEFAULT 0,
+    usuario VARCHAR(120) DEFAULT NULL,
+    KEY idx_ac_carga_suc (sucursal_id),
+    CONSTRAINT fk_arqueo_caja_carga_sucursal FOREIGN KEY (sucursal_id) REFERENCES Sucursales(sucursal_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS arqueo_caja_lineas (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    carga_id INT NOT NULL,
+    sucursal_id INT NOT NULL,
+    fec_compr DATE NOT NULL,
+    n_comp VARCHAR(120) NOT NULL,
+    cod_comp VARCHAR(30) NULL DEFAULT NULL COMMENT 'Tipo doc / COD_COMP (ej. FAC)',
+    desc_cta VARCHAR(255) NOT NULL,
+    debe DECIMAL(18,2) NOT NULL DEFAULT 0,
+    haber DECIMAL(18,2) NOT NULL DEFAULT 0,
+    KEY idx_ac_linea_suc_fecha (sucursal_id, fec_compr),
+    KEY idx_ac_linea_carga (carga_id),
+    CONSTRAINT fk_arqueo_linea_carga FOREIGN KEY (carga_id) REFERENCES arqueo_caja_cargas(carga_id) ON DELETE CASCADE,
+    CONSTRAINT fk_arqueo_linea_sucursal FOREIGN KEY (sucursal_id) REFERENCES Sucursales(sucursal_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS arqueo_caja_terreno (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    sucursal_id INT NOT NULL,
+    fecha DATE NOT NULL,
+    caja TINYINT NOT NULL DEFAULT 1 COMMENT '1=Caja 1, 2=Caja 2',
+    canal_raw VARCHAR(255) NOT NULL,
+    canal_norm VARCHAR(255) NOT NULL,
+    monto DECIMAL(18,2) NOT NULL,
+    propina DECIMAL(18,2) NULL DEFAULT NULL COMMENT 'Solo informativo',
+    notas VARCHAR(500) DEFAULT NULL,
+    usuario VARCHAR(120) DEFAULT NULL,
+    creado_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    actualizado_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_arqueo_terreno (sucursal_id, fecha, canal_norm, caja),
+    KEY idx_ac_terreno_suc_fecha (sucursal_id, fecha),
+    KEY idx_ac_terreno_caja (sucursal_id, fecha, caja),
+    CONSTRAINT fk_arqueo_terreno_sucursal FOREIGN KEY (sucursal_id) REFERENCES Sucursales(sucursal_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Rollback:
+-- DROP TABLE IF EXISTS arqueo_caja_lineas;
+-- DROP TABLE IF EXISTS arqueo_caja_terreno;
+-- DROP TABLE IF EXISTS arqueo_caja_cargas;
+
+
+-- [2026-05-11] [IA] [arqueo_caja terreno: caja, propina, unique por caja]
+-- Motivo: Dos cajas por sucursal; propina informativa; no pisar silenciosamente mismo canal/caja/día.
+-- Ejecutar SOLO si la tabla arqueo_caja_terreno ya existía sin columnas caja/propina (error si ya aplicado):
+-- SQL:
+-- ALTER TABLE arqueo_caja_terreno ADD COLUMN caja TINYINT NOT NULL DEFAULT 1 AFTER fecha;
+-- ALTER TABLE arqueo_caja_terreno ADD COLUMN propina DECIMAL(18,2) NULL DEFAULT NULL AFTER monto;
+-- ALTER TABLE arqueo_caja_terreno DROP INDEX uk_arqueo_terreno;
+-- ALTER TABLE arqueo_caja_terreno ADD UNIQUE KEY uk_arqueo_terreno (sucursal_id, fecha, canal_norm, caja);
+-- ALTER TABLE arqueo_caja_terreno ADD KEY idx_ac_terreno_caja (sucursal_id, fecha, caja);
+-- Rollback (manual): revertir UNIQUE y columnas según necesidad.
+
+
+-- [2026-05-10] [IA] [arqueo_caja_lineas.cod_comp]
+-- Motivo: Import tipo PruebaSemana / contable: columna G (COD_COMP, tipo documento).
+-- Ejecutar si la tabla ya existía sin cod_comp:
+-- ALTER TABLE arqueo_caja_lineas ADD COLUMN cod_comp VARCHAR(30) NULL DEFAULT NULL COMMENT 'Tipo doc' AFTER n_comp;
+
+
 -- [2026-05-02] [mantenimiento] [ventas_comercial.sucursal]
 -- Motivo: Filas insertadas antes del parseo Sem./alias seguian mostrando nombre de archivo en dashboard.
 -- No requiere ALTER: es correccion de DATOS. Ver script:

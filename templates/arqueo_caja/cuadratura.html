@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}Cuadratura de caja{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h2 class="text-white mb-3"><i class="bi bi-calculator text-danger me-2"></i> Cuadratura de caja</h2>
+  <p class="text-muted"><strong>Sistema:</strong> suma de toda la sucursal en el día (import Excel). <strong>Terreno:</strong> por caja (Caja 1 / Caja 2).</p>
+  <p class="text-muted small">En vista <strong>Semana</strong> se muestran <strong>ambas cajas</strong> cada día (para ver descuadres cruzados). El selector <strong>Caja</strong> solo afecta la vista <strong>Un día</strong> y el enlace por defecto.</p>
+  <p class="text-muted small"><a href="{{ url_for('arqueo_caja.index') }}" class="text-secondary">← Volver</a></p>
+  {% include "arqueo_caja/_flashes.html" %}
+
+  <form method="get" class="row g-2 align-items-end mb-3">
+    <div class="col-md-3">
+      <label class="form-label text-white">Sucursal</label>
+      <select name="sucursal_id" class="form-select bg-secondary text-white border-secondary" required>
+        <option value="">— Elegir —</option>
+        {% for s in sucursales %}
+          <option value="{{ s.sucursal_id }}" {% if sucursal_id == s.sucursal_id %}selected{% endif %}>{{ s.nombre_sucursal }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label text-white">Caja <small class="text-muted">(vista día)</small></label>
+      <select name="caja" class="form-select bg-secondary text-white border-secondary">
+        <option value="1" {% if caja == 1 %}selected{% endif %}>Caja 1</option>
+        <option value="2" {% if caja == 2 %}selected{% endif %}>Caja 2</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label text-white">Vista</label>
+      <select name="vista" class="form-select bg-secondary text-white border-secondary">
+        <option value="dia" {% if vista != 'semana' %}selected{% endif %}>Un día</option>
+        <option value="semana" {% if vista == 'semana' %}selected{% endif %}>Semana (lun–dom)</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label text-white">{% if vista == 'semana' %}Semana que contiene{% else %}Fecha{% endif %}</label>
+      <input type="date" name="fecha" value="{{ fecha }}" class="form-control bg-secondary text-white border-secondary" required>
+    </div>
+    <div class="col-md-2">
+      <button type="submit" class="btn btn-danger w-100">Ver</button>
+    </div>
+  </form>
+  {% if vista == 'semana' and (not sucursal_id or not fecha) %}
+  <p class="text-warning">Elegí sucursal y una fecha (sirve cualquier día de la semana que quieras revisar).</p>
+  {% endif %}
+  {% if vista == 'semana' and sucursal_id and fecha %}
+  <p class="text-muted small">Semana del <strong>{{ lunes_iso }}</strong> al <strong>{{ domingo_iso }}</strong>. <strong>Diferencia</strong> = suma (terreno − sistema) por canal ese día y caja. Las <strong>propinas</strong> son la suma informada en terreno ese día/caja.</p>
+  <div class="table-responsive mb-4">
+    <table class="table table-dark table-sm table-bordered align-middle">
+      <thead>
+        <tr>
+          <th>Día</th>
+          <th>Fecha</th>
+          <th>Caja</th>
+          <th class="text-end">Diferencia</th>
+          <th class="text-end">Propinas</th>
+          <th>Estado</th>
+          <th style="min-width:14rem">Observación <small class="text-muted">(guarda en todos los canales)</small></th>
+          <th class="text-end">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in semana_filas %}
+        <tr class="{{ d.row_cls }}">
+          <td>{{ d.dia }}</td>
+          <td>{{ d.fecha_iso }}</td>
+          <td>Caja {{ d.caja }}</td>
+          <td class="text-end font-monospace fw-semibold">{% if d.hay_datos %}{{ d.total_diff|dinero }}{% else %}—{% endif %}</td>
+          <td class="text-end">{% if d.hay_datos %}{{ d.total_propina|dinero }}{% else %}—{% endif %}</td>
+          <td>{{ d.estado }}</td>
+          <td>
+            <form method="post" action="{{ url_for('arqueo_caja.terreno_bundle_notas') }}" class="d-flex flex-wrap gap-1 align-items-center">
+              <input type="hidden" name="sucursal_id" value="{{ sucursal_id }}">
+              <input type="hidden" name="fecha" value="{{ d.fecha_iso }}">
+              <input type="hidden" name="caja" value="{{ d.caja }}">
+              <input type="hidden" name="semana_ref" value="{{ fecha }}">
+              <input type="hidden" name="vista_ret" value="semana">
+              <input type="text" name="notas" class="form-control form-control-sm bg-secondary text-white border-secondary" maxlength="500" value="{{ d.notas }}" placeholder="Nota del día/caja" style="min-width:10rem;max-width:18rem">
+              <button type="submit" class="btn btn-sm btn-outline-light">Guardar</button>
+            </form>
+          </td>
+          <td class="text-end text-nowrap">
+            {% if d.hay_datos %}
+            <a class="btn btn-sm btn-outline-danger" href="{{ url_for('arqueo_caja.cuadratura', sucursal_id=sucursal_id, fecha=d.fecha_iso, caja=d.caja, vista='dia') }}">Día</a>
+            <a class="btn btn-sm btn-outline-info" href="{{ url_for('arqueo_caja.auditoria', sucursal_id=sucursal_id, fecha=d.fecha_iso, caja=d.caja) }}">Auditoría</a>
+            {% else %}
+            <span class="text-muted small">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-secondary text-dark">
+        <tr>
+          <th colspan="3" class="text-end">Totales semana (Caja 1 + Caja 2, solo días con datos)</th>
+          <th class="text-end">{{ suma_semana_diff|dinero }}</th>
+          <th class="text-end">{{ suma_semana_propina|dinero }}</th>
+          <th colspan="3"></th>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if vista != 'semana' and data %}
+    {% if not data.filas %}
+      <div class="alert alert-secondary">No hay movimientos sistema ni captura terreno para esta fecha/caja (o canales no coinciden).</div>
+    {% endif %}
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <a class="btn btn-outline-info btn-sm" href="{{ url_for('arqueo_caja.auditoria', sucursal_id=sucursal_id, fecha=fecha, caja=caja) }}">Auditoría (detalle en pantalla)</a>
+      <a class="btn btn-outline-warning btn-sm" href="{{ url_for('arqueo_caja.export_auditoria_xlsx', sucursal_id=sucursal_id, fecha=fecha, caja=caja) }}">Descargar Excel</a>
+    </div>
+    <p class="text-muted small">Observaciones del día/caja: se guardan en <code>notas</code> de cada canal (mismo texto en todos).</p>
+    <form method="post" action="{{ url_for('arqueo_caja.terreno_bundle_notas') }}" class="row g-2 align-items-end mb-3">
+      <input type="hidden" name="sucursal_id" value="{{ sucursal_id }}">
+      <input type="hidden" name="fecha" value="{{ fecha }}">
+      <input type="hidden" name="caja" value="{{ caja }}">
+      <input type="hidden" name="vista_ret" value="dia">
+      <div class="col-md-8">
+        <label class="form-label text-white">Observación del día (caja {{ caja }})</label>
+        <input type="text" name="notas" class="form-control bg-secondary text-white border-secondary" maxlength="500" value="{{ data.notas_bundle }}" placeholder="Ej. préstamo entre cajas, efectivo en tránsito…">
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-outline-light w-100">Guardar nota</button>
+      </div>
+    </form>
+    {% if not data.hay_sistema %}
+      <div class="alert alert-warning">No hay líneas importadas en sistema para esta sucursal y fecha. Verificá la importación o la fecha.</div>
+    {% endif %}
+    {% if data.filas %}
+    <div class="table-responsive">
+      <table class="table table-dark table-striped table-bordered">
+        <thead>
+          <tr>
+            <th>Mostrado</th>
+            <th>Concilia con (norm)</th>
+            <th>Texto import (sistema)</th>
+            <th class="text-end">Sistema (DEBE−HABER)</th>
+            <th class="text-end">Terreno</th>
+            <th class="text-end">Propina (info)</th>
+            <th class="text-end">Diferencia</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in data.filas %}
+          <tr class="{% if f.descuadrado %}table-danger{% endif %}">
+            <td class="fw-semibold">{{ f.etiqueta }}</td>
+            <td><code>{{ f.canal_norm }}</code></td>
+            <td>{{ f.sistema_muestra }}{% if f.sin_terreno %} <span class="badge bg-secondary">sin terreno</span>{% endif %}{% if f.sin_sistema %} <span class="badge bg-secondary">solo terreno</span>{% endif %}</td>
+            <td class="text-end">{{ f.sistema|dinero }}</td>
+            <td class="text-end">{{ f.terreno|dinero }}</td>
+            <td class="text-end">{% if f.propina is not none %}{{ f.propina|dinero }}{% else %}—{% endif %}</td>
+            <td class="text-end fw-bold">{{ f.diff|dinero }}</td>
+            <td>{% if f.descuadrado %}Descuadrado{% else %}OK{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="table-secondary text-dark">
+            <th colspan="5" class="text-end">Totales día (caja {{ caja }})</th>
+            <th class="text-end">{{ data.total_propina_terreno|dinero }}</th>
+            <th class="text-end">{{ data.total_diff|dinero }}</th>
+            <th></th>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    {% endif %}
+  {% elif vista != 'semana' and sucursal_id and not fecha %}
+    <p class="text-muted">Elegí una fecha.</p>
+  {% elif vista != 'semana' and fecha and not sucursal_id %}
+    <p class="text-muted">Elegí una sucursal.</p>
+  {% elif vista != 'semana' %}
+    <p class="text-muted">Seleccioná sucursal, caja y fecha y pulsá Ver.</p>
+  {% endif %}
+</div>
+{% endblock %}

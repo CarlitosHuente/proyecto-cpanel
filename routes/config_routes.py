@@ -218,7 +218,7 @@ def api_actualizar_rol_usuario():
 @permiso_modulo("config")
 def gestionar_permisos():
     # Módulos base conocidos del sistema
-    modulos_conocidos = ["dashboard", "ventas", "clientes", "seremi", "contab", "reporte", "sucursales", "productos", "categorias", "agricola", "utilidades", "config"]
+    modulos_conocidos = ["dashboard", "ventas", "clientes", "seremi", "contab", "reporte", "sucursales", "productos", "categorias", "agricola", "utilidades", "arqueo_caja", "config"]
     
     # Recuperar cualquier módulo extra que ya esté en la configuración actual
     modulos_usados = set(modulos_conocidos)

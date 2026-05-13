@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Editar captura terreno{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h2 class="text-white mb-3"><i class="bi bi-pencil text-warning me-2"></i> Editar captura terreno</h2>
+  <p class="text-muted">{{ reg.nombre_sucursal }} · id {{ reg.id }}</p>
+  <p class="text-muted small"><a href="{{ url_for('arqueo_caja.terreno', sucursal_id=reg.sucursal_id, fecha=reg.fecha.isoformat(), caja=reg.caja|default(1)) }}" class="text-secondary">← Volver a terreno</a></p>
+  {% include "arqueo_caja/_flashes.html" %}
+
+  <div class="card bg-dark border-secondary">
+    <div class="card-body">
+      <form method="post">
+        <div class="row g-2">
+          <div class="col-md-3">
+            <label class="form-label text-white">Fecha</label>
+            <input type="date" name="fecha" value="{{ reg.fecha.isoformat() if reg.fecha else '' }}" class="form-control bg-secondary text-white border-secondary" required>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label text-white">Caja</label>
+            <select name="caja" class="form-select bg-secondary text-white border-secondary">
+              <option value="1" {% if (reg.caja|default(1)) == 1 %}selected{% endif %}>Caja 1</option>
+              <option value="2" {% if reg.caja == 2 %}selected{% endif %}>Caja 2</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label text-white">Canal</label>
+            {% set nlist = canales_opciones|map(attribute='norm')|list %}
+            <select name="canal" id="selCanal" class="form-select bg-secondary text-white border-secondary" required>
+              {% for o in canales_opciones %}
+                <option value="{{ o.norm }}" {% if o.norm == reg.canal_norm %}selected{% endif %}>{{ o.etiqueta }}</option>
+              {% endfor %}
+              <option value="__OTRO__" {% if reg.canal_norm not in nlist %}selected{% endif %}>Otro…</option>
+            </select>
+            <input type="text" name="canal_otro" id="inpCanalOtro" class="form-control bg-secondary text-white border-secondary mt-1 {% if reg.canal_norm in nlist %}d-none{% endif %}" value="{% if reg.canal_norm not in nlist %}{{ reg.canal_raw }}{% endif %}" placeholder="Texto del canal (se normaliza al guardar)">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label text-white">Monto</label>
+            <input type="text" name="monto" value="{{ reg.monto }}" class="form-control bg-secondary text-white border-secondary" required>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label text-white">Propina (info)</label>
+            <input type="text" name="propina" value="{{ reg.propina if reg.propina is not none else '' }}" class="form-control bg-secondary text-white border-secondary">
+          </div>
+          <div class="col-12">
+            <label class="form-label text-white">Notas</label>
+            <input type="text" name="notas" maxlength="500" value="{{ reg.notas or '' }}" class="form-control bg-secondary text-white border-secondary">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-warning mt-3">Guardar cambios</button>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+  (function () {
+    const canal = document.getElementById('selCanal');
+    const otro = document.getElementById('inpCanalOtro');
+    if (!canal || !otro) return;
+    function sync() {
+      if (canal.value === '__OTRO__') {
+        otro.classList.remove('d-none');
+        otro.required = true;
+      } else {
+        otro.classList.add('d-none');
+        otro.required = false;
+      }
+    }
+    canal.addEventListener('change', sync);
+    sync();
+  })();
+</script>
+{% endblock %}
