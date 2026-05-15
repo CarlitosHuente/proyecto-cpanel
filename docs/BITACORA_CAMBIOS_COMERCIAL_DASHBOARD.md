@@ -2,7 +2,7 @@
 
 **Objetivo:** registrar cambios recientes, reglas de negocio y **cómo trabajar en este repo** para que cualquier persona (o IA) que lea este archivo sepa **qué tocar**, **qué no romper** y **dónde seguir el hilo**.
 
-**Última actualización (contenido):** 2026-05-14 — `formato_huente.js` en `base.html` (head); contabilidad, ventas, arqueo terreno, utilidades alineados a `HuenteFmt` / % 1 decimal; fábrica calendario: resumen mes y modal con `|metrico` / `HuenteFmt.metrico` y % merma a 1 decimal; bitácora K y regla Cursor coherentes.
+**Última actualización (contenido):** 2026-05-14 — Cierre del **barrido de presentación** (CLP sin decimales, métricos, %): `HuenteFmt` global, tooltips Plotly unificados (`customdata` + `HuenteFmt` en `dashboard.js`, `ventas_historico.js`, gráfico top en `rentabilidad_gerencia.html`), plantillas contab/ventas/arqueo/utilidades/fábrica alineadas; **rama** `feature/comercial-ventas-dashboard` **subida** a `origin` (commit `b63e640`). Pendientes de **negocio/hosting** siguen en sección L y N.2; el pendiente técnico de “formato en todo el front” quedó cubierto salvo planillas `print_*.html` Seremi si se decide homogeneizar después.
 
 ---
 
@@ -194,24 +194,29 @@
 | `templates/config/comercial_cargas_historial.html` | Lista completa de cargas |
 | `templates/contab/acumulado_gestion.html` | **Vista acumulado de gestión (nueva)** |
 | `templates/ventas_historico.html` | **Vista histórico de productos (nueva)** |
-| `static/js/ventas_historico.js` | **JS histórico: cards, gráficos Plotly, tabla** |
+| `static/js/ventas_historico.js` | Cards, gráficos Plotly, tabla; tooltips **`customdata` + `HuenteFmt`**; cache-bust `?v=5` |
 | `templates/dashboard.html` | Overlays, modales ticket/neto, versión JS |
-| `static/js/dashboard.js` | KPIs, caché navegador, modales, barras, **overlay inicial** |
+| `static/js/dashboard.js` | KPIs, caché navegador, modales, barras, overlay inicial; Plotly tooltips **`customdata` + `HuenteFmt`**; `?v=2.8` |
 | `routes/arqueo_caja_routes.py` | Blueprint arqueo: import, terreno, cuadratura, auditoría, export, canales UI, bundles eliminar/notas |
 | `utils/arqueo_caja_import.py` | Lectura Excel arqueo, normalización de canal, parse montos |
 | `utils/arqueo_caja_canal_ui_config.py` | Etiquetas/orden canales → JSON en `instance/` |
 | `utils/formato_dinero.py` | `dinero_presentacion`, **`metrico_presentacion`** (kg, etc.; máx. 2 dec.) |
-- **JavaScript:** `static/js/formato_huente.js` (`HuenteFmt`); carga global en `templates/base.html` (head). No formatear CLP con `toLocaleString("es-CL")` sobre floats sin fijar cero decimales.
+| `static/js/formato_huente.js` | **`HuenteFmt`**; carga global en `templates/base.html` (head); subir `?v=` al cambiar |
 | `utils/arqueo_caja_canales.py` | Lista legacy (puede quedar sin uso; canales “admin” salen de `arqueo_caja_lineas`) |
 | `templates/arqueo_caja/*.html` | UI arqueo (terreno, cuadratura, auditoría, import, canales, flashes) |
 | `docs/QUERY_CAMBIOS_PRODUCCION.sql` | DDL `arqueo_caja_*` (cargas, líneas, terreno; índices, `cod_comp`, caja/propina) |
 | `instance/arqueo_canales_ui.json` | Preferencias UI canales; **no versionar** si es local; se crea al guardar en “Administrar nombres de canales” |
+| `templates/contab/rentabilidad_gerencia.html` | Rentabilidad; gráfico Plotly top productos con tooltip alineado a `HuenteFmt.peso` |
+| `routes/fabrica_routes.py` | Calendario producción, resumen mes, admin datos (según rama) |
+| `templates/fabrica/calendario.html` | Calendario + resumen `|metrico` + modal detalle `HuenteFmt` |
+| `templates/fabrica/admin_datos.html` | Admin datos fábrica (según rama) |
 
 ---
 
 ## J. Git y despliegue
 
 - Trabajo integrado en rama **`feature/comercial-ventas-dashboard`** hasta merge a `main`.
+- **Último push documentado aquí:** `origin/feature/comercial-ventas-dashboard` incluye commit **`b63e640`** (presentación Huente + ajustes fábrica y archivos asociados de esa entrega).
 - **Producción:** desplegar la rama elegida en el hosting; si algo falla, volver a la rama/commit estable **sin** tocar la BD salvo que el cambio haya incluido migraciones.
 - **Binarios en `docs/`:** no versionar `.xlsx` pesados si no hace falta; mantener SQL y esta bitácora sí.
 
@@ -227,6 +232,13 @@
 - **Cálculos internos** (cuadratura, import, BD) siguen usando `Decimal` con la precisión que defina el esquema; solo cambia la **presentación** salvo que se indique lo contrario en una pantalla específica.
 
 **Regla Cursor:** `.cursor/rules/huente-presentacion-trabajo.mdc` (`alwaysApply`) resume lo anterior para el agente.
+
+### K.1 Cierre barrido presentación (mayo 2026) — qué quedó hecho
+
+- **Alcance cubierto:** todas las plantillas que extienden `base.html` cargan `formato_huente.js` en el `<head>`; JS de dashboard e histórico de productos ya no duplican el script; contabilidad (prorrateos, costeo directos/simulador/global, GAV, rentabilidad), ventas (`lista_precios`), arqueo terreno, calculadora margen y **fábrica calendario** (resumen mes + modal detalle) usan `|dinero` / `|metrico` o `HuenteFmt` según corresponda; **%** en KPIs/modales alineados a **1 decimal** donde se tocó la vista.
+- **Plotly:** no quedó código “tipo Chart.js” sin efecto; los hovers de valor monetario o entero usan **`customdata`** precalculado con `HuenteFmt.peso` / `HuenteFmt.entero` para coincidir con el resto de la UI.
+- **Excluido a propósito (opcional futuro):** planillas **Seremi** `templates/seremi/print_*.html` (HTML standalone sin `base.html`); **fechas** con `toLocaleString()` en pizarra no son montos CLP.
+- **Pendiente que NO es este barrido:** definiciones de negocio fábrica (N.2), datos operativos/hosting (L), merge a `main` cuando el equipo decida.
 
 ## M. Módulo Arqueo de caja (`/arqueo-caja`)
 
@@ -292,22 +304,13 @@ Rutas con `@permiso_modulo("arqueo_caja")` (detalle de roles según tu `utils/au
 
 ## N. Próximos pasos — Fábrica de empanadas (producción)
 
-**Contexto actual:** ya existe el calendario en `routes/fabrica_routes.py` → `/fabrica/calendario`, plantilla `templates/fabrica/calendario.html`, datos en tabla **`fabrica_produccion`** (campos usados en UI: entre otros `fecha`, `cant_producida`, `queso_inicial_gr`, `queso_merma_gr`, `rendimiento`, stocks; el detalle día a día abre modal con promedio queso **(queso_inicial_gr − queso_merma_gr) / cant_producida**).
+**Contexto actual:** calendario en `routes/fabrica_routes.py` → `/fabrica/calendario`, plantilla `templates/fabrica/calendario.html`, datos en tabla **`fabrica_produccion`** (campos en UI: entre otros `fecha`, `cant_producida`, `queso_inicial_gr`, `queso_pizza_gr`, `queso_merma_gr`, `rendimiento`, stocks). El **detalle día a día** (modal) muestra **neto empanada** = inicial − pizza − merma y promedio neto/cantidad con **`HuenteFmt.metrico`**. Vista **admin datos** (`admin_datos.html` + rutas en el mismo blueprint) según lo desplegado en la rama.
 
-### N.1 Resumen mensual bajo el calendario
+### N.1 Resumen mensual bajo el calendario — **implementado (2026-05)**
 
-**Objetivo:** para el **mes y año** que se está viendo, mostrar **debajo de la grilla del calendario** un bloque de resumen (tarjetas o fila compacta) con:
+**Entregado:** bajo la grilla del calendario hay un **bloque de resumen del mes/año** seleccionado (tarjetas), alimentado por agregados en backend (`resumen_mes` en la vista del calendario). Indicadores mostrados incluyen: totales en **kg** / **g** con filtro **`|metrico`**, **merma** y **% merma** sobre inicial con **1 decimal** en el porcentaje, **promedio g/empanada** con `|metrico`, **unidades elaboradas** y conteo de registros. La definición numérica debe seguir alineada con operaciones (p. ej. si “queso utilizado” debe usar otra fórmula que neto = inicial − pizza − merma); si cambia la regla de negocio, ajustar query + template y anotar aquí.
 
-| Indicador | Definición sugerida (alinear con negocio antes de implementar) |
-|-----------|----------------------------------------------------------------|
-| **Total elaborado en el mes** | Suma de `cant_producida` (o unidad acordada: empanadas elaboradas) de todas las filas del mes con dato. |
-| **Queso utilizado en el mes** | Suma de **queso neto** por día: suma de `(queso_inicial_gr − queso_merma_gr)` en cada fila del mes, **o** otra regla si “utilizado” debe ser solo inicial u otra cuenta. |
-| **Merma total en el mes** | Suma de `queso_merma_gr` en el mes. |
-| **Promedio de queso (g) por empanada (mes)** | `sum(queso_inicial_gr − queso_merma_gr) / sum(cant_producida)` solo si el denominador es mayor que cero; los días sin producción no aportan al denominador. |
-
-**UX:** mismo selector de mes/año que hoy; el resumen se recalcula con la misma consulta ampliada (agregados `SUM`/`COUNT` sobre el rango del mes).
-
-**Técnico:** extender la query en `calendario_produccion()` o segunda query ligera; pasar al template variables `resumen_mes: dict`; documentar en `QUERY_CAMBIOS_PRODUCCION.sql` si se agregan columnas o vistas.
+**Técnico:** lógica en `fabrica_routes.py` / consultas al modelo existente; DDL adicional solo si en el futuro se agregan columnas (documentar en `QUERY_CAMBIOS_PRODUCCION.sql`).
 
 ### N.2 Nuevos datos de producción a registrar
 

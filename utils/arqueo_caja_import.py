@@ -9,12 +9,32 @@ También se reconocen encabezados por nombre (FEC_COMPR, etc.).
 Si faltan nombres pero hay al menos 12 columnas, se intenta mapeo por posición.
 Neto línea = DEBE − HABER.
 """
+import io
 import re
 import unicodedata
 from decimal import Decimal, InvalidOperation
 from typing import BinaryIO, List, Optional, Tuple
 
 import pandas as pd
+
+
+def _buffer_archivo_subido(archivo: BinaryIO) -> io.BytesIO:
+    """
+    pandas/openpyxl exigen un file-like con seekable().
+    request.files['archivo'].stream en producción es SpooledTemporaryFile (Werkzeug)
+    y no define seekable(), aunque sí seek/read.
+    """
+    if isinstance(archivo, io.BytesIO):
+        try:
+            if archivo.seekable():
+                archivo.seek(0)
+                return archivo
+        except AttributeError:
+            pass
+    data = archivo.read()
+    buf = io.BytesIO(data if isinstance(data, bytes) else bytes(data))
+    buf.seek(0)
+    return buf
 
 
 def parse_monto_entrada(val) -> Decimal:
@@ -177,11 +197,12 @@ def leer_arqueo_excel(archivo: BinaryIO, filename: str) -> Tuple[pd.DataFrame, L
     fec_compr (date), n_comp, cod_comp (opcional), desc_cta, debe, haber
     """
     errores: List[str] = []
+    archivo = _buffer_archivo_subido(archivo)
     low = (filename or "").lower()
     if low.endswith(".csv"):
         df = pd.read_csv(archivo, dtype=str, encoding="utf-8", errors="replace")
     else:
-        df = pd.read_excel(archivo, dtype=None)
+        df = pd.read_excel(archivo, dtype=None, engine="openpyxl")
 
     if df.empty:
         raise ValueError("El archivo no tiene filas.")
