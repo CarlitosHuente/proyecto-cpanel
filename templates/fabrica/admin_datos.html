@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Admin datos fábrica — Huente{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div>
+            <h2 class="text-white mb-0"><i class="bi bi-database-gear text-warning me-2"></i>Administrador de datos — Producción</h2>
+            <p class="text-secondary small mb-0">Solo superusuario. Edita y guarda por registro; eliminar pide confirmación.</p>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <a href="{{ url_for('fabrica.admin_datos', mes=mes-1, anio=anio) }}" class="btn btn-outline-danger btn-sm">◀</a>
+            <span class="text-white fw-bold px-2">{{ mes_nombre }} {{ anio }}</span>
+            <a href="{{ url_for('fabrica.admin_datos', mes=mes+1, anio=anio) }}" class="btn btn-outline-danger btn-sm">▶</a>
+            <a href="{{ url_for('fabrica.calendario_produccion', mes=mes, anio=anio) }}" class="btn btn-outline-light btn-sm">
+                <i class="bi bi-calendar3"></i> Calendario
+            </a>
+        </div>
+    </div>
+
+    {% if not registros %}
+    <div class="alert alert-secondary">No hay registros para este mes.</div>
+    {% endif %}
+
+    {% for r in registros %}
+    <div class="card bg-dark border-secondary mb-3">
+        <div class="card-header border-secondary py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span class="text-white-50 small">ID <strong class="text-white">{{ r.id }}</strong></span>
+            <span class="text-white-50 small">Rend. guardado: <strong class="text-info">{{ r.rendimiento }}%</strong> (neto ÷ inicial)</span>
+        </div>
+        <div class="card-body py-3">
+            <form method="post" action="{{ url_for('fabrica.admin_datos_actualizar', registro_id=r.id) }}" class="row g-2 align-items-end">
+                <input type="hidden" name="redir_mes" value="{{ mes }}">
+                <input type="hidden" name="redir_anio" value="{{ anio }}">
+
+                <div class="col-6 col-md-4 col-lg-2">
+                    <label class="form-label small text-white-50 mb-0">Fecha</label>
+                    <input type="date" class="form-control form-control-sm" name="fecha" required
+                           value="{{ r.fecha.strftime('%Y-%m-%d') if r.fecha else '' }}">
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <label class="form-label small text-white-50 mb-0">Cant. producida</label>
+                    <input type="number" class="form-control form-control-sm" name="cant_producida" min="1" step="1" required value="{{ r.cant_producida or 0 }}">
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <label class="form-label small text-white-50 mb-0">Q. inicial (g)</label>
+                    <input type="number" class="form-control form-control-sm" name="queso_inicial_gr" min="0" step="0.01" required value="{{ r.queso_inicial_gr }}">
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <label class="form-label small text-white-50 mb-0">Q. pizza (g)</label>
+                    <input type="number" class="form-control form-control-sm" name="queso_pizza_gr" min="0" step="0.01" value="{{ r.queso_pizza_gr or 0 }}">
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <label class="form-label small text-white-50 mb-0">Q. merma (g)</label>
+                    <input type="number" class="form-control form-control-sm" name="queso_merma_gr" min="0" step="0.01" value="{{ r.queso_merma_gr or 0 }}">
+                </div>
+                <div class="col-12 col-md-6 col-lg-3">
+                    <label class="form-label small text-white-50 mb-0">Responsable</label>
+                    <input type="text" class="form-control form-control-sm" name="encargada" maxlength="100" value="{{ r.encargada or '' }}">
+                </div>
+                <div class="col-12 col-md-6 col-lg-3">
+                    <label class="form-label small text-white-50 mb-0">Drive ID</label>
+                    <input type="text" class="form-control form-control-sm" name="drive_id" maxlength="255" value="{{ r.drive_id or '' }}">
+                </div>
+
+                <div class="col-6 col-md-4 col-lg-1">
+                    <label class="form-label small text-white-50 mb-0">Quesos und.</label>
+                    <input type="number" class="form-control form-control-sm" name="queso_unidad_stock" min="0" step="1" value="{{ r.queso_unidad_stock or 0 }}">
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <label class="form-label small text-white-50 mb-0">Trozos (g)</label>
+                    <input type="number" class="form-control form-control-sm" name="queso_trozos_gr_stock" min="0" step="0.01" value="{{ r.queso_trozos_gr_stock or 0 }}">
+                </div>
+                <div class="col-6 col-md-4 col-lg-1">
+                    <label class="form-label small text-white-50 mb-0">Harina sac.</label>
+                    <input type="number" class="form-control form-control-sm" name="harina_sacos_stock" min="0" step="1" value="{{ r.harina_sacos_stock or 0 }}">
+                </div>
+                <div class="col-6 col-md-4 col-lg-1">
+                    <label class="form-label small text-white-50 mb-0">Sal (kg)</label>
+                    <input type="number" class="form-control form-control-sm" name="sal_kg_stock" min="0" step="0.01" value="{{ r.sal_kg_stock or 0 }}">
+                </div>
+                <div class="col-6 col-md-4 col-lg-1">
+                    <label class="form-label small text-white-50 mb-0">Manteca und.</label>
+                    <input type="number" class="form-control form-control-sm" name="manteca_und_stock" min="0" step="1" value="{{ r.manteca_und_stock or 0 }}">
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <label class="form-label small text-white-50 mb-0">Harina qty (opc.)</label>
+                    <input type="number" class="form-control form-control-sm" name="harina_qty" min="0" step="0.01" value="{{ r.harina_qty if r.harina_qty is not none else '' }}" placeholder="—">
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <label class="form-label small text-white-50 mb-0">Manteca qty (opc.)</label>
+                    <input type="number" class="form-control form-control-sm" name="manteca_qty" min="0" step="0.01" value="{{ r.manteca_qty if r.manteca_qty is not none else '' }}" placeholder="—">
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label small text-white-50 mb-0">Observaciones</label>
+                    <textarea class="form-control form-control-sm" name="observaciones" rows="2">{{ r.observaciones or '' }}</textarea>
+                </div>
+
+                <div class="col-12 d-flex flex-wrap gap-2 align-items-center pt-2">
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-check2-circle"></i> Actualizar</button>
+                </div>
+            </form>
+            <form method="post" action="{{ url_for('fabrica.admin_datos_eliminar', registro_id=r.id) }}" class="mt-2"
+                  onsubmit="return confirm('¿Eliminar permanentemente el registro #{{ r.id }}?');">
+                <input type="hidden" name="redir_mes" value="{{ mes }}">
+                <input type="hidden" name="redir_anio" value="{{ anio }}">
+                <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i> Eliminar registro</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

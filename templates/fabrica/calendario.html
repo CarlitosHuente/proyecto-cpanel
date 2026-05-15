@@ -5,7 +5,6 @@
 {% block content %}
 <div class="container-fluid">
 
-{# CABECERA Y NAVEGACION #}
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
         <div class="d-flex align-items-center">
             <a href="{{ url_for('fabrica.calendario_produccion', mes=mes-1, anio=anio) }}" class="btn btn-outline-danger btn-sm me-3">◀</a>
@@ -15,52 +14,50 @@
             </div>
             <a href="{{ url_for('fabrica.calendario_produccion', mes=mes+1, anio=anio) }}" class="btn btn-outline-danger btn-sm ms-3">▶</a>
         </div>
-        
+
         <div class="mt-2 text-end">
             <a href="{{ url_for('fabrica.calendario_produccion') }}" class="btn btn-outline-light btn-sm me-2">Hoy</a>
-            {% if session['rol'] in ['admin', 'superusuario', 'logistica'] %}
-            <button class="btn btn-danger btn-sm shadow" data-bs-toggle="modal" data-bs-target="#modalRegistro">➕ Nuevo Registro</button>
+            {% if es_superusuario %}
+            <a href="{{ url_for('fabrica.admin_datos', mes=mes, anio=anio) }}" class="btn btn-outline-warning btn-sm me-2" title="Solo superusuario: editar o borrar registros del mes">
+                <i class="bi bi-database-gear"></i> Admin datos
+            </a>
             {% endif %}
+            <button type="button" class="btn btn-danger btn-sm shadow" data-bs-toggle="modal" data-bs-target="#modalRegistro">➕ Nuevo Registro</button>
         </div>
     </div>
-{# FIN CABECERA #}
 
-{# CUADRICULA DEL CALENDARIO #}
     <div class="card bg-black border-secondary shadow">
         <div class="card-body p-1">
             <div class="row row-cols-7 g-1">
-                
-                {# Cabecera de Dias #}
+
                 {% for dia_nom in ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'] %}
                 <div class="col text-center py-2 bg-dark text-white fw-bold border-bottom border-secondary small">{{ dia_nom }}</div>
                 {% endfor %}
 
-                {# Celdas #}
                 {% for semana in calendario %}
                     {% for dia in semana %}
-                    <div class="col position-relative celda-calendario" 
+                    <div class="col position-relative celda-calendario"
                          style="background-color: {{ '#151515' if dia != 0 else '#000' }}; min-height: 110px; border: 1px solid #333;">
-                        
+
                         {% if dia != 0 %}
-                            <span class="position-absolute top-0 start-0 m-1 texto-dia fw-bold {{ 'text-danger' if dia in datos else 'text-secondary' }}" style="font-size: 0.8rem; z-index: 10;">
+                            <span class="position-absolute top-0 start-0 m-1 texto-dia fw-bold {{ 'text-danger' if dia in datos else 'text-secondary' }}" style="font-size: 0.8rem; z-index: 10; pointer-events: none;">
                                 {{ dia }}
                             </span>
 
                             {% if dia in datos %}
-                            <button type="button" 
-                                    class="btn btn-link p-0 w-100 h-100 text-decoration-none shadow-none border-0 position-absolute top-0 start-0" 
-                                    onclick='verDetalle({{ datos[dia] | tojson | safe }})'
-                                    style="z-index: 5;">
+                            {% set cel = datos[dia] %}
+                            {% if cel.n > 1 %}
+                            <span class="badge bg-danger position-absolute top-0 end-0 m-1" style="font-size: 0.65rem; z-index: 11; pointer-events: none;" title="{{ cel.n }} registros este día">{{ cel.n }}</span>
+                            {% endif %}
+                            <button type="button"
+                                    class="btn btn-link p-0 w-100 h-100 text-decoration-none shadow-none border-0 position-absolute top-0 start-0"
+                                    onclick="verDetalleDiaPorDia({{ dia }})"
+                                    style="z-index: 6;"
+                                    title="Ver detalle ({{ cel.n }} registro{% if cel.n != 1 %}s{% endif %})">
                                 <div class="contenedor-datos-dia d-flex flex-column align-items-center justify-content-center h-100 pt-2">
-                                    {# Produccion en Blanco Resaltado #}
-                                    <div class="val-principal text-white fw-bold" style="font-size: 1.3rem; line-height: 1;">{{ datos[dia].cant_producida }}</div>
-                                    
-                                    {# Promedio Queso corregido: (Inicial - Merma) / Cantidad #}
-                                    {% set prom_queso = ((datos[dia].queso_inicial_gr - datos[dia].queso_merma_gr) / datos[dia].cant_producida) | round(1) %}
-                                    <div class="val-secundario text-warning fw-bold" style="font-size: 0.85rem;">{{ prom_queso }}gr</div>
-                                    
-                                    {# Rendimiento en Cyan/Info #}
-                                    <div class="val-rendimiento text-info fw-bold" style="font-size: 0.75rem;">{{ datos[dia].rendimiento }}%</div>
+                                    <div class="val-principal text-white fw-bold" style="font-size: 1.3rem; line-height: 1;">{{ cel.total_cant }}</div>
+                                    <div class="val-secundario text-warning fw-bold" style="font-size: 0.85rem;">{{ cel.prom_queso }}gr</div>
+                                    <div class="val-merma-pct text-info fw-bold" style="font-size: 0.75rem;">{{ cel.merma_pct_dia }}%</div>
                                 </div>
                             </button>
                             {% endif %}
@@ -69,67 +66,230 @@
                     </div>
                     {% endfor %}
                 {% endfor %}
-            </div> 
-        </div> 
+            </div>
+        </div>
     </div>
-{# FIN CUADRICULA #}
+
+    <div class="card fabrica-resumen bg-dark border-secondary shadow mt-3 mb-4">
+        <div class="card-header border-secondary text-white small fw-bold">Resumen del mes ({{ mes_nombre }} {{ anio }})</div>
+        <div class="card-body py-3">
+            <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 row-cols-xl-7 g-3 text-center">
+                <div class="col">
+                    <div class="stat-label small text-uppercase">Queso inicial total</div>
+                    <div class="stat-value fs-5 fw-bold">{{ (resumen_mes.total_inicial_gr / 1000)|metrico }} kg</div>
+                    <div class="stat-hint" style="font-size: 0.7rem;">Σ gramos iniciales</div>
+                </div>
+                <div class="col">
+                    <div class="stat-label small text-uppercase">A pizza (Σ)</div>
+                    <div class="stat-value fs-5 fw-bold text-warning">{{ (resumen_mes.total_pizza_gr / 1000)|metrico }} kg</div>
+                    <div class="stat-hint" style="font-size: 0.7rem;">no apto empanada</div>
+                </div>
+                <div class="col">
+                    <div class="stat-label small text-uppercase">Merma (Σ)</div>
+                    <div class="stat-value fs-5 fw-bold">{{ resumen_mes.merma_total_gr|metrico }} g</div>
+                    {% if resumen_mes.merma_pct is not none %}
+                    <div class="stat-hint" style="font-size: 0.75rem;">{{ "%.1f"|format(resumen_mes.merma_pct) }}% sobre inicial</div>
+                    {% else %}
+                    <div class="stat-hint" style="font-size: 0.75rem;">— %</div>
+                    {% endif %}
+                </div>
+                <div class="col">
+                    <div class="stat-label small text-uppercase">Neto empanada (Σ)</div>
+                    <div class="stat-value fs-5 fw-bold text-info">{{ (resumen_mes.queso_utilizado_gr / 1000)|metrico }} kg</div>
+                    <div class="stat-hint" style="font-size: 0.7rem;">inicial − pizza − merma</div>
+                </div>
+                <div class="col">
+                    <div class="stat-label small text-uppercase">Total elaborado</div>
+                    <div class="stat-value fs-5 fw-bold">{{ resumen_mes.total_elaborado }}</div>
+                    <div class="stat-hint" style="font-size: 0.7rem;">unidades</div>
+                </div>
+                <div class="col">
+                    <div class="stat-label small text-uppercase">Prom. queso / empanada</div>
+                    {% if resumen_mes.promedio_gr_por_empanada is not none %}
+                    <div class="stat-value fs-5 fw-bold">{{ resumen_mes.promedio_gr_por_empanada|metrico }} g</div>
+                    {% else %}
+                    <div class="stat-value fs-5 fw-bold">—</div>
+                    {% endif %}
+                    <div class="stat-hint" style="font-size: 0.7rem;">neto ÷ elaborado</div>
+                </div>
+                <div class="col">
+                    <div class="stat-label small text-uppercase">Registros</div>
+                    <div class="stat-value fs-5 fw-bold">{{ resumen_mes.num_registros }}</div>
+                    <div class="stat-hint" style="font-size: 0.7rem;">filas en el mes</div>
+                </div>
+            </div>
+        </div>
+    </div>
 
 </div>
 
-{# MODAL DE DETALLE #}
 <div class="modal fade" id="modalDetalle" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
         <div class="modal-content border-0">
             <div class="modal-header bg-black text-white border-bottom border-danger">
                 <h5 class="modal-title" id="modalTitulo">Detalle de Producción</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body bg-light" id="modalCuerpo">
-                {# El contenido con colores se inyecta aqui #}
-            </div>
+            <div class="modal-body bg-light" id="modalCuerpo"></div>
             <div class="modal-footer bg-light border-0">
                 <button type="button" class="btn btn-secondary w-100" data-bs-dismiss="modal">Cerrar</button>
             </div>
         </div>
     </div>
 </div>
-{# FIN MODAL DETALLE #}
 
-{# SCRIPTS #}
+<div class="modal fade" id="modalRegistro" tabindex="-1" aria-labelledby="modalRegistroTitulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content border-0">
+            <div class="modal-header bg-danger text-white border-0">
+                <h5 class="modal-title" id="modalRegistroTitulo">Nuevo registro de producción</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="{{ url_for('fabrica.nuevo_registro_produccion') }}">
+                <div class="modal-body bg-light text-dark">
+                    <input type="hidden" name="mes" value="{{ mes }}">
+                    <input type="hidden" name="anio" value="{{ anio }}">
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Fecha</label>
+                            <input type="date" class="form-control form-control-sm" name="fecha" required
+                                   min="{{ fecha_min_str }}" max="{{ fecha_max_str }}" value="{{ fecha_default_str }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Cant. producida</label>
+                            <input type="number" class="form-control form-control-sm" name="cant_producida" min="1" step="1" required placeholder="Empanadas">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Responsable</label>
+                            <input type="text" class="form-control form-control-sm" name="encargada" maxlength="100" placeholder="Nombre">
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Queso inicial (g)</label>
+                            <input type="number" class="form-control form-control-sm" name="queso_inicial_gr" min="0" step="0.01" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Queso pizza (g)</label>
+                            <input type="number" class="form-control form-control-sm" name="queso_pizza_gr" min="0" step="0.01" value="0"
+                                   title="Queso que no cumple calidad empanada y va a pizza">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Merma queso (g)</label>
+                            <input type="number" class="form-control form-control-sm" name="queso_merma_gr" min="0" step="0.01" value="0">
+                        </div>
+                    </div>
+                    <p class="small text-muted mb-2">Orden lógico: <strong>inicial</strong> → descuenta <strong>pizza</strong> y <strong>merma</strong> → <strong>neto empanada</strong> = inicial − pizza − merma. El % rendimiento guardado es (neto ÷ inicial) × 100.</p>
+                    <hr class="my-2">
+                    <p class="small fw-bold mb-1">Inventario día siguiente (opcional)</p>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6 col-md">
+                            <label class="form-label small">Quesos (und)</label>
+                            <input type="number" class="form-control form-control-sm" name="queso_unidad_stock" min="0" step="1" value="0">
+                        </div>
+                        <div class="col-6 col-md">
+                            <label class="form-label small">Trozos (g)</label>
+                            <input type="number" class="form-control form-control-sm" name="queso_trozos_gr_stock" min="0" step="0.01" value="0">
+                        </div>
+                        <div class="col-6 col-md">
+                            <label class="form-label small">Harina (sacos)</label>
+                            <input type="number" class="form-control form-control-sm" name="harina_sacos_stock" min="0" step="1" value="0">
+                        </div>
+                        <div class="col-6 col-md">
+                            <label class="form-label small">Sal (kg)</label>
+                            <input type="number" class="form-control form-control-sm" name="sal_kg_stock" min="0" step="0.01" value="0">
+                        </div>
+                        <div class="col-6 col-md">
+                            <label class="form-label small">Manteca (und)</label>
+                            <input type="number" class="form-control form-control-sm" name="manteca_und_stock" min="0" step="1" value="0">
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">ID foto Drive (opcional)</label>
+                        <input type="text" class="form-control form-control-sm" name="drive_id" maxlength="255" placeholder="ID del archivo en Google Drive">
+                    </div>
+                    <div>
+                        <label class="form-label small fw-bold">Observaciones</label>
+                        <textarea class="form-control form-control-sm" name="observaciones" rows="2" placeholder="Notas del turno…"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-0">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# JSON fuera del onclick: comillas en observaciones rompían el HTML y el modal no abría #}
+<script type="application/json" id="fabrica-calendario-data">{{ datos | tojson | safe }}</script>
 <script>
-function verDetalle(info) {
-    const modalElement = document.getElementById('modalDetalle');
-    const modal = new bootstrap.Modal(modalElement);
-    
-    document.getElementById('modalTitulo').innerText = "Producción: " + info.fecha;
-    
-    const urlImagen = info.drive_id 
+function fabricaCalendarioMap() {
+    const el = document.getElementById('fabrica-calendario-data');
+    if (!el) return {};
+    try {
+        return JSON.parse(el.textContent);
+    } catch (e) {
+        console.error('fabrica: JSON calendario inválido', e);
+        return {};
+    }
+}
+
+function verDetalleDiaPorDia(dia) {
+    const m = fabricaCalendarioMap();
+    const cel = m[String(dia)] ?? m[dia];
+    if (!cel || !cel.filas || !cel.filas.length) return;
+    verDetalleDia(cel.filas, cel.fecha_label);
+}
+
+function fmtNum(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+}
+
+function netoQuesoGr(info) {
+    return fmtNum(info.queso_inicial_gr) - fmtNum(info.queso_pizza_gr) - fmtNum(info.queso_merma_gr);
+}
+
+function panelProduccionHtml(info, idx) {
+    const cantNum = fmtNum(info.cant_producida);
+    const neto = netoQuesoGr(info);
+    const promQ = cantNum > 0 ? HuenteFmt.metrico(neto / cantNum) : '—';
+    const qp = fmtNum(info.queso_pizza_gr);
+    const urlImagen = info.drive_id
         ? `https://drive.google.com/uc?export=view&id=${info.drive_id}`
         : '';
+    const imgErrId = 'imgErrorFab_' + idx;
 
-    document.getElementById('modalCuerpo').innerHTML = `
+    return `
         <div class="container-fluid text-dark">
-            {# FILA DE INDICADORES PRINCIPALES #}
-            <div class="row g-2 mb-3 text-center border-bottom pb-3">
-                <div class="col-3 border-end">
+            <div class="row row-cols-2 row-cols-md-3 row-cols-lg-5 g-2 mb-2 text-center border-bottom pb-3">
+                <div class="col border-end border-md-end">
                     <h3 class="mb-0 fw-bold text-danger">${info.cant_producida}</h3>
                     <small class="text-muted fw-bold" style="font-size: 0.65rem;">UNIDADES</small>
                 </div>
-                <div class="col-3 border-end text-warning">
-                    <h3 class="mb-0 fw-bold" style="color: #d39e00;">${((info.queso_inicial_gr - info.queso_merma_gr) / info.cant_producida).toFixed(1)}g</h3>
-                    <small class="text-muted fw-bold" style="font-size: 0.65rem;">PROM. QUESO</small>
+                <div class="col border-end">
+                    <h3 class="mb-0 fw-bold" style="color: #d39e00;">${promQ === '—' ? '—' : promQ + ' g'}</h3>
+                    <small class="text-muted fw-bold" style="font-size: 0.65rem;">PROM. QUESO (neto/cant)</small>
                 </div>
-                <div class="col-3 border-end">
-                    <h3 class="mb-0 fw-bold text-dark">${info.queso_inicial_gr}g</h3>
+                <div class="col border-end">
+                    <h3 class="mb-0 fw-bold text-dark">${HuenteFmt.metrico(fmtNum(info.queso_inicial_gr))} g</h3>
                     <small class="text-muted fw-bold" style="font-size: 0.65rem;">Q. INICIAL</small>
                 </div>
-                <div class="col-3 text-secondary">
-                    <h3 class="mb-0 fw-bold">${info.queso_merma_gr}g</h3>
+                <div class="col border-end">
+                    <h3 class="mb-0 fw-bold" style="color: #c45c00;">${HuenteFmt.metrico(qp)} g</h3>
+                    <small class="text-muted fw-bold" style="font-size: 0.65rem;">Q. PIZZA</small>
+                </div>
+                <div class="col">
+                    <h3 class="mb-0 fw-bold text-secondary">${HuenteFmt.metrico(fmtNum(info.queso_merma_gr))} g</h3>
                     <small class="text-muted fw-bold" style="font-size: 0.65rem;">Q. MERMA</small>
                 </div>
             </div>
+            <p class="small text-center mb-3 fw-bold text-dark">Queso neto empanada (este registro): ${HuenteFmt.metrico(neto)}&nbsp;g
+                <span class="text-muted fw-normal">= inicial − pizza − merma</span>
+            </p>
 
-            {# SECCION INVENTARIO CRITICO (COLOR VERDE) #}
             <div class="p-3 mb-3" style="background-color: #e8f5e9; border-left: 5px solid #2e7d32; border-radius: 4px;">
                 <h6 class="fw-bold text-success mb-2 border-bottom border-success pb-1">📦 Inventario Disponible (Día Siguiente)</h6>
                 <div class="row text-center">
@@ -138,7 +298,7 @@ function verDetalle(info) {
                         <small class="text-muted">Quesos</small>
                     </div>
                     <div class="col">
-                        <span class="d-block fw-bold fs-5 text-dark">${info.queso_trozos_gr_stock}g</span>
+                        <span class="d-block fw-bold fs-5 text-dark">${HuenteFmt.metrico(fmtNum(info.queso_trozos_gr_stock))} g</span>
                         <small class="text-muted">Trozos</small>
                     </div>
                     <div class="col">
@@ -146,7 +306,7 @@ function verDetalle(info) {
                         <small class="text-muted">Harina</small>
                     </div>
                     <div class="col">
-                        <span class="d-block fw-bold fs-5 text-dark">${info.sal_kg_stock}kg</span>
+                        <span class="d-block fw-bold fs-5 text-dark">${HuenteFmt.metrico(fmtNum(info.sal_kg_stock))} kg</span>
                         <small class="text-muted">Sal</small>
                     </div>
                     <div class="col">
@@ -156,11 +316,10 @@ function verDetalle(info) {
                 </div>
             </div>
 
-            {# RESPONSABLE Y OBSERVACIONES #}
             <div class="row mb-3 bg-white p-2 rounded shadow-sm border">
                 <div class="col-6 border-end text-start">
                     <p class="mb-0 small text-muted fw-bold">Responsable:</p>
-                    <p class="mb-0 fw-bold text-dark">${info.encargada}</p>
+                    <p class="mb-0 fw-bold text-dark">${info.encargada || '—'}</p>
                 </div>
                 <div class="col-6 text-start">
                     <p class="mb-0 small text-muted fw-bold">Observaciones:</p>
@@ -168,23 +327,49 @@ function verDetalle(info) {
                 </div>
             </div>
 
-            {# IMAGEN DE RESPALDO #}
             <div class="text-center">
                 <label class="text-muted small d-block mb-1 fw-bold">EVIDENCIA CÁSCARA (FOTO DRIVE):</label>
                 <div class="bg-dark rounded d-flex align-items-center justify-content-center overflow-hidden border" style="height: 250px;">
-                    <img src="${urlImagen}" class="img-fluid" style="max-height: 250px;" 
-                         onerror="this.style.display='none'; document.getElementById('imgError').style.display='block';">
-                    <div id="imgError" style="display: none;" class="text-secondary small">
+                    <img src="${urlImagen}" class="img-fluid" style="max-height: 250px;"
+                         onerror="this.style.display='none'; document.getElementById('${imgErrId}').style.display='block';">
+                    <div id="${imgErrId}" style="display: none;" class="text-secondary small">
                         <i class="bi bi-camera-off fs-1 d-block mb-2"></i>
                         Imagen no encontrada o privada
                     </div>
                 </div>
             </div>
-        </div>
-    `;
+        </div>`;
+}
+
+function verDetalleDia(filas, fechaLabel) {
+    if (!filas || !filas.length) return;
+    const modalElement = document.getElementById('modalDetalle');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+    const titulo = fechaLabel || filas[0].fecha_str || filas[0].fecha || '';
+    document.getElementById('modalTitulo').innerText = 'Producción: ' + titulo;
+
+    let cuerpo = '';
+    if (filas.length === 1) {
+        cuerpo = panelProduccionHtml(filas[0], 0);
+    } else {
+        const pills = filas.map((_, i) => `
+            <li class="nav-item" role="presentation">
+                <button type="button" class="nav-link ${i === 0 ? 'active' : ''}" id="fab-pill-${i}"
+                        data-bs-toggle="tab" data-bs-target="#fab-pane-${i}" role="tab">Registro ${i + 1}</button>
+            </li>`).join('');
+        const panes = filas.map((f, i) => `
+            <div class="tab-pane fade ${i === 0 ? 'show active' : ''}" id="fab-pane-${i}" role="tabpanel">
+                ${panelProduccionHtml(f, i)}
+            </div>`).join('');
+        cuerpo = `
+            <div class="px-2 pt-2">
+                <ul class="nav nav-pills nav-fill flex-wrap gap-1 mb-3" role="tablist">${pills}</ul>
+                <div class="tab-content">${panes}</div>
+            </div>`;
+    }
+    document.getElementById('modalCuerpo').innerHTML = cuerpo;
     modal.show();
 }
 </script>
-{# FIN SCRIPTS #}
 
 {% endblock %}

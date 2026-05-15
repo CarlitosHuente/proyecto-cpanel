@@ -151,7 +151,7 @@ function actualizarEtiquetaIVA(input, showIVA) {
         const val = parseFloat(input.value);
         if (!isNaN(val)) {
             const bruto = Math.round(val * 1.19);
-            label.textContent = `Bruto: $${bruto.toLocaleString('es-CL')}`;
+            label.textContent = `Bruto: ${HuenteFmt.peso(bruto)}`;
             label.style.display = 'block';
         } else {
             label.style.display = 'none';

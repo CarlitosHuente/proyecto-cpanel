@@ -140,7 +140,7 @@ function updateAdmTotals() {
         const asignado = (totalAdmMonto * (pct / 100));
         const idSuc = inp.getAttribute('data-suc');
         
-        document.getElementById('asig-adm-' + idSuc).innerText = '$' + Math.round(asignado).toLocaleString('es-CL');
+        document.getElementById('asig-adm-' + idSuc).innerText = HuenteFmt.peso(asignado);
         totalPct += pct;
         totalAsig += asignado;
     });
@@ -149,7 +149,7 @@ function updateAdmTotals() {
     elPct.innerText = totalPct.toFixed(1) + '%';
     elPct.className = totalPct > 100 ? 'text-end pe-1 text-danger' : (totalPct === 100 ? 'text-end pe-1 text-success' : 'text-end pe-1 text-warning');
     
-    document.getElementById('adm-total-asig').innerText = '$' + Math.round(totalAsig).toLocaleString('es-CL');
+    document.getElementById('adm-total-asig').innerText = HuenteFmt.peso(totalAsig);
 }
 
 inputsAdm.forEach(inp => inp.addEventListener('input', updateAdmTotals));

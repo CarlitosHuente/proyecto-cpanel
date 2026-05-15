@@ -177,3 +177,17 @@ CREATE TABLE IF NOT EXISTS arqueo_caja_terreno (
 --   python scripts/fix_sucursal_ventas_comercial.py
 -- Luego refrescar cache dashboard (/refresh).
 
+
+-- [2026-05-14] [IA] [fabrica_produccion.queso_pizza_gr]
+-- Motivo: Queso que no califica para empanada va a pizza; neto empanada = inicial − pizza − merma.
+-- Entorno probado: local
+-- SQL:
+
+ALTER TABLE fabrica_produccion
+ADD COLUMN queso_pizza_gr DECIMAL(10,2) NOT NULL DEFAULT 0
+COMMENT 'Queso desviado a pizza (g), entre inicial y merma'
+AFTER queso_inicial_gr;
+
+-- Rollback:
+-- ALTER TABLE fabrica_produccion DROP COLUMN queso_pizza_gr;
+

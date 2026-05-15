@@ -1,0 +1,28 @@
+---
+description: Presentación de números (CLP, métricos, %) y flujo de trabajo antes de codificar
+alwaysApply: true
+---
+
+# Huente — presentación y trabajo en este repo
+
+## Dinero (pesos chilenos)
+
+- **Nunca** mostrar decimales en montos en pesos para usuarios finales. Redondeo al entero (HALF_UP).
+- **Python / Jinja:** `{{ valor|dinero }}` y `utils/formato_dinero.py` → `dinero_presentacion`.
+- **JavaScript:** `static/js/formato_huente.js` se incluye en **`templates/base.html` (head)** para todo el sitio; usar `HuenteFmt.peso(n)`, `HuenteFmt.pesoConSigno(n)` y `HuenteFmt.metrico(n)`. No usar `toLocaleString("es-CL")` solo sobre floats para CLP sin fijar `maximumFractionDigits: 0`.
+
+## Cantidades no monetarias (kg, litros, etc.)
+
+- Mostrar como máximo **2 decimales** (menos si no aportan). Sin inventar precisión extra.
+- **Python / Jinja:** `{{ valor|metrico }}` o `{{ valor|metrico(2) }}` → `metrico_presentacion` en `utils/formato_dinero.py`.
+- **JavaScript:** `HuenteFmt.metrico(n)`.
+
+## Porcentajes
+
+- En KPIs y comparativas de variación, **1 decimal** es el estándar (p. ej. `toFixed(1)`), salvo que el producto pida otro criterio explícito.
+
+## Flujo de trabajo (IA y equipo)
+
+1. **Alinear antes de implementar:** en cambios de negocio, alcance ambiguo o varias opciones válidas, proponer enfoque (archivos, riesgos, impacto en BD) y acordar **antes** de escribir código extenso.
+2. **Pruebas y comandos:** ejecutar pruebas locales, scripts y lectura de archivos **sin pedir permiso** al usuario para “poder correr comandos”; asumir entorno de desarrollo real según reglas del proyecto.
+3. Tras cambios de comportamiento visible, actualizar **`docs/BITACORA_CAMBIOS_COMERCIAL_DASHBOARD.md`** (secciones relevantes) y subir `?v=` en templates que enlazan JS tocado.

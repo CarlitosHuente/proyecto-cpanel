@@ -147,7 +147,7 @@ document.addEventListener('click', function(e) {
             tbody.innerHTML += `
                 <tr>
                     <td class="ps-4">${per}</td>
-                    <td class="text-end pe-4 text-info fw-bold">$${Math.round(costo).toLocaleString('es-CL')}</td>
+                    <td class="text-end pe-4 text-info fw-bold">${HuenteFmt.peso(costo)}</td>
                 </tr>
             `;
         }

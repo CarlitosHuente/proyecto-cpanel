@@ -2,7 +2,7 @@
 
 **Objetivo:** registrar cambios recientes, reglas de negocio y **cómo trabajar en este repo** para que cualquier persona (o IA) que lea este archivo sepa **qué tocar**, **qué no romper** y **dónde seguir el hilo**.
 
-**Última actualización (contenido):** 2026-05-10 — documentado módulo **Arqueo de caja** (sección M): terreno, cuadratura, auditoría, notas, presentación monetaria, archivos y rutas.
+**Última actualización (contenido):** 2026-05-14 — `formato_huente.js` en `base.html` (head); contabilidad, ventas, arqueo terreno, utilidades alineados a `HuenteFmt` / % 1 decimal; fábrica calendario: resumen mes y modal con `|metrico` / `HuenteFmt.metrico` y % merma a 1 decimal; bitácora K y regla Cursor coherentes.
 
 ---
 
@@ -50,6 +50,8 @@
 1. **Debate / alineación:** aclarar el problema, restricciones (comercial vs agrícola, dashboard, costeo, BD) y qué **no** se debe tocar.
 2. **Propuesta:** resumir en pocas líneas o bullets el enfoque (archivos, rutas, riesgos, si hace falta SQL en `QUERY_CAMBIOS_PRODUCCION.sql`). Conviene que el dueño del negocio o quien pide el cambio **valide** antes de implementar.
 3. **Implementación:** recién ahí commits acotados + actualizar esta bitácora si cambia comportamiento documentado.
+
+**Sobre “pedir permiso” para ejecutar:** en este proyecto el agente **no** necesita autorización explícita del usuario para correr comandos de comprobación (tests, `DESCRIBE`, lint, etc.) en el entorno de desarrollo; sí debe **alinear el enfoque** (puntos 1–2) cuando el alcance o el criterio de negocio no esté claro, para no implementar a ciegas.
 
 **Operativo (siempre, también en cambios pequeños):**
 
@@ -174,6 +176,7 @@
 - **Etiqueta en pantalla:** los títulos de sección muestran el rango de semanas comparado (ej. `Sem 1-18 — 2026 vs 2025`).
 - **Detalle de producto (`/api/historico-producto`):** los **gráficos** usan el año anterior **completo** (52 semanas) para ver tendencia y “proyección”; los **KPIs / totales** de variación siguen alineados al periodo comparable (mismas semanas y totales por meses comparables en la fila de totales).
 - **Caché en navegador:** `static/js/ventas_historico.js` guarda en memoria las respuestas de resumen y de detalle por combinación de filtros/producto; repetir la misma consulta no vuelve a llamar al servidor hasta recargar la página.
+- **Presentación $ en cards:** montos en pesos **sin decimales** (`HuenteFmt` en `static/js/formato_huente.js`, incluido desde `base.html`). Cards de crecimiento/caída muestran la **variación en $** (entero) como importe principal y el neto actual/anterior como línea secundaria.
 
 ---
 
@@ -197,7 +200,8 @@
 | `routes/arqueo_caja_routes.py` | Blueprint arqueo: import, terreno, cuadratura, auditoría, export, canales UI, bundles eliminar/notas |
 | `utils/arqueo_caja_import.py` | Lectura Excel arqueo, normalización de canal, parse montos |
 | `utils/arqueo_caja_canal_ui_config.py` | Etiquetas/orden canales → JSON en `instance/` |
-| `utils/formato_dinero.py` | Presentación monetaria sin decimales (`dinero_presentacion`) |
+| `utils/formato_dinero.py` | `dinero_presentacion`, **`metrico_presentacion`** (kg, etc.; máx. 2 dec.) |
+- **JavaScript:** `static/js/formato_huente.js` (`HuenteFmt`); carga global en `templates/base.html` (head). No formatear CLP con `toLocaleString("es-CL")` sobre floats sin fijar cero decimales.
 | `utils/arqueo_caja_canales.py` | Lista legacy (puede quedar sin uso; canales “admin” salen de `arqueo_caja_lineas`) |
 | `templates/arqueo_caja/*.html` | UI arqueo (terreno, cuadratura, auditoría, import, canales, flashes) |
 | `docs/QUERY_CAMBIOS_PRODUCCION.sql` | DDL `arqueo_caja_*` (cargas, líneas, terreno; índices, `cod_comp`, caja/propina) |
@@ -217,9 +221,12 @@
 
 - **En pantalla y exportes orientados a usuarios**, los montos en **pesos chilenos** se muestran **sin decimales** (redondeo HALF_UP al entero más cercano). Separador de miles: punto (ej. `12.345.678`).
 - **Implementación:** `utils/formato_dinero.py` (`dinero_presentacion`) y filtro Jinja `{{ valor|dinero }}` registrado en `app.py`.
+- **JavaScript:** `static/js/formato_huente.js` — `HuenteFmt.peso`, `HuenteFmt.pesoConSigno`, `HuenteFmt.metrico`; **carga global** en `templates/base.html` (head). Subir `?v=` en el template al cambiar el JS. No formatear CLP con `toLocaleString("es-CL")` sobre floats sin fijar cero decimales (evita valores tipo `$243.361,345`).
+- **Cantidades no monetarias** (kg, litros, m³, etc.): como máximo **2 decimales** en presentación; sin forzar decimales innecesarios. **Python/Jinja:** filtro `{{ valor|metrico }}` → `metrico_presentacion` en el mismo módulo.
+- **Porcentajes** (variación vs anterior, participación, etc.): criterio habitual **1 decimal** (`%.1f` / `toFixed(1)`), salvo requisito explícito distinto.
 - **Cálculos internos** (cuadratura, import, BD) siguen usando `Decimal` con la precisión que defina el esquema; solo cambia la **presentación** salvo que se indique lo contrario en una pantalla específica.
 
----
+**Regla Cursor:** `.cursor/rules/huente-presentacion-trabajo.mdc` (`alwaysApply`) resume lo anterior para el agente.
 
 ## M. Módulo Arqueo de caja (`/arqueo-caja`)
 
@@ -280,6 +287,38 @@ Rutas con `@permiso_modulo("arqueo_caja")` (detalle de roles según tu `utils/au
 - [ ] URL de producción y si hay staging.
 - [ ] Política de backups MySQL antes de `revertir` masivos.
 - [ ] Índices confirmados en prod sobre `fecha`, `estado`, `sucursal` (recomendado para escala ~550k filas).
+
+---
+
+## N. Próximos pasos — Fábrica de empanadas (producción)
+
+**Contexto actual:** ya existe el calendario en `routes/fabrica_routes.py` → `/fabrica/calendario`, plantilla `templates/fabrica/calendario.html`, datos en tabla **`fabrica_produccion`** (campos usados en UI: entre otros `fecha`, `cant_producida`, `queso_inicial_gr`, `queso_merma_gr`, `rendimiento`, stocks; el detalle día a día abre modal con promedio queso **(queso_inicial_gr − queso_merma_gr) / cant_producida**).
+
+### N.1 Resumen mensual bajo el calendario
+
+**Objetivo:** para el **mes y año** que se está viendo, mostrar **debajo de la grilla del calendario** un bloque de resumen (tarjetas o fila compacta) con:
+
+| Indicador | Definición sugerida (alinear con negocio antes de implementar) |
+|-----------|----------------------------------------------------------------|
+| **Total elaborado en el mes** | Suma de `cant_producida` (o unidad acordada: empanadas elaboradas) de todas las filas del mes con dato. |
+| **Queso utilizado en el mes** | Suma de **queso neto** por día: suma de `(queso_inicial_gr − queso_merma_gr)` en cada fila del mes, **o** otra regla si “utilizado” debe ser solo inicial u otra cuenta. |
+| **Merma total en el mes** | Suma de `queso_merma_gr` en el mes. |
+| **Promedio de queso (g) por empanada (mes)** | `sum(queso_inicial_gr − queso_merma_gr) / sum(cant_producida)` solo si el denominador es mayor que cero; los días sin producción no aportan al denominador. |
+
+**UX:** mismo selector de mes/año que hoy; el resumen se recalcula con la misma consulta ampliada (agregados `SUM`/`COUNT` sobre el rango del mes).
+
+**Técnico:** extender la query en `calendario_produccion()` o segunda query ligera; pasar al template variables `resumen_mes: dict`; documentar en `QUERY_CAMBIOS_PRODUCCION.sql` si se agregan columnas o vistas.
+
+### N.2 Nuevos datos de producción a registrar
+
+Además de los campos actuales del día, incorporar **dos magnitudes explícitas** (nombres tentativos; validar con operaciones):
+
+1. **Empanada** — cantidad o flujo acordado (p. ej. unidades de empanada asociadas a esa jornada de línea, si debe diferenciarse de `cant_producida` o refinarse).
+2. **Queso cortado para empanada** — gramos o kg según estándar del resto del formulario (alinear con `queso_inicial_gr` / merma para no duplicar concepto: definir si es “cortado del día”, “asignado a línea”, etc.).
+
+**Implementación típica:** `ALTER TABLE fabrica_produccion ADD COLUMN …` (tipos `DECIMAL` o `INT` según caso) + formulario en modal “Nuevo registro” / edición + validación; permisos existentes `@permiso_modulo('fabrica')`.
+
+**Pendiente de definición con el usuario:** si “empanada” y `cant_producida` conviven como la misma métrica o dos conceptos distintos (elaborado vs otra categoría), y cómo cruza **queso cortado** con queso inicial/merma para no confundir KPIs del resumen N.1.
 
 ---
 

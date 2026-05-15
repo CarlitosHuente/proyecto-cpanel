@@ -628,7 +628,7 @@ document.addEventListener("DOMContentLoaded", function () {
       total += v;
     });
     const totalEl = document.getElementById("total-porcentaje-sg");
-    if (totalEl) totalEl.innerText = total.toFixed(2);
+    if (totalEl) totalEl.innerText = total.toFixed(1);
   }
 
   const tbodySG = document.getElementById("tbody-prorrateo-sg");
@@ -650,7 +650,7 @@ document.addEventListener("DOMContentLoaded", function () {
         tbodySG.querySelectorAll(".input-porcentaje").forEach(inp => {
           const centro = inp.dataset.centro;
           const valor = regla_actual[centro] != null ? regla_actual[centro] * 100 : 0;
-          inp.value = valor.toFixed(2);
+          inp.value = valor.toFixed(1);
         });
       }
       recalcularTotalSG();
@@ -701,7 +701,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // =========================
   function formateaPesos(valor) {
     if (!isFinite(valor)) return "—";
-    return valor.toLocaleString("es-CL", { maximumFractionDigits: 0 });
+    return HuenteFmt.peso(valor);
   }
 
   function recalcularCostosFabrica() {
@@ -777,7 +777,7 @@ document.addEventListener("DOMContentLoaded", function () {
       total += v;
     });
     const totalEl = document.getElementById("total-porcentaje-cuenta");
-    if (totalEl) totalEl.innerText = total.toFixed(2);
+    if (totalEl) totalEl.innerText = total.toFixed(1);
   }
 
   if (tbodyCuenta) {
@@ -797,7 +797,7 @@ document.addEventListener("DOMContentLoaded", function () {
       tbodyCuenta.querySelectorAll(".input-porcentaje-cuenta").forEach(inp => {
         const centro = inp.dataset.centro;
         const valor = regla[centro] != null ? regla[centro] * 100 : 0;
-        inp.value = valor.toFixed(2);
+        inp.value = valor.toFixed(1);
       });
       recalcularTotalCuenta();
       modalCuenta.show();
@@ -868,10 +868,10 @@ document.addEventListener("DOMContentLoaded", function () {
         tdCC.textContent = cc;
 
         const tdMonto = document.createElement("td");
-        tdMonto.textContent = Math.round(monto).toLocaleString("es-CL");
+        tdMonto.textContent = HuenteFmt.peso(monto);
 
         const tdPct = document.createElement("td");
-        tdPct.textContent = pct.toFixed(2) + " %";
+        tdPct.textContent = pct.toFixed(1) + " %";
 
         tr.appendChild(tdCC);
         tr.appendChild(tdMonto);
@@ -900,7 +900,7 @@ document.addEventListener("DOMContentLoaded", function () {
       tbody.innerHTML = "";
 
       document.getElementById("texto-preview-cuenta").innerText =
-        `Cuenta: ${cuenta} – Periodo: ${periodoActual} – Monto: ${monto.toLocaleString("es-CL")}`;
+        `Cuenta: ${cuenta} – Periodo: ${periodoActual} – Monto: ${HuenteFmt.peso(monto)}`;
 
       let dist = {};
 
@@ -942,10 +942,10 @@ document.addEventListener("DOMContentLoaded", function () {
         tdCC.textContent = cc;
 
         const tdPct = document.createElement("td");
-        tdPct.textContent = pct.toFixed(2) + " %";
+        tdPct.textContent = pct.toFixed(1) + " %";
 
         const tdMonto = document.createElement("td");
-        tdMonto.textContent = Math.round(montoCC).toLocaleString("es-CL");
+        tdMonto.textContent = HuenteFmt.peso(montoCC);
 
         tr.appendChild(tdCC);
         tr.appendChild(tdPct);

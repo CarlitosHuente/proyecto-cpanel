@@ -167,7 +167,7 @@
     });
     var el = document.getElementById('sumaMontosTerreno');
     if (el) {
-      el.textContent = sum.toLocaleString('es-CL', { maximumFractionDigits: 0 });
+      el.textContent = HuenteFmt.peso(sum);
     }
   }
   document.querySelectorAll('.monto-canal').forEach(function (inp) {

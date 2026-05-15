@@ -245,8 +245,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     tr.style.borderBottom = "1px solid #333";
                     tr.innerHTML = `
                         <td class="text-start ps-4 text-light">${cuenta}</td>
-                        <td>$${Math.round(monto).toLocaleString('es-CL')}</td>
-                        <td class="text-warning pe-4">$${Math.round(monto / unidades).toLocaleString('es-CL')}</td>
+                        <td>${HuenteFmt.peso(monto)}</td>
+                        <td class="text-warning pe-4">${HuenteFmt.peso(monto / unidades)}</td>
                     `;
                     tbody.appendChild(tr);
                 }
@@ -256,8 +256,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-4">No hay gastos asignados a este producto.</td></tr>';
             }
             
-            document.getElementById('mdlTotalTot').innerText = '$' + Math.round(sumaTotal).toLocaleString('es-CL');
-            document.getElementById('mdlTotalUni').innerText = '$' + Math.round(sumaTotal / unidades).toLocaleString('es-CL');
+            document.getElementById('mdlTotalTot').innerText = HuenteFmt.peso(sumaTotal);
+            document.getElementById('mdlTotalUni').innerText = HuenteFmt.peso(sumaTotal / unidades);
             
             const modal = new bootstrap.Modal(document.getElementById('modalDesglose'));
             modal.show();

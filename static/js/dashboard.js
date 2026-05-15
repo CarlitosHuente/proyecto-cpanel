@@ -338,7 +338,7 @@ function abrirModalHistoricoTicket() {
             <td class="fw-bold ${isActiva ? "text-info" : ""}">Sem ${fila.semana}</td>`;
         dataHistoricoTicketGlobal.años.forEach((año) => {
             const val = fila[año] || 0;
-            htmlBody += `<td>$${Number(val).toLocaleString("es-CL")}</td>`;
+            htmlBody += `<td>${HuenteFmt.peso(val)}</td>`;
         });
         htmlBody += `</tr>`;
     });
@@ -373,7 +373,7 @@ function abrirModalHistorico() {
         
         dataHistoricoGlobal.años.forEach(año => {
             const val = fila[año] || 0;
-            htmlBody += `<td>$${val.toLocaleString('es-CL')}</td>`;
+            htmlBody += `<td>${HuenteFmt.peso(val)}</td>`;
         });
         htmlBody += `</tr>`;
     });
@@ -645,7 +645,8 @@ function renderBarrasNeto(familia, productos) {
         type: "bar",
         orientation: "h",
         marker: { color: "#e60000" },
-        hovertemplate: "<b>%{y}</b><br>$%{x:,.0f}<extra></extra>",
+        customdata: valores.map((v) => HuenteFmt.peso(v)),
+        hovertemplate: "<b>%{y}</b><br>%{customdata}<extra></extra>",
     };
 
     const layout = _layoutBarrasProductos(`Detalle Neto: ${familia}`, "Neto ($)", nombres, marginL);
@@ -664,7 +665,8 @@ function renderBarrasCantidad(familia, productos) {
         type: "bar",
         orientation: "h",
         marker: { color: "#17a2b8" },
-        hovertemplate: "<b>%{y}</b><br>%{x:,.0f} unidades<extra></extra>",
+        customdata: cantidades.map((v) => HuenteFmt.entero(v)),
+        hovertemplate: "<b>%{y}</b><br>%{customdata} unidades<extra></extra>",
     };
 
     const layout = _layoutBarrasProductos(`Detalle Cantidad: ${familia}`, "Cantidad (u.)", nombres, marginL);
@@ -679,7 +681,7 @@ function animarContador(idElemento, valorFinal, isCurrency = true) {
     const incremento = (valorFinal - valorInicial) / pasos;
     let contador = 0;
     
-    const formatNumber = (num) => isCurrency ? `$${Math.round(num).toLocaleString("es-CL")}` : Math.round(num).toLocaleString("es-CL");
+    const formatNumber = (num) => isCurrency ? HuenteFmt.peso(num) : HuenteFmt.entero(num);
 
     const intervalo = setInterval(() => {
         contador++;
@@ -763,9 +765,10 @@ function renderRankingSucursales(datos) {
         type: "bar",
         orientation: "h",
         marker: { color: "#0dcaf0" },
-        text: datos.map(d => "$" + d.neto.toLocaleString("es-CL")),
+        text: datos.map(d => HuenteFmt.peso(d.neto)),
         textposition: "auto",
-        hovertemplate: "<b>%{y}</b><br>$%{x:,.0f}<extra></extra>"
+        customdata: datos.map(d => HuenteFmt.peso(d.neto)),
+        hovertemplate: "<b>%{y}</b><br>%{customdata}<extra></extra>"
     };
 
     const layout = {
@@ -791,7 +794,7 @@ function renderListaTop(idContenedor, datos, isAlerta) {
     datos.forEach(d => {
         const varAbs = Math.abs(d.variacion);
         // Si la variación es 0 (porque no hay data previa), solo mostramos el texto.
-        const textVar = varAbs > 0 ? "$" + varAbs.toLocaleString("es-CL") : "-";
+        const textVar = varAbs > 0 ? HuenteFmt.peso(varAbs) : "-";
         const colorClass = isAlerta ? "text-danger" : "text-success";
         const sign = isAlerta && varAbs > 0 ? "-" : (varAbs > 0 ? "+" : "");
 
@@ -818,7 +821,8 @@ function renderTendenciaVentas(datos) {
         mode: "lines+markers",
         name: "Año Actual",
         line: { color: "#e60000", width: 3 }, // Rojo corporativo
-        hovertemplate: "<b>%{x}</b><br>Actual: $%{y:,.0f}<extra></extra>"
+        customdata: datos.actual.map((v) => HuenteFmt.peso(v)),
+        hovertemplate: "<b>%{x}</b><br>Actual: %{customdata}<extra></extra>"
     };
 
     const traceAnterior = {
@@ -828,7 +832,8 @@ function renderTendenciaVentas(datos) {
         mode: "lines",
         name: "Año Anterior",
         line: { color: "#6c757d", width: 2, dash: "dot" }, // Gris punteado
-        hovertemplate: "<b>%{x}</b><br>Anterior: $%{y:,.0f}<extra></extra>"
+        customdata: datos.anterior.map((v) => HuenteFmt.peso(v)),
+        hovertemplate: "<b>%{x}</b><br>Anterior: %{customdata}<extra></extra>"
     };
 
     const layout = {
@@ -854,9 +859,10 @@ function renderComparativoPeriodo(datos) {
         y: datos.valores,
         type: "bar",
         marker: { color: ["#6c757d", "#e60000"] }, // Gris vs Rojo
-        text: datos.valores.map(v => "$" + v.toLocaleString("es-CL")),
+        text: datos.valores.map(v => HuenteFmt.peso(v)),
         textposition: "auto",
-        hovertemplate: "<b>%{x}</b><br>$%{y:,.0f}<extra></extra>"
+        customdata: datos.valores.map((v) => HuenteFmt.peso(v)),
+        hovertemplate: "<b>%{x}</b><br>%{customdata}<extra></extra>"
     };
 
     const layout = {

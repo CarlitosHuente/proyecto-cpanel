@@ -159,14 +159,14 @@ document.addEventListener("DOMContentLoaded", () => {
         elements[targetId].classList.add("text-success", "bg-dark", "fw-bold");
 
         if (targetId === 'margen') {
-            if (!isNaN(c) && !isNaN(p) && p !== 0) elements[targetId].value = (((p - c) / p) * 100).toFixed(2);
+            if (!isNaN(c) && !isNaN(p) && p !== 0) elements[targetId].value = (((p - c) / p) * 100).toFixed(1);
             else elements[targetId].value = "";
         } else if (targetId === 'precio') {
-            if (!isNaN(c) && !isNaN(m) && m !== 100) elements[targetId].value = (c / (1 - (m / 100))).toFixed(2);
+            if (!isNaN(c) && !isNaN(m) && m !== 100) elements[targetId].value = (c / (1 - (m / 100))).toFixed(0);
             else elements[targetId].value = "";
         } else if (targetId === 'costo') {
             if (!isNaN(p) && !isNaN(m)) {
-                elements[targetId].value = (p * (1 - (m / 100))).toFixed(2);
+                elements[targetId].value = (p * (1 - (m / 100))).toFixed(0);
             } else {
                 elements[targetId].value = "";
             }

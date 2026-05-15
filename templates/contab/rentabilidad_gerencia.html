@@ -175,7 +175,7 @@
 <script>
     const nombres = {{ nombres_grafico | tojson | safe }};
     const margenes = {{ margenes_grafico | tojson | safe }};
-    if (nombres.length > 0) Plotly.newPlot('grafico_top_productos', [{ x: nombres, y: margenes, type: 'bar', marker: { color: '#0dcaf0' }, text: margenes.map(v => "$" + Math.round(v).toLocaleString("es-CL")), textposition: 'auto', hovertemplate: "<b>%{x}</b><br>Aporte Total: $%{y:,.0f}<extra></extra>" }], { title: { text: "Top 10 Productos por Aporte Total al Margen ($)", font: { color: "#fff", size: 16 } }, paper_bgcolor: "transparent", plot_bgcolor: "transparent", font: { color: "#ccc" }, margin: { t: 50, b: 90, l: 60, r: 20 }, xaxis: { showgrid: false, tickangle: -20 }, yaxis: { showgrid: true, gridcolor: "#333", tickformat: "$,.0f" } }, {displayModeBar: false, responsive: true});
+    if (nombres.length > 0) Plotly.newPlot('grafico_top_productos', [{ x: nombres, y: margenes, type: 'bar', marker: { color: '#0dcaf0' }, text: margenes.map(v => HuenteFmt.peso(v)), textposition: 'auto', customdata: margenes.map(v => HuenteFmt.peso(v)), hovertemplate: "<b>%{x}</b><br>Aporte Total: %{customdata}<extra></extra>" }], { title: { text: "Top 10 Productos por Aporte Total al Margen ($)", font: { color: "#fff", size: 16 } }, paper_bgcolor: "transparent", plot_bgcolor: "transparent", font: { color: "#ccc" }, margin: { t: 50, b: 90, l: 60, r: 20 }, xaxis: { showgrid: false, tickangle: -20 }, yaxis: { showgrid: true, gridcolor: "#333", tickformat: "$,.0f" } }, {displayModeBar: false, responsive: true});
     else document.getElementById('grafico_top_productos').innerHTML = "<div class='text-center mt-5 text-muted'>Sin datos para graficar</div>";
 </script>
 {% endblock %}

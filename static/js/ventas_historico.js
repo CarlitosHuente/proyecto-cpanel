@@ -15,10 +15,10 @@
     let productoActual = null;
 
     function fmt(n) {
-        return "$" + Math.round(n).toLocaleString("es-CL");
+        return HuenteFmt.peso(n);
     }
     function fmtN(n) {
-        return Math.round(n).toLocaleString("es-CL");
+        return HuenteFmt.entero(n);
     }
 
     function cargarResumen() {
@@ -65,9 +65,9 @@
         $("lbl-top-crec").innerHTML = "Mayor Crecimiento" + periodoTxt;
         $("lbl-top-caida").innerHTML = "Mayor Ca\u00edda" + periodoTxt;
 
-        renderCards("cards-top-neto", data.top_neto, "danger");
-        renderCards("cards-top-crec", data.top_crecimiento, "success");
-        renderCards("cards-top-caida", data.top_caida, "warning");
+        renderCards("cards-top-neto", data.top_neto, "danger", "neto");
+        renderCards("cards-top-crec", data.top_crecimiento, "success", "delta");
+        renderCards("cards-top-caida", data.top_caida, "warning", "delta");
     }
 
     function poblarSelect(sel, opciones, valorActual) {
@@ -86,7 +86,7 @@
         });
     }
 
-    function renderCards(containerId, cards, color) {
+    function renderCards(containerId, cards, color, modoMonto) {
         const container = $(containerId);
         if (!cards || cards.length === 0) {
             container.innerHTML = '<div class="col"><p class="text-muted small">Sin datos</p></div>';
@@ -96,6 +96,15 @@
             const varClass = c.var_pct >= 0 ? "text-success" : "text-danger";
             const arrow = c.var_pct >= 0 ? "&#9650;" : "&#9660;";
             const sparkId = "spark_" + Math.random().toString(36).substr(2, 6);
+            const lineaMonto = modoMonto === "delta"
+                ? `<div class="mt-1">
+                        <span class="text-${color} fw-bold fs-6">${HuenteFmt.pesoConSigno(c.variacion)}</span>
+                        <div class="text-muted small">Neto act. ${fmt(c.neto_actual)} · ant. ${fmt(c.neto_anterior)}</div>
+                   </div>`
+                : `<div class="mt-1">
+                        <span class="text-${color} fw-bold">${fmt(c.neto_actual)}</span>
+                        <span class="text-muted small ms-1">cant: ${fmtN(c.cantidad_actual)}</span>
+                   </div>`;
             return `
             <div class="col">
                 <div class="card card-producto bg-dark text-white h-100 p-2"
@@ -105,10 +114,7 @@
                         <span class="small fw-bold text-truncate" style="max-width:75%;" title="${c.producto}">${c.producto}</span>
                         <span class="${varClass} small fw-bold">${arrow} ${Math.abs(c.var_pct)}%</span>
                     </div>
-                    <div class="mt-1">
-                        <span class="text-${color} fw-bold">${fmt(c.neto_actual)}</span>
-                        <span class="text-muted small ms-1">cant: ${fmtN(c.cantidad_actual)}</span>
-                    </div>
+                    ${lineaMonto}
                     <canvas id="${sparkId}" class="spark-canvas mt-1"></canvas>
                 </div>
             </div>`;
@@ -217,27 +223,33 @@
 
     function renderCharts(data) {
         const sems = data.semanas.map(s => "Sem " + s);
-        const clp = { style: "currency", currency: "CLP", maximumFractionDigits: 0 };
-        const ttCLP = { callbacks: { label: ctx => ctx.dataset.label + ": " + new Intl.NumberFormat("es-CL", clp).format(ctx.parsed.y) } };
+        const hoverClp = "%{x}<br><b>%{fullData.name}</b><br>%{customdata}<extra></extra>";
+        const hoverQty = "%{x}<br><b>%{fullData.name}</b><br>%{customdata} unidades<extra></extra>";
 
         Plotly.newPlot("chart-neto", [
             { x: sems, y: data.neto_actual, name: data.año_actual, type: "scatter", mode: "lines+markers",
-              line: { color: "#d80000", width: 3 }, marker: { size: 4 } },
+              line: { color: "#d80000", width: 3 }, marker: { size: 4 },
+              customdata: data.neto_actual.map(v => HuenteFmt.peso(v)), hovertemplate: hoverClp },
             { x: sems, y: data.neto_anterior, name: data.año_anterior, type: "scatter", mode: "lines",
-              line: { color: "#888", width: 2, dash: "dot" } }
+              line: { color: "#888", width: 2, dash: "dot" },
+              customdata: data.neto_anterior.map(v => HuenteFmt.peso(v)), hovertemplate: hoverClp }
         ], { ...plotlyLayout }, plotlyConfig);
 
         const lyQty = { ...plotlyLayout, yaxis: { ...plotlyLayout.yaxis, tickformat: ",.0f" } };
         Plotly.newPlot("chart-cantidad", [
-            { x: sems, y: data.cant_actual, name: data.año_actual, type: "bar", marker: { color: "#0dcaf0" } },
-            { x: sems, y: data.cant_anterior, name: data.año_anterior, type: "bar", marker: { color: "#555" } }
+            { x: sems, y: data.cant_actual, name: data.año_actual, type: "bar", marker: { color: "#0dcaf0" },
+              customdata: data.cant_actual.map(v => HuenteFmt.entero(v)), hovertemplate: hoverQty },
+            { x: sems, y: data.cant_anterior, name: data.año_anterior, type: "bar", marker: { color: "#555" },
+              customdata: data.cant_anterior.map(v => HuenteFmt.entero(v)), hovertemplate: hoverQty }
         ], { ...lyQty, barmode: "group" }, plotlyConfig);
 
         Plotly.newPlot("chart-precio", [
             { x: sems, y: data.precio_actual, name: data.año_actual, type: "scatter", mode: "lines+markers",
-              line: { color: "#ffc107", width: 2 }, marker: { size: 4 } },
+              line: { color: "#ffc107", width: 2 }, marker: { size: 4 },
+              customdata: data.precio_actual.map(v => HuenteFmt.peso(v)), hovertemplate: hoverClp },
             { x: sems, y: data.precio_anterior, name: data.año_anterior, type: "scatter", mode: "lines",
-              line: { color: "#888", width: 2, dash: "dot" } }
+              line: { color: "#888", width: 2, dash: "dot" },
+              customdata: data.precio_anterior.map(v => HuenteFmt.peso(v)), hovertemplate: hoverClp }
         ], { ...plotlyLayout }, plotlyConfig);
     }
 

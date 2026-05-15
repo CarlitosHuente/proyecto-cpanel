@@ -11,6 +11,26 @@ h1, p, label, div, span, a {
     color: white !important;
 }
 
+/* Modales con fondo claro: la regla anterior deja labels/p en blanco sobre bg-light */
+body .modal .modal-body.bg-light label,
+body .modal .modal-body.bg-light p {
+    color: #212529 !important;
+}
+
+body .modal .modal-body.bg-light .text-muted {
+    color: #6c757d !important;
+}
+
+/* Resumen fábrica (fondo oscuro): labels visibles frente al global label { color: white } */
+.card.fabrica-resumen .stat-label,
+.card.fabrica-resumen .stat-hint {
+    color: #adb5bd !important;
+}
+
+.card.fabrica-resumen .stat-value {
+    color: #fff !important;
+}
+
 .nav-tabs .nav-link.active {
   background-color: #d80000;  /* Rojo corporativo */
   color: white;

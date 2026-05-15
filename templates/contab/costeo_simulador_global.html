@@ -189,7 +189,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const kpiDiferencia = document.getElementById('kpiDiferencia');
     const margenActualReal = {{ total_margen_op_actual | default(0) }};
 
-    function formatMoney(num) { return '$' + Math.round(num).toLocaleString('es-CL'); }
+    function formatMoney(num) { return HuenteFmt.peso(num); }
 
     function recalcularEscenario() {
         let totalAporteSimulado = 0;

@@ -25,7 +25,7 @@ import os
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
-from utils.formato_dinero import dinero_presentacion
+from utils.formato_dinero import dinero_presentacion, metrico_presentacion
 
 app = Flask(__name__, template_folder=os.path.join(BASE_DIR, 'templates'))
 app.permanent_session_lifetime = timedelta(minutes=45) #Tiempo Maximo de inactividad.
@@ -80,6 +80,16 @@ def utility_processor():
 def filtro_dinero(val):
     """Montos en pantalla sin decimales (pesos). Ver `utils/formato_dinero.py` y bitácora."""
     return dinero_presentacion(val)
+
+
+@app.template_filter("metrico")
+def filtro_metrico(val, decimales=2):
+    """Kg, litros, etc.: máximo decimales (default 2). Ver bitácora sección K."""
+    try:
+        d = int(decimales)
+    except (TypeError, ValueError):
+        d = 2
+    return metrico_presentacion(val, decimales=max(0, min(d, 6)))
 
 @app.route("/refresh")
 def refresh_global():
