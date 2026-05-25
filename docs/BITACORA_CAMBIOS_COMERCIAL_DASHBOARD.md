@@ -326,4 +326,23 @@ Además de los campos actuales del día, incorporar **dos magnitudes explícitas
 
 ---
 
+## O. Centro de Accesos — roles, correos, secciones e inicio (2026-05-24)
+
+**Problema:** permisos planos en `permisos.json`, menú con subsecciones sin control fino, inconsistencia `dashboard` (menú) vs `ventas` (ruta), página de inicio hardcodeada por rol en `auth_routes.py`, y gestión dispersa (pizarra permisos + pizarra usuarios).
+
+**Solución:**
+
+- **Catálogo:** `utils/permisos_catalogo.py` — árbol alineado al menú (Ventas, Seremi, Contab, etc.) con permisos padre/hijo; un padre (ej. `ventas`) implica todos sus hijos; un hijo solo (ej. `ventas.historico`) no abre el resto.
+- **Persistencia:** `roles_config.json` en raíz (`utils/roles_config.py`) con `permisos` por rol + `pagina_inicio` por rol. Migra automáticamente desde `permisos.json` si existía.
+- **UI:** `/config/accesos` — 3 pestañas: **Correos por rol** (drag & drop + asignación rápida), **Secciones por rol** (árbol con checkboxes), **Página de inicio** (selector por rol). `/config/permisos` y `/config/usuarios_pizarra` redirigen aquí.
+- **Login:** `obtener_ruta_inicio_rol()` en `utils/auth.py` lee la página configurada; fallback en `DEFAULT_PAGINA_INICIO` del catálogo.
+- **Menú:** `base.html` usa `tiene_seccion()` para dropdowns y permisos granulares por ítem; Config deja de depender solo de roles hardcodeados.
+- **Corrección:** `/dashboard` exige `@permiso_modulo("dashboard")` (antes `ventas`).
+
+**Archivos clave:** `utils/auth.py`, `utils/roles_config.py`, `utils/permisos_catalogo.py`, `routes/config_routes.py`, `templates/config/accesos.html`, `routes/auth_routes.py`, `templates/base.html`.
+
+**Deploy:** subir `roles_config.json` junto al código o dejar que se genere con defaults al primer arranque; en hosting verificar permisos de escritura en la raíz del proyecto para guardar cambios desde la UI.
+
+---
+
 *Fin de bitácora orientada a humanos e IA. Mantener actualizada al cerrar cada cambio relevante de comercial, dashboard o costeo.*

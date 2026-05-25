@@ -1,31 +1,13 @@
 from flask import Blueprint, render_template, request, redirect, session, url_for
-from utils.auth import autenticar_huente, crear_sesion_para_email
+from utils.auth import autenticar_huente, crear_sesion_para_email, obtener_ruta_inicio_rol
 from utils.logger import registrar_acceso
 
 auth_bp = Blueprint('auth', __name__)
 
-# --- Función Helper para decidir a dónde ir ---
+
 def obtener_ruta_inicio(rol):
-    """Devuelve la URL de destino según el rol del usuario."""
-    if rol == "gerencia":
-        return url_for("contab.dashboard_gestion")
-    elif rol == "contab":
-        return url_for("contab.dashboard_gestion")
-    elif rol == "seremi":
-        # Ajusta esto a la ruta principal de seremi que prefieras
-        return url_for("seremi.temperatura_equipos") 
-    elif rol == "ventas":
-        return url_for("ventas.ventas")
-    elif rol == "sucursales":
-        return url_for("sucursales.pizarra")
-    elif rol == "logistica":
-        return url_for("sucursales.pizarra")
-    elif rol == "invitado":
-        return url_for("config.gestion_agricola")
-    elif rol == "superusuario":
-        return url_for("contab.dashboard_gestion")
-    else:
-        return url_for("dashboard.dashboard")
+    """Redirige según página de inicio configurada para el rol (Centro de Accesos)."""
+    return obtener_ruta_inicio_rol(rol)
 
 @auth_bp.route("/", methods=["GET", "POST"])
 @auth_bp.route("/login", methods=["GET", "POST"])

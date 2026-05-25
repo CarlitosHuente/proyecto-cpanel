@@ -249,7 +249,7 @@ def descargar_excel():
 
 @ventas_bp.route("/ventas/historico")
 @login_requerido
-@permiso_modulo("ventas")
+@permiso_modulo("ventas.historico")
 def ventas_historico():
     return render_template("ventas_historico.html")
 

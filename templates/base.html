@@ -182,27 +182,35 @@
         </div>
         {% endif %}
 
-        {% if tiene_permiso(session.get('rol'), 'dashboard') %}
+        {% set rol_actual = session.get('rol') %}
+
+        {% if tiene_permiso(rol_actual, 'dashboard') %}
         <a href="{{ url_for('dashboard.dashboard') }}"><span class="texto-menu">Dashboard</span></a>
         {% endif %}
 
-        {% if tiene_permiso(session.get('rol'), 'ventas') %}
+        {% if tiene_seccion(rol_actual, 'ventas') or tiene_permiso(rol_actual, 'agricola') %}
         <div class="dropdown">
             <a class="dropdown-toggle d-block px-3 py-2 text-white" href="#" role="button" id="ventasDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                 <span class="texto-menu">Ventas</span>
             </a>
             <ul class="dropdown-menu bg-dark border-0" aria-labelledby="ventasDropdown">
+                {% if tiene_permiso(rol_actual, 'ventas') or tiene_permiso(rol_actual, 'ventas.resumen') %}
                 <li><a class="dropdown-item text-white" href="{{ url_for('ventas.ventas') }}">Dashboard Ventas</a></li>
+                {% endif %}
+                {% if tiene_permiso(rol_actual, 'ventas') or tiene_permiso(rol_actual, 'ventas.historico') %}
                 <li><a class="dropdown-item text-white" href="{{ url_for('ventas.ventas_historico') }}">Histórico Productos</a></li>
+                {% endif %}
+                {% if tiene_permiso(rol_actual, 'ventas') or tiene_permiso(rol_actual, 'ventas.precios') %}
                 <li><a class="dropdown-item text-white" href="{{ url_for('precios.vista_precios') }}">Lista de Precios</a></li>
-                {% if session.get('rol') in ['superusuario', 'admin'] %}
+                {% endif %}
+                {% if tiene_permiso(rol_actual, 'agricola') or tiene_permiso(rol_actual, 'ventas.agricola') %}
                 <li><a class="dropdown-item text-white" href="{{ url_for('config.gestion_agricola') }}">Importar Agrícola</a></li>
                 {% endif %}
             </ul>
         </div>
         {% endif %}
 
-        {% if tiene_permiso(session.get('rol'), 'seremi') %}
+        {% if tiene_seccion(rol_actual, 'seremi') %}
         <div class="dropdown">
             <a class="dropdown-toggle d-block px-3 py-2 text-white" href="#" role="button" id="seremiDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                 <span class="texto-menu">Seremi</span>
@@ -284,7 +292,7 @@
         </div>
         {% endif %}
         
-        {% if session['rol'] in ['superusuario', 'admin', 'logistica', "seremi"] %}
+        {% if tiene_seccion(rol_actual, 'config') or tiene_permiso(rol_actual, 'productos') or tiene_permiso(rol_actual, 'categorias') %}
         <li class="nav-item">
             <a class="nav-link collapsed text-white" href="#" data-bs-toggle="collapse" data-bs-target="#submenuConfig" aria-expanded="false">
                 <i class="bi bi-gear-fill me-2"></i> Configuración 
@@ -292,30 +300,33 @@
             </a>
             <div class="collapse" id="submenuConfig">
                 <ul class="btn-toggle-nav list-unstyled fw-normal pb-1 small ms-4">
-                    
-                    {% if session['rol'] in ['superusuario', 'admin'] %}
+                    {% if tiene_permiso(rol_actual, 'config') or tiene_permiso(rol_actual, 'config.usuarios') %}
                     <li><a href="{{ url_for('config.usuarios') }}" class="text-white text-decoration-none rounded p-1 d-block">
                         <i class="bi bi-people me-2"></i> Usuarios
                     </a></li>
                     {% endif %}
-
+                    {% if tiene_permiso(rol_actual, 'config') or tiene_permiso(rol_actual, 'config.accesos') %}
+                    <li><a href="{{ url_for('config.accesos') }}" class="text-white text-decoration-none rounded p-1 d-block">
+                        <i class="bi bi-shield-lock me-2"></i> Centro de Accesos
+                    </a></li>
+                    {% endif %}
+                    {% if tiene_permiso(rol_actual, 'productos') or tiene_permiso(rol_actual, 'config.productos') %}
                     <li><a href="{{ url_for('config.productos') }}" class="text-white text-decoration-none rounded p-1 d-block">
                         <i class="bi bi-box-seam me-2"></i> Productos
                     </a></li>
-
+                    {% endif %}
+                    {% if tiene_permiso(rol_actual, 'categorias') or tiene_permiso(rol_actual, 'config.categorias') %}
                     <li><a href="{{ url_for('config.categorias') }}" class="text-white text-decoration-none rounded p-1 d-block">
                         <i class="bi bi-tags me-2"></i> Categorías
                     </a></li>
-
-                    {% if session.get('rol') == 'superusuario' %}
+                    {% endif %}
+                    {% if tiene_permiso(rol_actual, 'config.anuncios') %}
                     <li class="nav-item">
                         <a class="nav-link text-white" href="{{ url_for('config.gestion_anuncios') }}">
                             <i class="bi bi-megaphone"></i> Config. Pop-Ups
                         </a>
                     </li>
                     {% endif %}
-                    
-                    
                 </ul>
             </div>
         </li>

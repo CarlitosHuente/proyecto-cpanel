@@ -36,7 +36,7 @@ dashboard_bp = Blueprint('dashboard', __name__)
 
 @dashboard_bp.route("/dashboard")
 @login_requerido
-@permiso_modulo("ventas")
+@permiso_modulo("dashboard")
 def dashboard():
     if "usuario" not in session:
         return redirect(url_for("auth.login"))

@@ -13,7 +13,7 @@ from datetime import timedelta
 from routes.contab_routes import contab_bp
 from utils.sheet_cache import refrescar_todo_el_cache, obtener_fecha_actualizacion
 from flask import redirect, request
-from utils.auth import tiene_permiso
+from utils.auth import tiene_permiso, tiene_seccion
 from routes.finanzas_routes import finanzas_bp
 from routes.sucursales_routes import sucursales_bp
 from routes.fabrica_routes import fabrica_bp
@@ -73,7 +73,7 @@ app.config['UPLOAD_FOLDER_CONTAB'] = UPLOAD_FOLDER
 @app.context_processor
 def utility_processor():
     """Esto permite usar la función tiene_permiso dentro de los HTML"""
-    return dict(tiene_permiso=tiene_permiso)
+    return dict(tiene_permiso=tiene_permiso, tiene_seccion=tiene_seccion)
 
 
 @app.template_filter("dinero")

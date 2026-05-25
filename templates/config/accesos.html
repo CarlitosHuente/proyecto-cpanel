@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+{% block title %}Centro de Accesos{% endblock %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
+<div class="container-fluid mt-4 pb-5">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <h2 class="text-white mb-1"><i class="bi bi-shield-lock text-info"></i> Centro de Accesos</h2>
+            <p class="text-muted mb-0 small">Asigna correos a roles, define secciones visibles y la página de inicio al iniciar sesión.</p>
+        </div>
+        <a href="{{ url_for('config.usuarios') }}" class="btn btn-outline-light btn-sm">
+            <i class="bi bi-people"></i> Tabla de usuarios
+        </a>
+    </div>
+
+    <div id="toast-accesos" class="position-fixed top-0 start-50 translate-middle-x mt-3" style="z-index: 9999; display: none;">
+        <div class="alert alert-success shadow mb-0 py-2 px-3"><i class="bi bi-check-circle me-1"></i> <span id="toast-msg">Guardado</span></div>
+    </div>
+
+    <ul class="nav nav-tabs border-secondary mb-3" id="tabsAccesos" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active text-white" id="tab-correos" data-bs-toggle="tab" data-bs-target="#panel-correos" type="button">Correos por rol</button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link text-white" id="tab-secciones" data-bs-toggle="tab" data-bs-target="#panel-secciones" type="button">Secciones por rol</button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link text-white" id="tab-inicio" data-bs-toggle="tab" data-bs-target="#panel-inicio" type="button">Página de inicio</button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        {# ===== TAB 1: CORREOS POR ROL ===== #}
+        <div class="tab-pane fade show active" id="panel-correos" role="tabpanel">
+            <p class="text-muted small">Arrastra un correo a otra columna para cambiarle el rol. También puedes asignar desde el selector rápido.</p>
+
+            <div class="row g-3 mb-4">
+                <div class="col-md-5">
+                    <label class="form-label text-white-50 small">Asignar rol a un usuario</label>
+                    <div class="input-group">
+                        <select id="sel-usuario-rapido" class="form-select bg-dark text-white border-secondary">
+                            <option value="">— Elegir correo —</option>
+                            {% for rol, lista in usuarios_por_rol.items() %}
+                                {% for u in lista %}
+                                    {% set uid = u.id if u is mapping else u[0] %}
+                                    {% set uemail = u.email if u is mapping else u[1] %}
+                                    {% set urol = u.rol if u is mapping else u[2] %}
+                                    <option value="{{ uid }}" data-rol="{{ urol }}">{{ uemail }} ({{ urol }})</option>
+                                {% endfor %}
+                            {% endfor %}
+                        </select>
+                        <select id="sel-rol-rapido" class="form-select bg-dark text-white border-secondary" style="max-width: 160px;">
+                            {% for rol in roles %}
+                            <option value="{{ rol }}">{{ rol }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="button" class="btn btn-info" id="btn-asignar-rapido">Asignar</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 g-3">
+                {% for rol in roles %}
+                <div class="col">
+                    <div class="card bg-dark border-secondary h-100 shadow">
+                        <div class="card-header bg-black text-warning border-secondary d-flex justify-content-between">
+                            <span><i class="bi bi-person-badge"></i> {{ rol|upper }}</span>
+                            <span class="badge bg-secondary">{{ usuarios_por_rol.get(rol, [])|length }}</span>
+                        </div>
+                        <div class="card-body p-2 zona-rol-correo" data-rol="{{ rol }}" style="min-height: 200px; background: #1a1a1a;">
+                            {% for u in usuarios_por_rol.get(rol, []) %}
+                                {% set uid = u.id if u is mapping else u[0] %}
+                                {% set uemail = u.email if u is mapping else u[1] %}
+                                {% set uactivo = u.activo if u is mapping else u[3] %}
+                                <div class="card text-white mb-2 p-2 shadow-sm usuario-card {{ 'bg-secondary' if uactivo else 'bg-danger opacity-75' }}"
+                                     style="cursor: grab;" data-id="{{ uid }}" title="{{ uemail }}">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-grip-vertical me-2 text-white-50"></i>
+                                        <span class="text-truncate small">{{ uemail }}</span>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# ===== TAB 2: SECCIONES POR ROL ===== #}
+        <div class="tab-pane fade" id="panel-secciones" role="tabpanel">
+            <div class="row g-3">
+                <div class="col-lg-3">
+                    <label class="form-label text-white-50 small">Rol a editar</label>
+                    <select id="sel-rol-permisos" class="form-select bg-dark text-white border-secondary">
+                        {% for rol in roles %}
+                        <option value="{{ rol }}">{{ rol }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="mt-3 d-grid gap-2">
+                        <button type="button" class="btn btn-warning btn-sm" id="btn-guardar-permisos">
+                            <i class="bi bi-save"></i> Guardar secciones de este rol
+                        </button>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" id="chk-acceso-total">
+                            <label class="form-check-label text-success small" for="chk-acceso-total">
+                                <i class="bi bi-star-fill"></i> Acceso total (*)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-9">
+                    <div class="card bg-dark border-secondary">
+                        <div class="card-body" id="arbol-permisos">
+                            {% for grupo in catalogo %}
+                            <div class="mb-3 border-bottom border-secondary pb-2 perm-grupo" data-grupo="{{ grupo.id }}">
+                                <div class="form-check">
+                                    <input class="form-check-input perm-check perm-padre" type="checkbox"
+                                           id="perm-{{ grupo.id }}" value="{{ grupo.id }}"
+                                           data-padre="{{ grupo.id }}">
+                                    <label class="form-check-label text-white fw-semibold" for="perm-{{ grupo.id }}">
+                                        {{ grupo.label }}
+                                    </label>
+                                    <div class="small text-muted ms-4">{{ grupo.desc }}</div>
+                                </div>
+                                {% if grupo.hijos %}
+                                <div class="ms-4 mt-2">
+                                    {% for h in grupo.hijos %}
+                                    <div class="form-check">
+                                        <input class="form-check-input perm-check perm-hijo" type="checkbox"
+                                               id="perm-{{ h.id }}" value="{{ h.id }}"
+                                               data-padre="{{ grupo.id }}">
+                                        <label class="form-check-label text-white-50" for="perm-{{ h.id }}">
+                                            {{ h.label }}
+                                        </label>
+                                        <span class="small text-muted"> — {{ h.desc }}</span>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# ===== TAB 3: PÁGINA DE INICIO ===== #}
+        <div class="tab-pane fade" id="panel-inicio" role="tabpanel">
+            <p class="text-muted small">Al iniciar sesión, cada rol irá a la pantalla que elijas aquí (si tiene permiso para verla).</p>
+            <div class="table-responsive">
+                <table class="table table-dark table-bordered align-middle">
+                    <thead>
+                        <tr>
+                            <th style="width: 180px;">Rol</th>
+                            <th>Página de inicio</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rol in roles %}
+                        <tr>
+                            <td class="text-warning">{{ rol }}</td>
+                            <td>
+                                <select class="form-select form-select-sm bg-dark text-white border-secondary sel-inicio" data-rol="{{ rol }}">
+                                    {% set actual = paginas_inicio.get(rol, '') %}
+                                    {% for p in paginas_inicio_opciones %}
+                                    <option value="{{ p.endpoint }}" {% if actual == p.endpoint %}selected{% endif %}>{{ p.label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <button type="button" class="btn btn-info" id="btn-guardar-inicio">
+                <i class="bi bi-house-door"></i> Guardar páginas de inicio
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+const PERMISOS_DATA = {{ permisos | tojson }};
+
+function mostrarToast(msg) {
+    const t = document.getElementById("toast-accesos");
+    document.getElementById("toast-msg").textContent = msg;
+    t.style.display = "block";
+    setTimeout(() => { t.style.display = "none"; }, 2500);
+}
+
+function apiPost(url, body) {
+    return fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+    }).then(r => r.json());
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    const hash = window.location.hash.replace("#", "");
+    if (hash === "secciones") {
+        document.getElementById("tab-secciones").click();
+    } else if (hash === "inicio") {
+        document.getElementById("tab-inicio").click();
+    }
+
+    // --- Drag & drop correos ---
+    document.querySelectorAll(".zona-rol-correo").forEach(function(zona) {
+        new Sortable(zona, {
+            group: "usuarios-correo",
+            animation: 150,
+            ghostClass: "bg-info",
+            onEnd: function(evt) {
+                const item = evt.item;
+                const userId = item.getAttribute("data-id");
+                const nuevoRol = evt.to.getAttribute("data-rol");
+                if (!userId || !nuevoRol) return;
+                apiPost("{{ url_for('config.api_asignar_rol_usuario') }}", {
+                    user_id: parseInt(userId, 10),
+                    nuevo_rol: nuevoRol
+                }).then(data => {
+                    if (data.success) mostrarToast("Rol actualizado para el usuario");
+                    else alert(data.error || "Error al asignar rol");
+                });
+            }
+        });
+    });
+
+    document.getElementById("btn-asignar-rapido").addEventListener("click", function() {
+        const selU = document.getElementById("sel-usuario-rapido");
+        const selR = document.getElementById("sel-rol-rapido");
+        const userId = selU.value;
+        const nuevoRol = selR.value;
+        if (!userId) { alert("Elige un correo"); return; }
+        apiPost("{{ url_for('config.api_asignar_rol_usuario') }}", {
+            user_id: parseInt(userId, 10),
+            nuevo_rol: nuevoRol
+        }).then(data => {
+            if (data.success) {
+                mostrarToast("Rol asignado — recarga para ver la pizarra actualizada");
+                setTimeout(() => location.reload(), 800);
+            } else alert(data.error || "Error");
+        });
+    });
+
+    // --- Permisos árbol ---
+    const selRolPerm = document.getElementById("sel-rol-permisos");
+    const chkTotal = document.getElementById("chk-acceso-total");
+    const arbol = document.getElementById("arbol-permisos");
+
+    function modulosDelRol(rol) {
+        return PERMISOS_DATA[rol] || [];
+    }
+
+    function pintarPermisosRol(rol) {
+        const mods = modulosDelRol(rol);
+        const esTotal = mods.includes("*");
+        chkTotal.checked = esTotal;
+        arbol.style.opacity = esTotal ? "0.45" : "1";
+        arbol.querySelectorAll(".perm-check").forEach(cb => {
+            cb.disabled = esTotal;
+            cb.checked = esTotal || mods.includes(cb.value);
+        });
+    }
+
+    selRolPerm.addEventListener("change", () => pintarPermisosRol(selRolPerm.value));
+    chkTotal.addEventListener("change", function() {
+        arbol.style.opacity = this.checked ? "0.45" : "1";
+        arbol.querySelectorAll(".perm-check").forEach(cb => {
+            cb.disabled = this.checked;
+            if (this.checked) cb.checked = false;
+        });
+    });
+
+    arbol.addEventListener("change", function(e) {
+        const cb = e.target;
+        if (!cb.classList.contains("perm-check")) return;
+        if (cb.classList.contains("perm-padre")) {
+            const padre = cb.value;
+            arbol.querySelectorAll(`.perm-hijo[data-padre="${padre}"]`).forEach(h => {
+                h.checked = cb.checked;
+            });
+        }
+    });
+
+    document.getElementById("btn-guardar-permisos").addEventListener("click", function() {
+        const rol = selRolPerm.value;
+        let modulos;
+        if (chkTotal.checked) {
+            modulos = ["*"];
+        } else {
+            modulos = [];
+            arbol.querySelectorAll(".perm-check:checked").forEach(cb => modulos.push(cb.value));
+        }
+        apiPost("{{ url_for('config.api_guardar_permisos_rol') }}", { rol, modulos }).then(data => {
+            if (data.success) {
+                PERMISOS_DATA[rol] = modulos;
+                mostrarToast("Secciones guardadas para " + rol);
+            } else alert(data.error || "Error al guardar");
+        });
+    });
+
+    pintarPermisosRol(selRolPerm.value);
+
+    // --- Página inicio ---
+    document.getElementById("btn-guardar-inicio").addEventListener("click", function() {
+        const payload = {};
+        document.querySelectorAll(".sel-inicio").forEach(sel => {
+            payload[sel.getAttribute("data-rol")] = sel.value;
+        });
+        apiPost("{{ url_for('config.api_guardar_paginas_inicio_todos') }}", payload).then(data => {
+            if (data.success) mostrarToast("Páginas de inicio guardadas");
+            else alert(data.error || "Error");
+        });
+    });
+});
+</script>
+{% endblock %}
