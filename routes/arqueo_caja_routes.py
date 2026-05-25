@@ -608,15 +608,18 @@ def terreno_eliminar_bundle():
 @login_requerido
 @permiso_modulo("arqueo_caja")
 def terreno_bundle_notas():
-    """Replica la misma observación en todas las filas terreno de ese día/caja (columna notas existente)."""
+    """Replica la misma observación en todas las filas terreno de ese día (y caja o ambas cajas)."""
     sucursal_id = request.form.get("sucursal_id", type=int)
     fecha = _parse_fecha(request.form.get("fecha") or "")
-    caja = request.form.get("caja", type=int) or 1
+    caja = request.form.get("caja", type=int)
+    todas_cajas = request.form.get("todas_cajas") == "1"
     semana_ref = _parse_fecha(request.form.get("semana_ref") or "")
     vista_ret = (request.form.get("vista_ret") or "").strip().lower()
     notas = (request.form.get("notas") or "").strip()[:500] or None
-    if caja not in (1, 2):
-        caja = 1
+    if not todas_cajas:
+        caja = caja or 1
+        if caja not in (1, 2):
+            caja = 1
     if not sucursal_id or not fecha:
         flash("Faltan datos para guardar la observación.", "warning")
         return redirect(url_for("arqueo_caja.cuadratura"))
@@ -624,11 +627,18 @@ def terreno_bundle_notas():
     n = 0
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                """UPDATE arqueo_caja_terreno SET notas=%s
-                   WHERE sucursal_id=%s AND fecha=%s AND caja=%s""",
-                (notas, sucursal_id, fecha, caja),
-            )
+            if todas_cajas:
+                cur.execute(
+                    """UPDATE arqueo_caja_terreno SET notas=%s
+                       WHERE sucursal_id=%s AND fecha=%s""",
+                    (notas, sucursal_id, fecha),
+                )
+            else:
+                cur.execute(
+                    """UPDATE arqueo_caja_terreno SET notas=%s
+                       WHERE sucursal_id=%s AND fecha=%s AND caja=%s""",
+                    (notas, sucursal_id, fecha, caja),
+                )
             n = cur.rowcount
         conn.commit()
     except Exception as ex:
@@ -639,9 +649,11 @@ def terreno_bundle_notas():
         conn.close()
     if n == 0:
         flash(
-            "No hay captura terreno ese día/caja: cargá la grilla terreno antes de anotar.",
+            "No hay captura terreno ese día: cargá la grilla terreno antes de anotar.",
             "warning",
         )
+    elif todas_cajas:
+        flash("Observación guardada en todos los canales del día (Caja 1 y Caja 2).", "success")
     else:
         flash("Observación guardada en todos los canales de esa caja y día.", "success")
     if vista_ret == "semana" and semana_ref:
@@ -651,7 +663,6 @@ def terreno_bundle_notas():
                 sucursal_id=sucursal_id,
                 fecha=semana_ref.isoformat(),
                 vista="semana",
-                caja=caja,
             )
         )
     return redirect(
@@ -659,7 +670,6 @@ def terreno_bundle_notas():
             "arqueo_caja.cuadratura",
             sucursal_id=sucursal_id,
             fecha=fecha.isoformat(),
-            caja=caja,
             vista="dia",
         )
     )
@@ -842,7 +852,8 @@ def _sort_detalle_auditoria(rows: List[dict], key: str, desc: bool) -> List[dict
     return sorted(rows, key=ks[key], reverse=desc)
 
 
-def _cuadratura_data(sucursal_id: int, fecha: date, caja: int = 1):
+def _cuadratura_data(sucursal_id: int, fecha: date):
+    """Concilia sistema (sucursal/día) vs terreno sumando Caja 1 + Caja 2 por canal."""
     conn = get_db_connection()
     sistema_rows = []
     detalle_sistema = []
@@ -862,19 +873,45 @@ def _cuadratura_data(sucursal_id: int, fecha: date, caja: int = 1):
             )
             detalle_sistema = cur.fetchall() or []
             cur.execute(
-                """SELECT canal_norm, canal_raw, monto, notas, propina FROM arqueo_caja_terreno
-                   WHERE sucursal_id = %s AND fecha = %s AND caja = %s""",
-                (sucursal_id, fecha, caja),
+                """SELECT canal_norm, canal_raw, monto, notas, propina, caja FROM arqueo_caja_terreno
+                   WHERE sucursal_id = %s AND fecha = %s ORDER BY caja, canal_norm""",
+                (sucursal_id, fecha),
             )
             for r in cur.fetchall() or []:
-                terreno_map[r["canal_norm"]] = {
-                    "monto": Decimal(str(r["monto"])),
-                    "canal_raw": r["canal_raw"],
-                    "notas": r.get("notas"),
-                    "propina": r.get("propina"),
-                }
+                cn = r["canal_norm"]
+                if cn not in terreno_map:
+                    terreno_map[cn] = {
+                        "monto": Decimal("0"),
+                        "canal_raw": r["canal_raw"],
+                        "notas": [],
+                        "propina_sum": Decimal("0"),
+                        "tiene_propina": False,
+                    }
+                entry = terreno_map[cn]
+                entry["monto"] += Decimal(str(r["monto"]))
+                if r.get("propina") is not None:
+                    entry["propina_sum"] += Decimal(str(r["propina"]))
+                    entry["tiene_propina"] = True
+                nota = (r.get("notas") or "").strip()
+                if nota:
+                    entry["notas"].append(nota)
     finally:
         conn.close()
+
+    terreno_agg = {}
+    for cn, entry in terreno_map.items():
+        uniq_notas = list(dict.fromkeys(entry["notas"]))
+        if len(uniq_notas) <= 1:
+            notas_txt = uniq_notas[0] if uniq_notas else None
+        else:
+            notas_txt = " · ".join(uniq_notas)
+        terreno_agg[cn] = {
+            "monto": entry["monto"],
+            "canal_raw": entry["canal_raw"],
+            "notas": notas_txt,
+            "propina": entry["propina_sum"] if entry["tiene_propina"] else None,
+        }
+    terreno_map = terreno_agg
 
     sis_buckets = _sumar_sistema_por_canal(sistema_rows)
     canales = sorted(set(sis_buckets.keys()) | set(terreno_map.keys()))
@@ -931,12 +968,9 @@ def cuadratura():
     sucursales = _listar_sucursales()
     sucursal_id = request.args.get("sucursal_id", type=int)
     fecha = _parse_fecha(request.args.get("fecha") or "")
-    caja = request.args.get("caja", type=int) or 1
     vista = (request.args.get("vista") or "dia").strip().lower()
     if vista not in ("dia", "semana"):
         vista = "dia"
-    if caja not in (1, 2):
-        caja = 1
     data = None
     semana_filas = []
     suma_semana_diff = Decimal("0")
@@ -952,45 +986,42 @@ def cuadratura():
             es = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
             for i in range(7):
                 d = lunes + timedelta(days=i)
-                for caj in (1, 2):
-                    dd = _cuadratura_data(sucursal_id, d, caj)
-                    hay = dd["hay_sistema"] or dd["hay_terreno"]
-                    td = dd["total_diff"]
-                    tp = dd.get("total_propina_terreno", Decimal("0"))
-                    conc = td == Decimal("0")
-                    if not hay:
-                        estado = "Sin datos"
-                        row_cls = "table-secondary"
-                    elif conc:
-                        estado = "Conciliado"
-                        row_cls = ""
-                    else:
-                        estado = "Descuadrado"
-                        row_cls = "table-danger"
-                    if hay:
-                        suma_semana_diff += td
-                        suma_semana_propina += tp
-                    semana_filas.append(
-                        {
-                            "dia": es[i],
-                            "fecha_iso": d.isoformat(),
-                            "caja": caj,
-                            "estado": estado,
-                            "row_cls": row_cls,
-                            "hay_datos": hay,
-                            "total_diff": td,
-                            "total_propina": tp,
-                            "notas": dd.get("notas_bundle") or "",
-                        }
-                    )
+                dd = _cuadratura_data(sucursal_id, d)
+                hay = dd["hay_sistema"] or dd["hay_terreno"]
+                td = dd["total_diff"]
+                tp = dd.get("total_propina_terreno", Decimal("0"))
+                conc = td == Decimal("0")
+                if not hay:
+                    estado = "Sin datos"
+                    row_cls = "table-secondary"
+                elif conc:
+                    estado = "Conciliado"
+                    row_cls = ""
+                else:
+                    estado = "Descuadrado"
+                    row_cls = "table-danger"
+                if hay:
+                    suma_semana_diff += td
+                    suma_semana_propina += tp
+                semana_filas.append(
+                    {
+                        "dia": es[i],
+                        "fecha_iso": d.isoformat(),
+                        "estado": estado,
+                        "row_cls": row_cls,
+                        "hay_datos": hay,
+                        "total_diff": td,
+                        "total_propina": tp,
+                        "notas": dd.get("notas_bundle") or "",
+                    }
+                )
         else:
-            data = _cuadratura_data(sucursal_id, fecha, caja)
+            data = _cuadratura_data(sucursal_id, fecha)
     return render_template(
         "arqueo_caja/cuadratura.html",
         sucursales=sucursales,
         sucursal_id=sucursal_id,
         fecha=fecha.isoformat() if fecha else "",
-        caja=caja,
         vista=vista,
         data=data,
         semana_filas=semana_filas,
@@ -1007,13 +1038,10 @@ def cuadratura():
 def auditoria():
     sucursal_id = request.args.get("sucursal_id", type=int)
     fecha = _parse_fecha(request.args.get("fecha") or "")
-    caja = request.args.get("caja", type=int) or 1
-    if caja not in (1, 2):
-        caja = 1
     if not sucursal_id or not fecha:
         flash("Indicá sucursal y fecha.", "warning")
         return redirect(url_for("arqueo_caja.cuadratura"))
-    data = _cuadratura_data(sucursal_id, fecha, caja)
+    data = _cuadratura_data(sucursal_id, fecha)
     ord_res = request.args.get("ord_res", "").strip()
     dir_res_desc = request.args.get("dir_res", "asc").strip().lower() == "desc"
     ord_det = request.args.get("ord_det", "").strip()
@@ -1043,7 +1071,6 @@ def auditoria():
         sucursal_id=sucursal_id,
         nombre_suc=nombre_suc,
         fecha=fecha.isoformat(),
-        caja=caja,
         data=data,
         ord_res=ord_res,
         dir_res="desc" if dir_res_desc else "asc",
@@ -1058,13 +1085,10 @@ def auditoria():
 def export_auditoria_xlsx():
     sucursal_id = request.args.get("sucursal_id", type=int)
     fecha = _parse_fecha(request.args.get("fecha") or "")
-    caja = request.args.get("caja", type=int) or 1
-    if caja not in (1, 2):
-        caja = 1
     if not sucursal_id or not fecha:
         flash("Indicá sucursal y fecha.", "warning")
         return redirect(url_for("arqueo_caja.cuadratura"))
-    data = _cuadratura_data(sucursal_id, fecha, caja)
+    data = _cuadratura_data(sucursal_id, fecha)
     nombre_suc = str(sucursal_id)
     terreno_rows = []
     conn = get_db_connection()
@@ -1080,8 +1104,9 @@ def export_auditoria_xlsx():
             cur.execute(
                 """SELECT caja, canal_raw, canal_norm, monto, propina, notas, usuario
                    FROM arqueo_caja_terreno
-                   WHERE sucursal_id = %s AND fecha = %s AND caja = %s""",
-                (sucursal_id, fecha, caja),
+                   WHERE sucursal_id = %s AND fecha = %s
+                   ORDER BY caja, canal_norm""",
+                (sucursal_id, fecha),
             )
             terreno_rows = cur.fetchall() or []
     finally:
@@ -1091,7 +1116,7 @@ def export_auditoria_xlsx():
     for f in data["filas"]:
         resumen.append(
             {
-                "Caja": caja,
+                "Cajas": "1+2",
                 "Nombre_pantalla": f["etiqueta"],
                 "Canal_norm": f["canal_norm"],
                 "Etiqueta_sistema": f["sistema_muestra"],
@@ -1142,7 +1167,7 @@ def export_auditoria_xlsx():
             )
         df_t.to_excel(w, sheet_name="Terreno_captura", index=False)
     buf.seek(0)
-    safe = secure_filename(f"auditoria_arqueo_{nombre_suc}_caja{caja}_{fecha}.xlsx")
+    safe = secure_filename(f"auditoria_arqueo_{nombre_suc}_{fecha}.xlsx")
     return Response(
         buf.getvalue(),
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

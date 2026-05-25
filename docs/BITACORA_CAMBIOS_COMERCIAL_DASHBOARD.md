@@ -279,8 +279,9 @@ Esquema y migraciones comentadas: `docs/QUERY_CAMBIOS_PRODUCCION.sql`.
 
 ### Cuadratura — día y semana
 
-- **Día:** por canal; totales **diferencia** y **propinas** terreno; observación del día/caja vía `terreno/bundle/notas`.
-- **Semana:** por cada día, **Caja 1 y Caja 2** (hasta 14 filas): diferencia total día/caja, suma propinas, estado, observación, enlaces a cuadratura día y auditoría. **Pie:** suma semanal de diferencias y propinas (solo días/caja con datos).
+- **Terreno en conciliación:** suma **Caja 1 + Caja 2** por `canal_norm` (montos y propinas). El import **sistema** sigue siendo el total sucursal/día (sin caja). La **captura terreno** sigue siendo **por caja** en `/terreno`.
+- **Día:** por canal; totales **diferencia** y **propinas** terreno (ambas cajas); observación del día vía `terreno/bundle/notas` con `todas_cajas=1` (replica en filas de Caja 1 y Caja 2).
+- **Semana:** **una fila por día** (no por caja): diferencia total del día, suma propinas, estado, observación, enlaces a cuadratura día y auditoría. **Pie:** suma semanal de diferencias y propinas (solo días con datos).
 - **Conciliado:** `total_diff == 0` y hay sistema o terreno.
 
 ### Presentación monetaria
