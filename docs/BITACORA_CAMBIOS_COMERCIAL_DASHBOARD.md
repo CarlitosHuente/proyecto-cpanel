@@ -347,4 +347,20 @@ Además de los campos actuales del día, incorporar **dos magnitudes explícitas
 
 ---
 
+## P. Ventas por Horario — dashboard (2026-05-24)
+
+**Objetivo:** ver neto, boletas y ticket promedio por **hora del pedido** (`hora_pedid`) para una sucursal/canal y un período, Comercial o Agrícola.
+
+**Rutas:** `/dashboard/ventas-horario`, API `/api/dashboard-ventas-horario`, sucursales `/api/sucursales-horario`.
+
+**Menú:** Dashboard ▾ → KPIs Ventas | **Ventas por Horario**. Permiso `dashboard.horario` (hereda de `dashboard`).
+
+**Lógica:** `services/ventas_horario_service.py` — SQL filtrado por fechas/semana; NETO comercial = misma regla dashboard; agrícola = `SUB_RENGL/1.19` y canal (`BOLETAS` / `TRABAJADOR` / `FACTURA` desde `des_client`). API devuelve `por_hora`, `heatmap`, `por_dia` (7 días Lun–Dom con neto y curva horaria).
+
+**UI (2026-05-24):** vista por defecto **Comparar 7 días** — gráfico de líneas (una curva por día de semana, agregando todos los lunes/martes/etc. del período filtrado). Vista **Detalle un día** — chips `[Todos | Lun | …]` sobre barras neto+boletas; heatmap resalta fila del día elegido. Tabla resumen por día (clic → detalle).
+
+**Archivos:** `templates/dashboard_ventas_horario.html`, `static/js/dashboard_ventas_horario.js?v=3`, `utils/permisos_catalogo.py`, `routes/dashboard_routes.py`, `templates/base.html`.
+
+---
+
 *Fin de bitácora orientada a humanos e IA. Mantener actualizada al cerrar cada cambio relevante de comercial, dashboard o costeo.*

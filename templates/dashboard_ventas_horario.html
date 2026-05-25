@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}Ventas por Horario{% endblock %}
+
+{% block content %}
+<style>
+    .sticky-top-dark {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background-color: #000;
+        padding: 10px;
+        border-bottom: 1px solid #333;
+    }
+    .kpi-card {
+        background: #111;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 1rem;
+        height: 100%;
+    }
+    .kpi-valor { font-size: 1.5rem; font-weight: 700; color: #0dcaf0; }
+    .kpi-sub { font-size: 0.85rem; color: #aaa; }
+</style>
+
+<div class="container-fluid sticky-top-dark">
+    <div class="row align-items-end g-2">
+        <div class="col-md-3">
+            <h2 class="text-danger mb-1">Ventas por Horario</h2>
+            <p class="text-muted small mb-0">Hora del pedido (<code>hora_pedid</code>)</p>
+        </div>
+        <div class="col-md-2">
+            <label class="text-white small">Empresa</label>
+            <select id="empresa" class="form-select form-select-sm">
+                <option value="comercial">Huente Comercial</option>
+                <option value="agricola">Huente Agrícola</option>
+            </select>
+        </div>
+        <div class="col-md-7">
+            <label class="text-white small">Sucursal / canal</label>
+            <div id="sucursales" class="btn-group flex-wrap" role="group"></div>
+        </div>
+    </div>
+    <div class="row mt-2 g-2">
+        <div class="col-md-2">
+            <label class="text-white small">Semana</label>
+            <input type="number" id="semana" min="1" max="53" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-2">
+            <label class="text-white small">Año</label>
+            <input type="number" id="año" min="2020" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-2">
+            <label class="text-white small">Desde</label>
+            <input type="date" id="desde" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-2">
+            <label class="text-white small">Hasta</label>
+            <input type="date" id="hasta" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button type="button" id="btn-consultar" class="btn btn-danger btn-sm w-100">Consultar</button>
+        </div>
+    </div>
+</div>
+
+<div id="loading-overlay" class="position-fixed top-0 start-0 w-100 h-100 d-none align-items-center justify-content-center" style="background:rgba(0,0,0,0.75); z-index:1050;">
+    <div class="text-center text-white">
+        <div class="spinner-border text-danger" role="status"></div>
+        <p class="mt-2">Calculando horarios…</p>
+    </div>
+</div>
+
+<div class="container-fluid mt-4 pb-5">
+    <div id="alert-filtros" class="alert alert-warning d-none"></div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="kpi-card">
+                <div class="kpi-sub">Neto total período</div>
+                <div class="kpi-valor" id="kpi-neto">—</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="kpi-card">
+                <div class="kpi-sub">Hora pico (neto)</div>
+                <div class="kpi-valor" id="kpi-hora-pico">—</div>
+                <div class="kpi-sub" id="kpi-neto-pico"></div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="kpi-card">
+                <div class="kpi-sub">Ticket promedio</div>
+                <div class="kpi-valor" id="kpi-ticket">—</div>
+                <div class="kpi-sub"><span id="kpi-boletas">0</span> boletas</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="kpi-card">
+                <div class="kpi-sub">Cantidad vendida</div>
+                <div class="kpi-valor" id="kpi-cantidad">—</div>
+                <div class="kpi-sub" id="kpi-meta"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-lg-7">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header border-secondary text-white">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <span id="titulo-grafico-principal">Comparar semana — neto por hora</span>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-danger" id="btn-vista-comparar">Comparar 7 días</button>
+                            <button type="button" class="btn btn-outline-light" id="btn-vista-detalle">Detalle un día</button>
+                        </div>
+                    </div>
+                    <p class="small text-muted mb-0 mt-1" id="subtitulo-grafico">
+                        Suma de todos los lunes, martes, etc. del período filtrado.
+                    </p>
+                </div>
+                <div class="card-body">
+                    <div id="panel-dias-chips" class="mb-3 d-none">
+                        <span class="text-white-50 small me-2">Día:</span>
+                        <div id="dias-chips" class="btn-group flex-wrap" role="group"></div>
+                    </div>
+                    <div id="chart-barras" style="min-height:380px;"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-header border-secondary text-white">
+                    Heatmap — día × hora
+                    <span class="small text-muted d-block fw-normal">Filas = día de semana; columnas = hora del pedido</span>
+                </div>
+                <div class="card-body">
+                    <div id="chart-heatmap" style="min-height:380px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary mb-3 d-none" id="card-resumen-dias">
+        <div class="card-header border-secondary text-white">Resumen por día de la semana</div>
+        <div class="table-responsive">
+            <table class="table table-dark table-bordered mb-0 align-middle text-center small">
+                <thead>
+                    <tr>
+                        <th>Día</th>
+                        <th>Neto total</th>
+                        <th>Hora pico</th>
+                        <th>Neto hora pico</th>
+                        <th>Boletas</th>
+                    </tr>
+                </thead>
+                <tbody id="tabla-dias"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary">
+        <div class="card-header border-secondary text-white d-flex justify-content-between">
+            <span>Detalle por hora</span>
+            <span class="small text-muted" id="sin-hora-info"></span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-dark table-striped table-bordered mb-0 align-middle text-center">
+                <thead>
+                    <tr>
+                        <th>Hora</th>
+                        <th>Neto</th>
+                        <th>Boletas</th>
+                        <th>Ticket prom.</th>
+                        <th>Cantidad</th>
+                        <th>% del neto</th>
+                    </tr>
+                </thead>
+                <tbody id="tabla-horas"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script src="{{ url_for('static', filename='js/dashboard_ventas_horario.js') }}?v=3"></script>
+{% endblock %}

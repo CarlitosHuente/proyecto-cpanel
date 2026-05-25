@@ -184,8 +184,20 @@
 
         {% set rol_actual = session.get('rol') %}
 
-        {% if tiene_permiso(rol_actual, 'dashboard') %}
-        <a href="{{ url_for('dashboard.dashboard') }}"><span class="texto-menu">Dashboard</span></a>
+        {% if tiene_seccion(rol_actual, 'dashboard') %}
+        <div class="dropdown">
+            <a class="dropdown-toggle d-block px-3 py-2 text-white" href="#" role="button" id="dashboardDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                <span class="texto-menu">Dashboard</span>
+            </a>
+            <ul class="dropdown-menu bg-dark border-0" aria-labelledby="dashboardDropdown">
+                {% if tiene_permiso(rol_actual, 'dashboard') or tiene_permiso(rol_actual, 'dashboard.kpis') %}
+                <li><a class="dropdown-item text-white" href="{{ url_for('dashboard.dashboard') }}">KPIs Ventas</a></li>
+                {% endif %}
+                {% if tiene_permiso(rol_actual, 'dashboard') or tiene_permiso(rol_actual, 'dashboard.horario') %}
+                <li><a class="dropdown-item text-white" href="{{ url_for('dashboard.ventas_horario') }}">Ventas por Horario</a></li>
+                {% endif %}
+            </ul>
+        </div>
         {% endif %}
 
         {% if tiene_seccion(rol_actual, 'ventas') or tiene_permiso(rol_actual, 'agricola') %}

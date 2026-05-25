@@ -13,7 +13,10 @@ CATALOGO: List[dict] = [
         "id": "dashboard",
         "label": "Dashboard KPIs",
         "desc": "Panel gerencial: neto, empanadas, ticket, gráficos y tendencias.",
-        "hijos": [],
+        "hijos": [
+            {"id": "dashboard.kpis", "label": "Dashboard KPIs", "desc": "Vista principal de KPIs y gráficos de ventas."},
+            {"id": "dashboard.horario", "label": "Ventas por Horario", "desc": "Neto y boletas por hora del pedido (hora_pedid) por sucursal y período."},
+        ],
     },
     {
         "id": "ventas",
@@ -137,6 +140,7 @@ CATALOGO: List[dict] = [
 # Páginas de inicio disponibles al configurar un rol (endpoint Flask → etiqueta)
 PAGINAS_INICIO: List[dict] = [
     {"endpoint": "dashboard.dashboard", "label": "Dashboard KPIs"},
+    {"endpoint": "dashboard.ventas_horario", "label": "Ventas por Horario"},
     {"endpoint": "ventas.ventas", "label": "Ventas — Resumen"},
     {"endpoint": "ventas.ventas_historico", "label": "Histórico Productos"},
     {"endpoint": "precios.vista_precios", "label": "Lista de Precios"},
@@ -197,6 +201,8 @@ PERMISO_RUTA_LEGACY: Dict[str, str] = {
     "config.categorias": "categorias",
     "config.anuncios": "config",
     "config.comercial": "config",
+    "dashboard.kpis": "dashboard",
+    "dashboard.horario": "dashboard",
 }
 
 
