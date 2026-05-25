@@ -9,6 +9,10 @@
         <div>
             <h2 class="text-white mb-1"><i class="bi bi-shield-lock text-info"></i> Centro de Accesos</h2>
             <p class="text-muted mb-0 small">Asigna correos a roles, define secciones visibles y la página de inicio al iniciar sesión.</p>
+            <p class="text-info small mb-0 mt-1">
+                <i class="bi bi-person-check"></i> Tu sesión actual: <strong>{{ session.get('rol', '—') }}</strong>
+                ({{ session.get('usuario', '') }}) — los cambios en <em>Secciones</em> aplican al rol que elijas en el selector, no necesariamente al tuyo.
+            </p>
         </div>
         <a href="{{ url_for('config.usuarios') }}" class="btn btn-outline-light btn-sm">
             <i class="bi bi-people"></i> Tabla de usuarios
@@ -300,7 +304,8 @@ document.addEventListener("DOMContentLoaded", function() {
         apiPost("{{ url_for('config.api_guardar_permisos_rol') }}", { rol, modulos }).then(data => {
             if (data.success) {
                 PERMISOS_DATA[rol] = modulos;
-                mostrarToast("Secciones guardadas para " + rol);
+                mostrarToast("Secciones guardadas para " + rol + " — recargando menú…");
+                setTimeout(() => location.reload(), 600);
             } else alert(data.error || "Error al guardar");
         });
     });

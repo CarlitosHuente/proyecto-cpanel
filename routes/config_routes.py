@@ -258,7 +258,9 @@ def api_guardar_permisos_rol():
 
     permisos = dict(obtener_permisos())
     permisos[rol] = modulos
-    guardar_permisos_json(permisos)
+    ok, msg = guardar_permisos_json(permisos)
+    if not ok:
+        return jsonify({"success": False, "error": msg})
     return jsonify({"success": True, "rol": rol, "modulos": modulos})
 
 
@@ -269,7 +271,9 @@ def api_guardar_permisos_todos():
     nuevos = request.get_json()
     if not nuevos or not isinstance(nuevos, dict):
         return jsonify({"success": False, "error": "Sin datos"})
-    guardar_permisos_json(nuevos)
+    ok, msg = guardar_permisos_json(nuevos)
+    if not ok:
+        return jsonify({"success": False, "error": msg})
     return jsonify({"success": True})
 
 
@@ -285,7 +289,9 @@ def api_guardar_pagina_inicio():
 
     paginas = dict(obtener_paginas_inicio())
     paginas[rol] = endpoint
-    guardar_paginas_inicio(paginas)
+    ok, msg = guardar_paginas_inicio(paginas)
+    if not ok:
+        return jsonify({"success": False, "error": msg})
     recargar_permisos()
     return jsonify({"success": True})
 
@@ -297,7 +303,9 @@ def api_guardar_paginas_inicio_todos():
     nuevas = request.get_json()
     if not nuevas or not isinstance(nuevas, dict):
         return jsonify({"success": False, "error": "Sin datos"})
-    guardar_paginas_inicio(nuevas)
+    ok, msg = guardar_paginas_inicio(nuevas)
+    if not ok:
+        return jsonify({"success": False, "error": msg})
     recargar_permisos()
     return jsonify({"success": True})
 
@@ -335,7 +343,9 @@ def api_guardar_permisos():
     nuevos_permisos = request.get_json()
     if not nuevos_permisos:
         return jsonify({"success": False, "error": "Sin datos"})
-    guardar_permisos_json(nuevos_permisos)
+    ok, msg = guardar_permisos_json(nuevos_permisos)
+    if not ok:
+        return jsonify({"success": False, "error": msg})
     return jsonify({"success": True})
 
 # ==========================================

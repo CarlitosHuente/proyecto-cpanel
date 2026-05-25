@@ -343,6 +343,8 @@ Además de los campos actuales del día, incorporar **dos magnitudes explícitas
 
 **Deploy:** subir `roles_config.json` junto al código o dejar que se genere con defaults al primer arranque; en hosting verificar permisos de escritura en la raíz del proyecto para guardar cambios desde la UI.
 
+**Fix 2026-05-24 (menú no reflejaba cambios):** persistencia movida a `data/roles_config.json` (carpeta escribible); `tiene_permiso` lee siempre desde disco (mtime); tras guardar se recarga la página; API devuelve error si no puede escribir el archivo; aviso en UI de que el rol editado debe coincidir con la sesión (o reasignar correo en pestaña Correos).
+
 ---
 
 *Fin de bitácora orientada a humanos e IA. Mantener actualizada al cerrar cada cambio relevante de comercial, dashboard o costeo.*

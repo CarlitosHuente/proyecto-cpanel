@@ -12,33 +12,37 @@ from utils.roles_config import (
     pagina_inicio_para_rol,
 )
 
-# Compatibilidad: PERMISOS sigue siendo el dict rol → módulos
+# Compatibilidad con código que importa PERMISOS (siempre leer vía obtener_permisos())
 PERMISOS = obtener_permisos()
 
 
 def recargar_permisos():
-    """Recarga PERMISOS desde disco (tras guardar en Centro de Accesos)."""
+    """Recarga permisos desde disco (tras guardar en Centro de Accesos)."""
     global PERMISOS
     cargar_config(forzar=True)
-    PERMISOS.clear()
-    PERMISOS.update(obtener_permisos())
+    PERMISOS = obtener_permisos()
 
 
 def guardar_permisos_json(nuevos_permisos):
-    guardar_permisos(nuevos_permisos)
-    recargar_permisos()
+    ok, msg = guardar_permisos(nuevos_permisos)
+    if ok:
+        recargar_permisos()
+    return ok, msg
+
+
+def _permisos_del_rol(rol) -> list:
+    return obtener_permisos().get(rol, [])
 
 
 def tiene_permiso(rol, modulo):
-    permisos = PERMISOS.get(rol, [])
-    return tiene_permiso_en_lista(permisos, modulo)
+    return tiene_permiso_en_lista(_permisos_del_rol(rol), modulo)
 
 
 def tiene_seccion(rol, seccion_id: str) -> bool:
     """True si el rol tiene el permiso padre o algún hijo de esa sección del menú."""
     from utils.permisos_catalogo import hijos_de, permisos_expandidos
 
-    permisos = PERMISOS.get(rol, [])
+    permisos = _permisos_del_rol(rol)
     if "*" in permisos:
         return True
     expandido = permisos_expandidos(permisos)

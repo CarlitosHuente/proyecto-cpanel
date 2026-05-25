@@ -70,6 +70,17 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app.config['UPLOAD_FOLDER_CONTAB'] = UPLOAD_FOLDER
 
+
+@app.before_request
+def _sincronizar_permisos_desde_disco():
+    """Evita menú desactualizado entre workers o tras guardar en Centro de Accesos."""
+    from utils.auth import recargar_permisos
+    from utils.roles_config import sincronizar_si_cambio
+
+    if sincronizar_si_cambio():
+        recargar_permisos()
+
+
 @app.context_processor
 def utility_processor():
     """Esto permite usar la función tiene_permiso dentro de los HTML"""
