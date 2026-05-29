@@ -4,7 +4,7 @@ from __future__ import annotations
 import io
 import re
 from datetime import date
-from typing import Any
+from typing import Any, Optional
 
 MESES_ES = {
     "enero": 1,
@@ -27,7 +27,7 @@ def _parse_monto_clp(texto: str) -> int:
     return int(digits) if digits else 0
 
 
-def _parse_fecha_es(texto: str) -> str | None:
+def _parse_fecha_es(texto: str) -> Optional[str]:
     """'mayo 11, 2026' → '2026-05-11'."""
     m = re.search(
         r"(\w+)\s+(\d{1,2}),?\s+(\d{4})",
@@ -47,7 +47,7 @@ def _parse_fecha_es(texto: str) -> str | None:
         return None
 
 
-def _extraer_email(lineas: list[str]) -> str | None:
+def _extraer_email(lineas: list[str]) -> Optional[str]:
     for ln in lineas:
         m = re.search(r"[\w.+-]+@[\w.-]+\.\w+", ln)
         if m:
@@ -55,7 +55,7 @@ def _extraer_email(lineas: list[str]) -> str | None:
     return None
 
 
-def _extraer_celular(lineas: list[str]) -> str | None:
+def _extraer_celular(lineas: list[str]) -> Optional[str]:
     texto = "\n".join(lineas)
     compacto = re.sub(r"[\s.\-()]", "", texto)
     for patron in (

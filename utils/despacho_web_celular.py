@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import re
+from typing import Optional
 
 _CELULAR_OK = re.compile(r"^\+569\d{8}$")
 
 
-def formatear_celular_chile(valor: str | None) -> str | None:
+def formatear_celular_chile(valor: Optional[str]) -> Optional[str]:
     """
     Acepta: 99393805, 999393805, 56999393805, +56999393805, +56 9 9939 3805, etc.
     Devuelve '+569XXXXXXXX' o None.
@@ -38,6 +39,6 @@ def formatear_celular_chile(valor: str | None) -> str | None:
     return None
 
 
-def celular_valido(valor: str | None) -> bool:
+def celular_valido(valor: Optional[str]) -> bool:
     fmt = formatear_celular_chile(valor)
     return bool(fmt and _CELULAR_OK.match(fmt))

@@ -5,7 +5,7 @@ import json
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Dict, Optional
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMP_ROOT = os.path.join(BASE_DIR, "uploads", "despacho_web", "temp")
@@ -61,7 +61,7 @@ def crear_batch(usuario: str, archivos: list[tuple[str, bytes, dict]]) -> str:
     return batch_id
 
 
-def cargar_batch(batch_id: str) -> dict[str, Any] | None:
+def cargar_batch(batch_id: str) -> Optional[Dict[str, Any]]:
     path = _manifest_path(batch_id)
     if not os.path.isfile(path):
         return None
@@ -75,7 +75,7 @@ def guardar_batch(manifest: dict) -> None:
         json.dump(manifest, f, ensure_ascii=False, indent=2)
 
 
-def pdf_path(batch_id: str, idx: int) -> str | None:
+def pdf_path(batch_id: str, idx: int) -> Optional[str]:
     manifest = cargar_batch(batch_id)
     if not manifest:
         return None
@@ -88,7 +88,7 @@ def pdf_path(batch_id: str, idx: int) -> str | None:
     return None
 
 
-def item_pendiente(manifest: dict) -> dict | None:
+def item_pendiente(manifest: dict) -> Optional[dict]:
     for it in manifest.get("items", []):
         if it.get("status") == "pending":
             return it

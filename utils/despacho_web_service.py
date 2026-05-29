@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 import pymysql
 
@@ -37,7 +37,7 @@ def listar_productos_activos(cursor) -> list[dict]:
     return cursor.fetchall() or []
 
 
-def listar_ordenes_recientes(cursor, limite: int = 20, comuna: str | None = None):
+def listar_ordenes_recientes(cursor, limite: int = 20, comuna: Optional[str] = None):
     return listar_ordenes(cursor, comuna=comuna, limite=limite)
 
 
@@ -47,9 +47,9 @@ TRANSPORTES = ("", "Cristobal", "Matias")
 
 def listar_ordenes(
     cursor,
-    comuna: str | None = None,
-    estado: str | None = None,
-    buscar: str | None = None,
+    comuna: Optional[str] = None,
+    estado: Optional[str] = None,
+    buscar: Optional[str] = None,
     limite: int = 100,
     offset: int = 0,
 ):
@@ -98,7 +98,7 @@ def orden_existe(cursor, n_orden: str) -> bool:
     return cursor.fetchone() is not None
 
 
-def obtener_orden(cursor, n_orden: str) -> dict | None:
+def obtener_orden(cursor, n_orden: str) -> Optional[Dict]:
     cursor.execute("SELECT * FROM dw_orden WHERE n_orden = %s", (n_orden,))
     return cursor.fetchone()
 
@@ -184,7 +184,7 @@ def guardar_orden(
     datos: dict,
     lineas: list[dict],
     usuario: str,
-    respaldo_ruta: str | None = None,
+    respaldo_ruta: Optional[str] = None,
 ) -> str:
     """
     Inserta orden + detalle en transacción.
