@@ -1,12 +1,14 @@
 """Persistencia de órdenes DespachoWeb."""
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import pymysql
 
 from utils.despacho_web_celular import celular_valido, formatear_celular_chile
+from utils.despacho_web_tables import TBL_DETALLE, TBL_ORDEN, TBL_PRODUCTOS
 
 
 class OrdenDuplicadaError(Exception):
@@ -25,12 +27,38 @@ def _direccion_completa(calle_o_direccion: str, comuna: str) -> str:
     return direccion
 
 
+def _slug_sku(nombre: str) -> str:
+    base = re.sub(r"[^A-Za-z0-9]+", "", nombre.upper())[:24] or "PROD"
+    return f"DW-{base}"[:50]
+
+
+def _sku_disponible(cursor, sku: str) -> bool:
+    cursor.execute(f"SELECT 1 FROM {TBL_PRODUCTOS} WHERE sku = %s LIMIT 1", (sku,))
+    return cursor.fetchone() is None
+
+
+def _generar_sku_unico(cursor, nombre: str, sku_pdf: Optional[str] = None) -> str:
+    candidatos: list[str] = []
+    if sku_pdf:
+        candidatos.append(str(sku_pdf).strip()[:50])
+    slug = _slug_sku(nombre)
+    if slug not in candidatos:
+        candidatos.append(slug)
+    base = candidatos[-1]
+    for i in range(2, 20):
+        candidatos.append(f"{base[:45]}-{i}"[:50])
+
+    for sku in candidatos:
+        if sku and _sku_disponible(cursor, sku):
+            return sku
+    raise ValueError(f"No se pudo generar SKU único para «{nombre}».")
+
+
 def listar_productos_activos(cursor) -> list[dict]:
     cursor.execute(
-        """
-        SELECT nombre, precio, sku_referencia
-        FROM dw_productos
-        WHERE activo = 1
+        f"""
+        SELECT nombre, sku, producto_id
+        FROM {TBL_PRODUCTOS}
         ORDER BY nombre ASC
         """
     )
@@ -53,9 +81,9 @@ def listar_ordenes(
     limite: int = 100,
     offset: int = 0,
 ):
-    sql = """
+    sql = f"""
         SELECT n_orden, fecha_oc, cliente, estado, comuna, transporte, celular, direccion, creado_at
-        FROM dw_orden
+        FROM {TBL_ORDEN}
         WHERE 1=1
     """
     params: list[Any] = []
@@ -76,7 +104,7 @@ def listar_ordenes(
 
 
 def contar_ordenes(cursor, comuna=None, estado=None, buscar=None) -> int:
-    sql = "SELECT COUNT(*) AS c FROM dw_orden WHERE 1=1"
+    sql = f"SELECT COUNT(*) AS c FROM {TBL_ORDEN} WHERE 1=1"
     params: list[Any] = []
     if comuna:
         sql += " AND comuna LIKE %s"
@@ -94,20 +122,20 @@ def contar_ordenes(cursor, comuna=None, estado=None, buscar=None) -> int:
 
 
 def orden_existe(cursor, n_orden: str) -> bool:
-    cursor.execute("SELECT 1 FROM dw_orden WHERE n_orden = %s LIMIT 1", (n_orden,))
+    cursor.execute(f"SELECT 1 FROM {TBL_ORDEN} WHERE n_orden = %s LIMIT 1", (n_orden,))
     return cursor.fetchone() is not None
 
 
 def obtener_orden(cursor, n_orden: str) -> Optional[Dict]:
-    cursor.execute("SELECT * FROM dw_orden WHERE n_orden = %s", (n_orden,))
+    cursor.execute(f"SELECT * FROM {TBL_ORDEN} WHERE n_orden = %s", (n_orden,))
     return cursor.fetchone()
 
 
 def listar_detalle_orden(cursor, n_orden: str) -> list[dict]:
     cursor.execute(
-        """
+        f"""
         SELECT detalle_id, n_orden, producto, cantidad, total, estado
-        FROM dw_detalle_oc
+        FROM {TBL_DETALLE}
         WHERE n_orden = %s
         ORDER BY detalle_id ASC
         """,
@@ -138,9 +166,8 @@ def _normalizar_celular_guardar(datos: dict) -> str:
 
 def asegurar_productos(cursor, lineas: list[dict]) -> list[str]:
     """
-    Alta automática en dw_productos de nombres que vienen del PDF.
-    No sobrescribe precio/SKU de productos ya existentes.
-    Devuelve la lista de nombres recién creados.
+    Alta automática en Productos (por nombre) para líneas del PDF.
+    Devuelve nombres recién creados.
     """
     creados: list[str] = []
     vistos: set[str] = set()
@@ -151,29 +178,20 @@ def asegurar_productos(cursor, lineas: list[dict]) -> list[str]:
         vistos.add(nombre)
 
         cursor.execute(
-            "SELECT nombre, activo FROM dw_productos WHERE nombre = %s LIMIT 1",
+            f"SELECT producto_id FROM {TBL_PRODUCTOS} WHERE nombre = %s LIMIT 1",
             (nombre,),
         )
-        row = cursor.fetchone()
-        if row:
-            if isinstance(row, dict) and not row.get("activo"):
-                cursor.execute(
-                    "UPDATE dw_productos SET activo = 1 WHERE nombre = %s",
-                    (nombre,),
-                )
+        if cursor.fetchone():
             continue
 
-        precio = None
-        total = ln.get("total")
-        if total is not None and str(total).strip() != "":
-            precio = str(int(total))
-        sku = (ln.get("sku") or "").strip() or None
+        sku_pdf = (ln.get("sku") or "").strip() or None
+        sku = _generar_sku_unico(cursor, nombre, sku_pdf)
         cursor.execute(
-            """
-            INSERT INTO dw_productos (nombre, precio, sku_referencia, activo)
-            VALUES (%s, %s, %s, 1)
+            f"""
+            INSERT INTO {TBL_PRODUCTOS} (sku, nombre, descripcion, unidad_medida)
+            VALUES (%s, %s, %s, 'unidad')
             """,
-            (nombre, precio, sku),
+            (sku, nombre, f"Alta automática DespachoWeb"),
         )
         creados.append(nombre)
     return creados
@@ -186,29 +204,22 @@ def guardar_orden(
     usuario: str,
     respaldo_ruta: Optional[str] = None,
 ) -> str:
-    """
-    Inserta orden + detalle en transacción.
-    datos: n_orden, fecha_oc, cliente, direccion, comuna, celular, email, url, obs, transporte
-    lineas: [{producto, cantidad, total}, ...]
-    """
     n_orden = str(datos.get("n_orden", "")).strip()
     if not n_orden:
         raise ValueError("N° Orden obligatorio")
 
     celular = _normalizar_celular_guardar(datos)
-
     direccion = _resolver_direccion(datos)
     if not direccion.strip():
         raise ValueError("Dirección obligatoria (incluya comuna para Maps).")
-
     if not lineas:
         raise ValueError("Debe incluir al menos una línea de detalle.")
 
     cursor = conn.cursor()
     try:
         cursor.execute(
-            """
-            INSERT INTO dw_orden (
+            f"""
+            INSERT INTO {TBL_ORDEN} (
                 n_orden, fecha_oc, cliente, estado, transporte, fecha_estado,
                 respaldo, direccion, comuna, celular, email, url, obs, creado_por
             ) VALUES (
@@ -242,8 +253,8 @@ def guardar_orden(
             cantidad = float(ln.get("cantidad") or 1)
             total = int(ln.get("total") or 0)
             cursor.execute(
-                """
-                INSERT INTO dw_detalle_oc (n_orden, producto, cantidad, total, estado)
+                f"""
+                INSERT INTO {TBL_DETALLE} (n_orden, producto, cantidad, total, estado)
                 VALUES (%s, %s, %s, %s, 'Pendiente')
                 """,
                 (n_orden, producto, cantidad, total),
@@ -284,8 +295,8 @@ def actualizar_orden(conn, n_orden: str, datos: dict, lineas: list[dict]) -> Non
     cursor = conn.cursor()
     try:
         cursor.execute(
-            """
-            UPDATE dw_orden SET
+            f"""
+            UPDATE {TBL_ORDEN} SET
                 fecha_oc = %s,
                 cliente = %s,
                 estado = %s,
@@ -318,7 +329,7 @@ def actualizar_orden(conn, n_orden: str, datos: dict, lineas: list[dict]) -> Non
             raise ValueError(f"Orden N° {n_orden} no encontrada.")
 
         asegurar_productos(cursor, lineas)
-        cursor.execute("DELETE FROM dw_detalle_oc WHERE n_orden = %s", (n_orden,))
+        cursor.execute(f"DELETE FROM {TBL_DETALLE} WHERE n_orden = %s", (n_orden,))
         for ln in lineas:
             producto = (ln.get("producto") or "").strip()
             if not producto:
@@ -327,8 +338,8 @@ def actualizar_orden(conn, n_orden: str, datos: dict, lineas: list[dict]) -> Non
             total = int(ln.get("total") or 0)
             estado_ln = (ln.get("estado") or estado).strip()
             cursor.execute(
-                """
-                INSERT INTO dw_detalle_oc (n_orden, producto, cantidad, total, estado)
+                f"""
+                INSERT INTO {TBL_DETALLE} (n_orden, producto, cantidad, total, estado)
                 VALUES (%s, %s, %s, %s, %s)
                 """,
                 (n_orden, producto, cantidad, total, estado_ln),
@@ -344,7 +355,7 @@ def actualizar_orden(conn, n_orden: str, datos: dict, lineas: list[dict]) -> Non
 def eliminar_orden(conn, n_orden: str) -> None:
     cursor = conn.cursor()
     try:
-        cursor.execute("DELETE FROM dw_orden WHERE n_orden = %s", (n_orden,))
+        cursor.execute(f"DELETE FROM {TBL_ORDEN} WHERE n_orden = %s", (n_orden,))
         if cursor.rowcount == 0:
             raise ValueError(f"Orden N° {n_orden} no encontrada.")
         conn.commit()

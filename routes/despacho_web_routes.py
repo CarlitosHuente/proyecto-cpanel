@@ -87,13 +87,15 @@ def index():
 @login_requerido
 @permiso_modulo("despacho_web")
 def productos():
+    from utils.despacho_web_tables import TBL_PRODUCTOS
+
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
             cur.execute(
-                """
-                SELECT nombre, precio, sku_referencia, activo, creado_at
-                FROM dw_productos
+                f"""
+                SELECT producto_id, nombre, sku, descripcion
+                FROM {TBL_PRODUCTOS}
                 ORDER BY nombre ASC
                 """
             )
@@ -107,9 +109,11 @@ def productos():
 @login_requerido
 @permiso_modulo("despacho_web")
 def productos_guardar():
+    from utils.despacho_web_service import _generar_sku_unico
+    from utils.despacho_web_tables import TBL_PRODUCTOS
+
     nombre = (request.form.get("nombre") or "").strip()
-    precio = (request.form.get("precio") or "").strip()
-    sku = (request.form.get("sku_referencia") or "").strip() or None
+    sku = (request.form.get("sku") or "").strip() or None
     if not nombre:
         flash("Nombre de producto obligatorio.", "danger")
         return redirect(url_for("despacho_web.productos"))
@@ -118,40 +122,30 @@ def productos_guardar():
     try:
         with conn.cursor() as cur:
             cur.execute(
-                """
-                INSERT INTO dw_productos (nombre, precio, sku_referencia, activo)
-                VALUES (%s, %s, %s, 1)
-                ON DUPLICATE KEY UPDATE
-                    precio = VALUES(precio),
-                    sku_referencia = VALUES(sku_referencia),
-                    activo = 1
-                """,
-                (nombre, precio or None, sku),
+                f"SELECT producto_id, sku FROM {TBL_PRODUCTOS} WHERE nombre = %s LIMIT 1",
+                (nombre,),
             )
+            existente = cur.fetchone()
+            if existente:
+                if sku and sku != existente.get("sku"):
+                    cur.execute(
+                        f"UPDATE {TBL_PRODUCTOS} SET sku = %s WHERE producto_id = %s",
+                        (sku, existente["producto_id"]),
+                    )
+            else:
+                sku_final = _generar_sku_unico(cur, nombre, sku)
+                cur.execute(
+                    f"""
+                    INSERT INTO {TBL_PRODUCTOS} (sku, nombre, descripcion, unidad_medida)
+                    VALUES (%s, %s, %s, 'unidad')
+                    """,
+                    (sku_final, nombre, "Alta manual DespachoWeb"),
+                )
         conn.commit()
         flash(f'Producto "{nombre}" guardado.', "success")
     except Exception as e:
         conn.rollback()
         flash(f"Error al guardar producto: {e}", "danger")
-    finally:
-        conn.close()
-    return redirect(url_for("despacho_web.productos"))
-
-
-@despacho_web_bp.route("/productos/toggle", methods=["POST"])
-@login_requerido
-@permiso_modulo("despacho_web")
-def productos_toggle():
-    nombre = (request.form.get("nombre") or "").strip()
-    activo = 1 if request.form.get("activo") == "1" else 0
-    conn = get_db_connection()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "UPDATE dw_productos SET activo = %s WHERE nombre = %s",
-                (activo, nombre),
-            )
-        conn.commit()
     finally:
         conn.close()
     return redirect(url_for("despacho_web.productos"))
