@@ -191,3 +191,56 @@ AFTER queso_inicial_gr;
 -- Rollback:
 -- ALTER TABLE fabrica_produccion DROP COLUMN queso_pizza_gr;
 
+
+-- [2026-05-28] [IA] [despacho_web]
+-- Motivo: Módulo DespachoWeb — carga PDF facturas tienda web, órdenes para AppSheet vía MySQL.
+-- Entorno probado: local
+-- SQL:
+
+CREATE TABLE IF NOT EXISTS dw_productos (
+    nombre VARCHAR(255) NOT NULL PRIMARY KEY,
+    precio VARCHAR(50) NULL DEFAULT NULL,
+    sku_referencia VARCHAR(50) NULL DEFAULT NULL COMMENT 'Opcional: cruce con Productos.sku ERP',
+    activo TINYINT(1) NOT NULL DEFAULT 1,
+    creado_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS dw_orden (
+    n_orden VARCHAR(50) NOT NULL PRIMARY KEY,
+    fecha_oc DATE NOT NULL,
+    cliente VARCHAR(255) NOT NULL,
+    estado VARCHAR(30) NOT NULL DEFAULT 'Pendiente',
+    transporte VARCHAR(50) NULL DEFAULT NULL,
+    fecha_estado DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    respaldo VARCHAR(500) NULL DEFAULT NULL COMMENT 'Ruta relativa PDF respaldo',
+    direccion VARCHAR(500) NOT NULL COMMENT 'Calle y comuna completas para Maps',
+    comuna VARCHAR(120) NULL DEFAULT NULL COMMENT 'Filtro web, tambien en direccion',
+    celular VARCHAR(20) NOT NULL,
+    email VARCHAR(255) NULL DEFAULT NULL,
+    url VARCHAR(500) NULL DEFAULT NULL,
+    obs TEXT NULL,
+    creado_por VARCHAR(120) NULL DEFAULT NULL,
+    creado_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_dw_orden_estado (estado),
+    KEY idx_dw_orden_comuna (comuna),
+    KEY idx_dw_orden_fecha (fecha_oc)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS dw_detalle_oc (
+    detalle_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    n_orden VARCHAR(50) NOT NULL,
+    producto VARCHAR(255) NOT NULL,
+    cantidad DECIMAL(10,2) NOT NULL DEFAULT 1,
+    total INT NOT NULL DEFAULT 0 COMMENT 'CLP entero',
+    estado VARCHAR(30) NOT NULL DEFAULT 'Pendiente',
+    KEY idx_dw_det_orden (n_orden),
+    KEY idx_dw_det_producto (producto),
+    CONSTRAINT fk_dw_det_orden FOREIGN KEY (n_orden) REFERENCES dw_orden (n_orden) ON DELETE CASCADE,
+    CONSTRAINT fk_dw_det_producto FOREIGN KEY (producto) REFERENCES dw_productos (nombre)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Rollback:
+-- DROP TABLE IF EXISTS dw_detalle_oc;
+-- DROP TABLE IF EXISTS dw_orden;
+-- DROP TABLE IF EXISTS dw_productos;
+

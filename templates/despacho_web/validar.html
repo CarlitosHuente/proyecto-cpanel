@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}DespachoWeb — Validar{% endblock %}
+{% block content %}
+<style>
+.dw-split { min-height: calc(100vh - 120px); }
+.dw-pdf-pane {
+    border-right: 1px solid #444;
+    position: relative;
+    z-index: 1;
+    overflow: hidden;
+    max-width: 100%;
+}
+.dw-form-pane {
+    position: relative;
+    z-index: 10;
+    background: #111;
+    isolation: isolate;
+}
+.dw-form-pane input,
+.dw-form-pane select,
+.dw-form-pane textarea,
+.dw-form-pane button {
+    pointer-events: auto;
+    user-select: text;
+    -webkit-user-select: text;
+}
+@media (max-width: 991px) {
+    .dw-pdf-pane { border-right: none; border-bottom: 1px solid #444; min-height: 45vh; }
+}
+.dw-pdf-frame { width: 100%; height: calc(100vh - 160px); min-height: 400px; border: none; background: #222; display: block; }
+#lineasDetalle .form-control, #lineasDetalle .form-select { font-size: 0.85rem; }
+</style>
+
+<div class="container-fluid mt-2 px-2 px-lg-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
+        <div>
+            <h2 class="text-white h4 mb-0">Validar orden {{ idx_actual }} de {{ total_items }}</h2>
+            <small class="text-muted">{{ item.filename }} — {{ pendientes }} pendiente(s)</small>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="btnOmitir">Omitir</button>
+            <a href="{{ url_for('despacho_web.index') }}" class="btn btn-outline-danger btn-sm">Cancelar lote</a>
+        </div>
+    </div>
+
+    {% if parsed.advertencias %}
+    <div class="alert alert-warning py-2 small mb-2">
+        {% for w in parsed.advertencias %}{{ w }}{% if not loop.last %} · {% endif %}{% endfor %}
+    </div>
+    {% endif %}
+
+    <div id="alertDuplicado" class="alert alert-danger d-none py-2"></div>
+    <div id="alertError" class="alert alert-danger d-none py-2"></div>
+
+    <div class="row dw-split g-0 bg-dark border border-secondary rounded overflow-hidden">
+        <div class="col-lg-6 dw-pdf-pane p-2">
+            <iframe class="dw-pdf-frame rounded" src="{{ url_for('despacho_web.servir_pdf', batch_id=batch_id, idx=item.idx) }}#toolbar=1"></iframe>
+        </div>
+        <div class="col-lg-6 p-3 overflow-auto dw-form-pane" style="max-height: calc(100vh - 100px);">
+            <form id="formOrden">
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label text-white-50 small">N° Orden</label>
+                        <input type="text" class="form-control bg-black text-white border-secondary" name="n_orden" id="n_orden" value="{{ parsed.n_orden }}" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label text-white-50 small">Fecha O.C</label>
+                        <input type="date" class="form-control bg-black text-white border-secondary" name="fecha_oc" value="{{ parsed.fecha_oc }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label text-white-50 small">Estado</label>
+                        <input type="text" class="form-control bg-black text-white border-secondary" value="Pendiente" readonly>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label text-white-50 small">Cliente</label>
+                        <input type="text" class="form-control bg-black text-white border-secondary" name="cliente" value="{{ parsed.cliente }}">
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label text-white-50 small">Dirección (calle/número)</label>
+                        <input type="text" class="form-control bg-black text-white border-secondary" name="calle" id="calle" value="{{ parsed.calle or parsed.direccion }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label text-white-50 small">Comuna</label>
+                        <input type="text" class="form-control bg-black text-white border-secondary" name="comuna" id="comuna" value="{{ parsed.comuna }}">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label text-white-50 small">Dirección completa (Maps)</label>
+                        <input type="text" class="form-control bg-black text-white border-secondary" name="direccion" id="direccion" value="{{ parsed.direccion }}">
+                        <div class="form-text text-muted">Editable. Se sugiere automáticamente desde calle + comuna.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-white-50 small">Celular</label>
+                        <input type="tel" class="form-control bg-black text-white border-secondary" name="celular" id="celular" value="{{ celular_fmt or parsed.celular_raw }}" placeholder="999393805 o +56999393805" autocomplete="tel">
+                        <div class="form-text text-muted" id="celularHint"></div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-white-50 small">Email</label>
+                        <input type="email" class="form-control bg-black text-white border-secondary" name="email" value="{{ parsed.email }}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-white-50 small">Transporte</label>
+                        <select name="transporte" class="form-select bg-black text-white border-secondary">
+                            <option value="" selected>— Sin asignar —</option>
+                            <option value="Cristobal">Cristobal</option>
+                            <option value="Matias">Matias</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-white-50 small">Obs.</label>
+                        <input type="text" class="form-control bg-black text-white border-secondary" name="obs" value="{{ parsed.obs }}">
+                    </div>
+                </div>
+
+                <hr class="border-secondary my-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="text-white mb-0">Detalle O.C</h6>
+                    <button type="button" class="btn btn-sm btn-outline-light" id="btnAddLinea">+ Línea</button>
+                </div>
+                <p class="text-muted small mb-2">Productos del PDF ya están en catálogo. Si el nombre no calza, elija otro en la lista antes de guardar.</p>
+                <div id="lineasDetalle"></div>
+
+                <button type="submit" class="btn btn-danger w-100 mt-3" id="btnGuardar">
+                    <i class="bi bi-check2-circle me-2"></i>Guardar y continuar
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+window.DW_VALIDAR = {
+    batchId: {{ batch_id|tojson }},
+    idx: {{ item.idx }},
+    lineasIniciales: {{ parsed.lineas|tojson }},
+    productosAutoCreados: {{ (parsed.productos_auto_creados or [])|tojson }},
+    productos: {{ productos|map(attribute='nombre')|list|tojson }},
+    urls: {
+        guardar: {{ url_for('despacho_web.guardar')|tojson }},
+        omitir: {{ url_for('despacho_web.omitir')|tojson }},
+        duplicado: {{ url_for('despacho_web.verificar_duplicado')|tojson }}
+    }
+};
+</script>
+<script src="{{ url_for('static', filename='js/despacho_web_validar.js') }}?v=3"></script>
+{% endblock %}

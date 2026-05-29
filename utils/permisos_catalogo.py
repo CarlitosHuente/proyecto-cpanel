@@ -60,6 +60,12 @@ CATALOGO: List[dict] = [
         "hijos": [],
     },
     {
+        "id": "despacho_web",
+        "label": "DespachoWeb",
+        "desc": "Carga PDF facturas tienda web y órdenes para despacho (AppSheet).",
+        "hijos": [],
+    },
+    {
         "id": "flujo",
         "label": "Finanzas / Tesorería",
         "desc": "Flujo de caja y pagos.",
@@ -147,6 +153,7 @@ PAGINAS_INICIO: List[dict] = [
     {"endpoint": "seremi.temperatura_equipos", "label": "Seremi — Temperatura Equipos"},
     {"endpoint": "sucursales.pizarra", "label": "Sucursales / Pedidos"},
     {"endpoint": "arqueo_caja.index", "label": "Arqueo de Caja"},
+    {"endpoint": "despacho_web.index", "label": "DespachoWeb"},
     {"endpoint": "finanzas.flujo", "label": "Flujo de Caja"},
     {"endpoint": "contab.dashboard_gestion", "label": "Informe Gerencial"},
     {"endpoint": "contab.comparativo", "label": "Comparativo Contable"},

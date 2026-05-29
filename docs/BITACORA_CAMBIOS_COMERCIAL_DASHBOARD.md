@@ -294,6 +294,45 @@ Rutas con `@permiso_modulo("arqueo_caja")` (detalle de roles según tu `utils/au
 
 ---
 
+## M-bis. Módulo DespachoWeb (`/despacho-web`) — 2026-05-28
+
+**Objetivo:** carga de facturas PDF tienda web Huentelauquen (máx. 5), validación split-screen (PDF | formulario), persistencia en MySQL para AppSheet (sin Google Sheets). AppSheet solo visualiza; la carga es 100 % web.
+
+### Datos (MySQL)
+
+| Tabla | Rol |
+|--------|-----|
+| `dw_productos` | Catálogo despacho (PK `nombre`; manual en web). |
+| `dw_orden` | Cabecera OC (PK `n_orden`, estado default `Pendiente`, `direccion` completa con comuna, `comuna` para filtro web). |
+| `dw_detalle_oc` | Líneas por orden (FK producto → `dw_productos.nombre`). |
+
+DDL: `docs/QUERY_CAMBIOS_PRODUCCION.sql` bloque `[2026-05-28] [despacho_web]`.
+
+### Rutas
+
+| Ruta | Descripción |
+|------|-------------|
+| `GET /despacho-web/` | Upload PDF + listado órdenes (filtro comuna). |
+| `GET /despacho-web/productos` | Mantenedor catálogo. |
+| `POST /despacho-web/procesar` | Parse PDF en temp (no BD). |
+| `GET /despacho-web/validar/<batch>` | Split-screen; cola uno a uno. |
+| `POST /despacho-web/guardar` | INSERT orden + detalle; duplicado → error claro. |
+| `POST /despacho-web/omitir` | Salta ítem de la cola. |
+
+### Reglas
+
+- Celular: `utils/despacho_web_celular.py` → `+569XXXXXXXX`.
+- Duplicado: PK `n_orden` → mensaje *La Orden N° X ya existe en el sistema*.
+- PDF: `utils/despacho_web_pdf_parser.py` (formato factura web; incluye línea Envío si viene).
+- **Productos:** al procesar PDF, `asegurar_productos()` crea automáticamente nombres nuevos en `dw_productos`; en validación el usuario puede cambiar el selector a un producto ya existente. Respaldo al guardar si falta alguno.
+- Permiso menú: `despacho_web` (roles default: `superusuario`, `admin`, `logistica`).
+
+### Archivos clave
+
+`routes/despacho_web_routes.py`, `utils/despacho_web_*.py`, `templates/despacho_web/*`, `static/js/despacho_web_validar.js?v=1`, `requirements.txt` (+ `pdfplumber`).
+
+---
+
 ## L. Pendiente / datos que debe completar el equipo
 
 - [ ] Plan exacto HostChile (compartido vs VPS) y límites de workers / PHP no aplica — **Python WSGI**.

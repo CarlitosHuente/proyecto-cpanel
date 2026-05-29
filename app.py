@@ -21,6 +21,7 @@ from routes.costeo_routes import costeo_bp
 from routes.utilidades_routes import utilidades_bp
 from routes.precios_routes import precios_bp
 from routes.arqueo_caja_routes import arqueo_caja_bp
+from routes.despacho_web_routes import despacho_web_bp
 import os
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -61,6 +62,7 @@ app.register_blueprint(costeo_bp)
 app.register_blueprint(utilidades_bp)
 app.register_blueprint(precios_bp)
 app.register_blueprint(arqueo_caja_bp)
+app.register_blueprint(despacho_web_bp)
 
 
 

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}DespachoWeb — Productos{% endblock %}
+{% block content %}
+<div class="container mt-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="text-white mb-0"><i class="bi bi-box-seam text-danger me-2"></i>Productos DespachoWeb</h2>
+        <a href="{{ url_for('despacho_web.index') }}" class="btn btn-outline-light btn-sm">← Volver</a>
+    </div>
+    <p class="text-muted">Catálogo DespachoWeb (MySQL / AppSheet). Los productos nuevos del PDF se agregan solos al procesar; aquí puede editarlos o desactivarlos.</p>
+
+    <div class="card bg-dark border-secondary mb-4">
+        <div class="card-header border-secondary text-white">Nuevo / actualizar producto</div>
+        <div class="card-body">
+            <form method="post" action="{{ url_for('despacho_web.productos_guardar') }}" class="row g-2 align-items-end">
+                <div class="col-md-5">
+                    <label class="form-label text-white-50 small">Nombre (PK AppSheet)</label>
+                    <input type="text" name="nombre" class="form-control bg-black text-white border-secondary" required placeholder="Ej. Docena Empanadas de Queso Crudas">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-white-50 small">Precio ref. (texto)</label>
+                    <input type="text" name="precio" class="form-control bg-black text-white border-secondary" placeholder="35000">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label text-white-50 small">SKU ref.</label>
+                    <input type="text" name="sku_referencia" class="form-control bg-black text-white border-secondary" placeholder="80121">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-danger w-100">Guardar</button>
+                </div>
+            </form>
+            <p class="text-muted small mt-2 mb-0">Sugerencia: cree <strong>Envío</strong> para líneas de despacho a domicilio.</p>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-dark table-hover table-sm">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Precio ref.</th>
+                    <th>SKU ref.</th>
+                    <th>Activo</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in productos %}
+                <tr class="{{ '' if p.activo else 'text-muted' }}">
+                    <td>{{ p.nombre }}</td>
+                    <td>{{ p.precio or '—' }}</td>
+                    <td>{{ p.sku_referencia or '—' }}</td>
+                    <td>{{ 'Sí' if p.activo else 'No' }}</td>
+                    <td>
+                        <form method="post" action="{{ url_for('despacho_web.productos_toggle') }}" class="d-inline">
+                            <input type="hidden" name="nombre" value="{{ p.nombre }}">
+                            <input type="hidden" name="activo" value="{{ 0 if p.activo else 1 }}">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">{{ 'Desactivar' if p.activo else 'Activar' }}</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="text-center text-muted py-4">Sin productos. Agregue al menos los que aparecen en las facturas PDF.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

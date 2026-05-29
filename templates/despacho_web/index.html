@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}DespachoWeb{% endblock %}
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <h2 class="text-white mb-1"><i class="bi bi-truck text-danger me-2"></i>DespachoWeb</h2>
+            <p class="text-muted mb-0">Carga facturas PDF de la tienda web (máx. {{ max_pdfs }} por vez). AppSheet solo visualiza; la carga es desde aquí.</p>
+        </div>
+        <a href="{{ url_for('despacho_web.productos') }}" class="btn btn-outline-light btn-sm">
+            <i class="bi bi-box-seam me-1"></i> Catálogo productos
+        </a>
+        <a href="{{ url_for('despacho_web.ordenes') }}" class="btn btn-outline-light btn-sm">
+            <i class="bi bi-database me-1"></i> Administrar órdenes
+        </a>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-lg-5">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header border-secondary text-white">Subir PDF</div>
+                <div class="card-body">
+                    <form action="{{ url_for('despacho_web.procesar') }}" method="post" enctype="multipart/form-data" id="formUploadDw">
+                        <div class="mb-3">
+                            <label class="form-label text-white-50">Facturas PDF (1 a {{ max_pdfs }})</label>
+                            <input type="file" class="form-control bg-black text-white border-secondary" name="pdfs" id="inpPdfs" accept=".pdf,application/pdf" multiple required>
+                        </div>
+                        <button type="submit" class="btn btn-danger w-100" id="btnProcesar">
+                            <i class="bi bi-file-earmark-pdf me-2"></i>Procesar y validar
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-7">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-header border-secondary text-white">Ayuda rápida</div>
+                <div class="card-body text-muted small">
+                    <ul class="mb-0">
+                        <li>Formato soportado: factura tienda web Huentelauquen (ej. <code>factura-5160.pdf</code>).</li>
+                        <li>Revise cada PDF en pantalla dividida antes de guardar en la base de datos.</li>
+                        <li>Estado inicial: <strong class="text-white">Pendiente</strong>. Transporte se asigna después.</li>
+                        <li>La dirección debe incluir comuna (para Maps en AppSheet).</li>
+                        <li>Los productos del PDF se <strong class="text-white">crean solos</strong> en el catálogo; en validación puede corregir el nombre o elegir otro de la lista.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary">
+        <div class="card-header border-secondary d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <span class="text-white">Órdenes recientes</span>
+            <form method="get" class="d-flex gap-2">
+                <input type="text" name="comuna" class="form-control form-control-sm bg-black text-white border-secondary" placeholder="Filtrar comuna…" value="{{ comuna_filtro }}">
+                <button type="submit" class="btn btn-sm btn-outline-light">Filtrar</button>
+                {% if comuna_filtro %}
+                <a href="{{ url_for('despacho_web.index') }}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+                {% endif %}
+            </form>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-dark table-hover table-sm mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th>N° Orden</th>
+                        <th>Fecha O.C</th>
+                        <th>Cliente</th>
+                        <th>Comuna</th>
+                        <th>Estado</th>
+                        <th>Transporte</th>
+                        <th>Celular</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for o in ordenes %}
+                    <tr style="cursor:pointer" onclick="window.location='{{ url_for('despacho_web.orden_editar', n_orden=o.n_orden) }}'">
+                        <td class="fw-bold">{{ o.n_orden }}</td>
+                        <td>{{ o.fecha_oc.strftime('%d/%m/%Y') if o.fecha_oc else '—' }}</td>
+                        <td>{{ o.cliente }}</td>
+                        <td>{{ o.comuna or '—' }}</td>
+                        <td><span class="badge bg-secondary">{{ o.estado }}</span></td>
+                        <td>{{ o.transporte or '—' }}</td>
+                        <td>{{ o.celular }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="7" class="text-center text-muted py-4">Sin órdenes cargadas aún.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<script>
+document.getElementById('formUploadDw').addEventListener('submit', function() {
+    const btn = document.getElementById('btnProcesar');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Procesando…';
+});
+document.getElementById('inpPdfs').addEventListener('change', function() {
+    if (this.files.length > {{ max_pdfs }}) {
+        alert('Máximo {{ max_pdfs }} archivos PDF.');
+        this.value = '';
+    }
+});
+</script>
+{% endblock %}
