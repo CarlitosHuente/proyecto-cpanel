@@ -29,6 +29,7 @@ from utils.despacho_web_batch import (
     pdf_path,
 )
 from utils.despacho_web_celular import formatear_celular_chile
+from utils.despacho_web_export import generar_excel_resumen_productos, nombre_archivo_export
 from utils.despacho_web_pdf_parser import parse_factura_pdf_bytes
 from utils.despacho_web_service import (
     ESTADOS_ORDEN,
@@ -37,14 +38,18 @@ from utils.despacho_web_service import (
     actualizar_orden,
     asegurar_productos,
     contar_ordenes,
+    contar_ordenes_filtradas,
     eliminar_orden,
     guardar_orden,
+    listar_detalle_export_lineas,
     listar_detalle_orden,
+    listar_lineas_por_producto,
     listar_ordenes,
     listar_ordenes_recientes,
     listar_productos_activos,
     obtener_orden,
     orden_existe,
+    resumir_ventas_por_producto,
 )
 
 despacho_web_bp = Blueprint("despacho_web", __name__, url_prefix="/despacho-web")
@@ -500,3 +505,100 @@ def orden_eliminar(n_orden):
     finally:
         conn.close()
     return redirect(url_for("despacho_web.ordenes"))
+
+
+@despacho_web_bp.route("/resumen-productos")
+@login_requerido
+@permiso_modulo("despacho_web")
+def resumen_productos():
+    desde = request.args.get("desde", "").strip() or None
+    hasta = request.args.get("hasta", "").strip() or None
+    comuna = request.args.get("comuna", "").strip() or None
+    estado = request.args.get("estado", "").strip() or None
+    producto_sel = request.args.get("producto", "").strip() or None
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            resumen = resumir_ventas_por_producto(
+                cur, desde=desde, hasta=hasta, comuna=comuna, estado=estado
+            )
+            detalle = []
+            if producto_sel:
+                detalle = listar_lineas_por_producto(
+                    cur,
+                    producto_sel,
+                    desde=desde,
+                    hasta=hasta,
+                    comuna=comuna,
+                    estado=estado,
+                )
+            num_ordenes = contar_ordenes_filtradas(
+                cur, desde=desde, hasta=hasta, comuna=comuna, estado=estado
+            )
+    finally:
+        conn.close()
+
+    totales = {
+        "cantidad": sum(float(r.get("cantidad_total") or 0) for r in resumen),
+        "monto": sum(int(r.get("monto_total") or 0) for r in resumen),
+        "productos": len(resumen),
+        "ordenes": num_ordenes,
+    }
+
+    return render_template(
+        "despacho_web/resumen_productos.html",
+        resumen=resumen,
+        detalle=detalle,
+        producto_sel=producto_sel,
+        estados=ESTADOS_ORDEN,
+        desde=desde or "",
+        hasta=hasta or "",
+        comuna_filtro=comuna or "",
+        estado_filtro=estado or "",
+        totales=totales,
+    )
+
+
+@despacho_web_bp.route("/resumen-productos/exportar")
+@login_requerido
+@permiso_modulo("despacho_web")
+def resumen_productos_exportar():
+    desde = request.args.get("desde", "").strip() or None
+    hasta = request.args.get("hasta", "").strip() or None
+    comuna = request.args.get("comuna", "").strip() or None
+    estado = request.args.get("estado", "").strip() or None
+    producto = request.args.get("producto", "").strip() or None
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            resumen = resumir_ventas_por_producto(
+                cur, desde=desde, hasta=hasta, comuna=comuna, estado=estado
+            )
+            lineas = listar_detalle_export_lineas(
+                cur,
+                desde=desde,
+                hasta=hasta,
+                comuna=comuna,
+                estado=estado,
+                producto=producto,
+            )
+    finally:
+        conn.close()
+
+    filtros = {
+        "Desde": desde or "",
+        "Hasta": hasta or "",
+        "Comuna": comuna or "",
+        "Estado orden": estado or "",
+        "Producto": producto or "",
+    }
+    buf = generar_excel_resumen_productos(resumen, lineas, filtros=filtros)
+    return send_file(
+        buf,
+        as_attachment=True,
+        download_name=nombre_archivo_export(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+

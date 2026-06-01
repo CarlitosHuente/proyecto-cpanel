@@ -27,6 +27,7 @@ import os
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 from utils.formato_dinero import dinero_presentacion, metrico_presentacion
+from utils.formato_fecha import fecha_ddmmaaaa
 
 app = Flask(__name__, template_folder=os.path.join(BASE_DIR, 'templates'))
 app.permanent_session_lifetime = timedelta(minutes=45) #Tiempo Maximo de inactividad.
@@ -103,6 +104,13 @@ def filtro_metrico(val, decimales=2):
     except (TypeError, ValueError):
         d = 2
     return metrico_presentacion(val, decimales=max(0, min(d, 6)))
+
+
+@app.template_filter("ddmmaaaa")
+def filtro_ddmmaaaa(val, con_hora=False):
+    """Fecha DDMMAAAA (ej. 28052026). Ver `utils/formato_fecha.py`."""
+    out = fecha_ddmmaaaa(val, con_hora=bool(con_hora))
+    return out if out else "—"
 
 @app.route("/refresh")
 def refresh_global():

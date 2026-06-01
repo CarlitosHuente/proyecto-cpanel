@@ -13,6 +13,9 @@
         <a href="{{ url_for('despacho_web.ordenes') }}" class="btn btn-outline-light btn-sm">
             <i class="bi bi-database me-1"></i> Administrar órdenes
         </a>
+        <a href="{{ url_for('despacho_web.resumen_productos') }}" class="btn btn-outline-light btn-sm">
+            <i class="bi bi-bar-chart me-1"></i> Ventas por producto
+        </a>
     </div>
 
     <div class="row g-3 mb-4">
@@ -76,7 +79,7 @@
                     {% for o in ordenes %}
                     <tr style="cursor:pointer" onclick="window.location='{{ url_for('despacho_web.orden_editar', n_orden=o.n_orden) }}'">
                         <td class="fw-bold">{{ o.n_orden }}</td>
-                        <td>{{ o.fecha_oc.strftime('%d/%m/%Y') if o.fecha_oc else '—' }}</td>
+                        <td>{{ o.fecha_oc|ddmmaaaa }}</td>
                         <td>{{ o.cliente }}</td>
                         <td>{{ o.comuna or '—' }}</td>
                         <td><span class="badge bg-secondary">{{ o.estado }}</span></td>

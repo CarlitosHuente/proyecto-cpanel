@@ -318,6 +318,8 @@ DDL: `docs/QUERY_CAMBIOS_PRODUCCION.sql` bloque `[2026-05-28] [despacho_web]`.
 | `GET /despacho-web/validar/<batch>` | Split-screen; cola uno a uno. |
 | `POST /despacho-web/guardar` | INSERT orden + detalle; duplicado → error claro. |
 | `POST /despacho-web/omitir` | Salta ítem de la cola. |
+| `GET /despacho-web/resumen-productos` | Sumatoria ventas por producto + detalle de pedidos al hacer clic. |
+| `GET /despacho-web/resumen-productos/exportar` | Excel: hojas Resumen, Detalle_lineas y Filtros. |
 
 ### Reglas
 

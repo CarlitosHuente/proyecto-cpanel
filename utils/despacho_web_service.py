@@ -364,3 +364,151 @@ def eliminar_orden(conn, n_orden: str) -> None:
         raise
     finally:
         cursor.close()
+
+
+def _filtros_orden_sql(
+    desde: Optional[str] = None,
+    hasta: Optional[str] = None,
+    comuna: Optional[str] = None,
+    estado: Optional[str] = None,
+) -> tuple[str, list[Any]]:
+    clauses: list[str] = []
+    params: list[Any] = []
+    if desde:
+        clauses.append("o.fecha_oc >= %s")
+        params.append(desde)
+    if hasta:
+        clauses.append("o.fecha_oc <= %s")
+        params.append(hasta)
+    if comuna:
+        clauses.append("o.comuna LIKE %s")
+        params.append(f"%{comuna.strip()}%")
+    if estado:
+        clauses.append("o.estado = %s")
+        params.append(estado.strip())
+    if not clauses:
+        return "", params
+    return " AND " + " AND ".join(clauses), params
+
+
+def resumir_ventas_por_producto(
+    cursor,
+    desde: Optional[str] = None,
+    hasta: Optional[str] = None,
+    comuna: Optional[str] = None,
+    estado: Optional[str] = None,
+) -> list[dict]:
+    extra, params = _filtros_orden_sql(desde, hasta, comuna, estado)
+    cursor.execute(
+        f"""
+        SELECT
+            d.producto,
+            SUM(d.cantidad) AS cantidad_total,
+            SUM(d.total) AS monto_total,
+            COUNT(DISTINCT d.n_orden) AS num_pedidos
+        FROM {TBL_DETALLE} d
+        INNER JOIN {TBL_ORDEN} o ON o.n_orden = d.n_orden
+        WHERE 1=1{extra}
+        GROUP BY d.producto
+        ORDER BY cantidad_total DESC, d.producto ASC
+        """,
+        params,
+    )
+    rows = cursor.fetchall() or []
+    for row in rows:
+        cant = float(row.get("cantidad_total") or 0)
+        monto = int(row.get("monto_total") or 0)
+        row["precio_prom"] = round(monto / cant) if cant else 0
+    return rows
+
+
+def listar_lineas_por_producto(
+    cursor,
+    producto: str,
+    desde: Optional[str] = None,
+    hasta: Optional[str] = None,
+    comuna: Optional[str] = None,
+    estado: Optional[str] = None,
+) -> list[dict]:
+    extra, params = _filtros_orden_sql(desde, hasta, comuna, estado)
+    cursor.execute(
+        f"""
+        SELECT
+            o.n_orden,
+            o.fecha_oc,
+            o.cliente,
+            o.comuna,
+            o.direccion,
+            o.estado,
+            d.cantidad,
+            d.total,
+            d.estado AS estado_linea
+        FROM {TBL_DETALLE} d
+        INNER JOIN {TBL_ORDEN} o ON o.n_orden = d.n_orden
+        WHERE d.producto = %s{extra}
+        ORDER BY o.fecha_oc DESC, o.n_orden DESC
+        """,
+        [producto.strip()] + params,
+    )
+    return cursor.fetchall() or []
+
+
+def listar_detalle_export_lineas(
+    cursor,
+    desde: Optional[str] = None,
+    hasta: Optional[str] = None,
+    comuna: Optional[str] = None,
+    estado: Optional[str] = None,
+    producto: Optional[str] = None,
+) -> list[dict]:
+    """Todas las líneas de detalle con datos de cabecera (export Excel)."""
+    extra, params = _filtros_orden_sql(desde, hasta, comuna, estado)
+    producto_clause = ""
+    query_params: list[Any] = []
+    if producto:
+        producto_clause = " AND d.producto = %s"
+        query_params.append(producto.strip())
+    query_params.extend(params)
+    cursor.execute(
+        f"""
+        SELECT
+            d.detalle_id,
+            d.producto,
+            d.cantidad,
+            d.total,
+            d.estado AS estado_linea,
+            o.n_orden,
+            o.fecha_oc,
+            o.cliente,
+            o.estado AS estado_orden,
+            o.transporte,
+            o.fecha_estado,
+            o.direccion,
+            o.comuna,
+            o.celular,
+            o.email,
+            o.url,
+            o.obs,
+            o.creado_por,
+            o.creado_at
+        FROM {TBL_DETALLE} d
+        INNER JOIN {TBL_ORDEN} o ON o.n_orden = d.n_orden
+        WHERE 1=1{producto_clause}{extra}
+        ORDER BY d.producto ASC, o.fecha_oc DESC, o.n_orden DESC, d.detalle_id ASC
+        """,
+        query_params,
+    )
+    return cursor.fetchall() or []
+
+
+def contar_ordenes_filtradas(
+    cursor,
+    desde: Optional[str] = None,
+    hasta: Optional[str] = None,
+    comuna: Optional[str] = None,
+    estado: Optional[str] = None,
+) -> int:
+    extra, params = _filtros_orden_sql(desde, hasta, comuna, estado)
+    cursor.execute(f"SELECT COUNT(*) AS c FROM {TBL_ORDEN} o WHERE 1=1{extra}", params)
+    row = cursor.fetchone()
+    return int(row["c"] if isinstance(row, dict) else row[0])

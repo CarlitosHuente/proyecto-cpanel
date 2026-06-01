@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}DespachoWeb — Ventas por producto{% endblock %}
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <h2 class="text-white mb-1"><i class="bi bi-bar-chart text-danger me-2"></i>Ventas por producto</h2>
+            <p class="text-muted mb-0">Sumatoria de lo cargado en órdenes web (tabla <code>Detalle O.C</code>).</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{{ url_for('despacho_web.index') }}" class="btn btn-outline-light btn-sm">← DespachoWeb</a>
+            <a href="{{ url_for('despacho_web.ordenes') }}" class="btn btn-outline-light btn-sm">Órdenes</a>
+            <a href="{{ url_for('despacho_web.resumen_productos_exportar', desde=desde, hasta=hasta, comuna=comuna_filtro, estado=estado_filtro, producto=producto_sel or '') }}"
+               class="btn btn-success btn-sm">
+                <i class="bi bi-file-earmark-excel me-1"></i> Descargar Excel
+            </a>
+        </div>
+    </div>
+
+    <p class="text-muted small mb-3">
+        El Excel incluye hoja <strong>Resumen</strong> (totales por producto) y <strong>Detalle_lineas</strong>
+        (cada línea con estado, orden, comuna, dirección, cliente, transporte, etc.).
+        {% if producto_sel %}Solo se exporta «{{ producto_sel }}».{% else %}Usa «Ver pedidos» y vuelve a descargar para filtrar un producto.{% endif %}
+    </p>
+
+    <form method="get" class="row g-2 mb-3 align-items-end">
+        <div class="col-md-2">
+            <label class="form-label text-white-50 small mb-0">Desde</label>
+            <input type="date" name="desde" class="form-control bg-black text-white border-secondary" value="{{ desde }}">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label text-white-50 small mb-0">Hasta</label>
+            <input type="date" name="hasta" class="form-control bg-black text-white border-secondary" value="{{ hasta }}">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label text-white-50 small mb-0">Comuna</label>
+            <input type="text" name="comuna" class="form-control bg-black text-white border-secondary" placeholder="Opcional" value="{{ comuna_filtro }}">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label text-white-50 small mb-0">Estado orden</label>
+            <select name="estado" class="form-select bg-black text-white border-secondary">
+                <option value="">Todos</option>
+                {% for e in estados %}
+                <option value="{{ e }}" {% if estado_filtro == e %}selected{% endif %}>{{ e }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-danger w-100">Filtrar</button>
+        </div>
+        <div class="col-md-2">
+            <a href="{{ url_for('despacho_web.resumen_productos') }}" class="btn btn-outline-secondary w-100">Limpiar</a>
+        </div>
+    </form>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary">
+                <div class="card-body py-2">
+                    <div class="text-white-50 small">Cantidad total (unidades)</div>
+                    <div class="text-white fs-5 fw-bold">{{ totales.cantidad|metrico }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary">
+                <div class="card-body py-2">
+                    <div class="text-white-50 small">Monto total (CLP)</div>
+                    <div class="text-white fs-5 fw-bold">${{ totales.monto|dinero }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary">
+                <div class="card-body py-2">
+                    <div class="text-white-50 small">Órdenes (distintas)</div>
+                    <div class="text-white fs-5 fw-bold">{{ totales.ordenes }}</div>
+                    <div class="text-muted small">{{ totales.productos }} producto(s) en el resumen</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive mb-4">
+        <table class="table table-dark table-hover table-sm align-middle">
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th class="text-end">Cantidad</th>
+                    <th class="text-end">Monto CLP</th>
+                    <th class="text-end">Precio prom.</th>
+                    <th class="text-end">N° pedidos</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in resumen %}
+                <tr class="{{ 'table-active' if producto_sel == r.producto else '' }}">
+                    <td>{{ r.producto }}</td>
+                    <td class="text-end">{{ r.cantidad_total|metrico }}</td>
+                    <td class="text-end">${{ r.monto_total|dinero }}</td>
+                    <td class="text-end">${{ r.precio_prom|dinero }}</td>
+                    <td class="text-end">{{ r.num_pedidos }}</td>
+                    <td class="text-end">
+                        <a href="?desde={{ desde }}&hasta={{ hasta }}&comuna={{ comuna_filtro }}&estado={{ estado_filtro }}&producto={{ r.producto|urlencode }}"
+                           class="btn btn-sm btn-outline-light">Ver pedidos</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="text-center text-muted py-4">Sin ventas con estos filtros.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if producto_sel %}
+    <div class="card bg-dark border-secondary">
+        <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+            <span class="text-white">Pedidos con «{{ producto_sel }}»</span>
+            <a href="?desde={{ desde }}&hasta={{ hasta }}&comuna={{ comuna_filtro }}&estado={{ estado_filtro }}"
+               class="btn btn-sm btn-outline-secondary">Cerrar detalle</a>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-dark table-sm mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th>N° Orden</th>
+                        <th>Fecha</th>
+                        <th>Cliente</th>
+                        <th>Comuna</th>
+                        <th>Estado orden</th>
+                        <th>Estado línea</th>
+                        <th class="text-end">Cant.</th>
+                        <th class="text-end">Total línea</th>
+                        <th>Dirección</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ln in detalle %}
+                    <tr>
+                        <td class="fw-bold">{{ ln.n_orden }}</td>
+                        <td>{{ ln.fecha_oc|ddmmaaaa }}</td>
+                        <td>{{ ln.cliente }}</td>
+                        <td>{{ ln.comuna or '—' }}</td>
+                        <td><span class="badge bg-secondary">{{ ln.estado }}</span></td>
+                        <td><span class="badge bg-dark border border-secondary">{{ ln.estado_linea or '—' }}</span></td>
+                        <td class="text-end">{{ ln.cantidad|metrico }}</td>
+                        <td class="text-end">${{ ln.total|dinero }}</td>
+                        <td class="small text-muted">{{ ln.direccion or '—' }}</td>
+                        <td>
+                            <a href="{{ url_for('despacho_web.orden_editar', n_orden=ln.n_orden) }}" class="btn btn-sm btn-outline-light">Abrir</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="10" class="text-center text-muted py-3">Sin líneas para este producto.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

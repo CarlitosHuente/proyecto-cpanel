@@ -10,6 +10,7 @@
         <div class="d-flex gap-2">
             <a href="{{ url_for('despacho_web.index') }}" class="btn btn-outline-light btn-sm">← Carga PDF</a>
             <a href="{{ url_for('despacho_web.productos') }}" class="btn btn-outline-light btn-sm">Productos</a>
+            <a href="{{ url_for('despacho_web.resumen_productos') }}" class="btn btn-outline-light btn-sm">Ventas por producto</a>
         </div>
     </div>
 
@@ -51,7 +52,7 @@
                 {% for o in ordenes %}
                 <tr>
                     <td class="fw-bold">{{ o.n_orden }}</td>
-                    <td>{{ o.fecha_oc.strftime('%d/%m/%Y') if o.fecha_oc else '—' }}</td>
+                    <td>{{ o.fecha_oc|ddmmaaaa }}</td>
                     <td>{{ o.cliente }}</td>
                     <td>{{ o.comuna or '—' }}</td>
                     <td><span class="badge bg-secondary">{{ o.estado }}</span></td>
