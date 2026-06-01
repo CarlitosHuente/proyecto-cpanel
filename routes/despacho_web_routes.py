@@ -29,7 +29,11 @@ from utils.despacho_web_batch import (
     pdf_path,
 )
 from utils.despacho_web_celular import formatear_celular_chile
-from utils.despacho_web_export import generar_excel_resumen_productos, nombre_archivo_export
+from utils.despacho_web_export import (
+    generar_excel_resumen_productos,
+    nombre_archivo_export,
+    respuesta_excel,
+)
 from utils.despacho_web_pdf_parser import parse_factura_pdf_bytes
 from utils.despacho_web_service import (
     ESTADOS_ORDEN,
@@ -403,6 +407,8 @@ def ordenes():
     comuna = request.args.get("comuna", "").strip()
     estado = request.args.get("estado", "").strip()
     buscar = request.args.get("q", "").strip()
+    orden_por = request.args.get("sort", "").strip() or None
+    orden_dir = request.args.get("dir", "").strip() or None
     pagina = max(1, int(request.args.get("pagina", 1) or 1))
     por_pagina = 50
     offset = (pagina - 1) * por_pagina
@@ -423,6 +429,8 @@ def ordenes():
                 buscar=buscar or None,
                 limite=por_pagina,
                 offset=offset,
+                orden_por=orden_por,
+                orden_dir=orden_dir,
             )
     finally:
         conn.close()
@@ -438,6 +446,8 @@ def ordenes():
         pagina=pagina,
         total_paginas=total_paginas,
         total=total,
+        sort_col=orden_por or "creado_at",
+        sort_dir=(orden_dir or "desc").lower(),
     )
 
 
@@ -516,12 +526,20 @@ def resumen_productos():
     comuna = request.args.get("comuna", "").strip() or None
     estado = request.args.get("estado", "").strip() or None
     producto_sel = request.args.get("producto", "").strip() or None
+    orden_por = request.args.get("sort", "").strip() or None
+    orden_dir = request.args.get("dir", "").strip() or None
 
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
             resumen = resumir_ventas_por_producto(
-                cur, desde=desde, hasta=hasta, comuna=comuna, estado=estado
+                cur,
+                desde=desde,
+                hasta=hasta,
+                comuna=comuna,
+                estado=estado,
+                orden_por=orden_por,
+                orden_dir=orden_dir,
             )
             detalle = []
             if producto_sel:
@@ -532,6 +550,8 @@ def resumen_productos():
                     hasta=hasta,
                     comuna=comuna,
                     estado=estado,
+                    orden_por=orden_por,
+                    orden_dir=orden_dir,
                 )
             num_ordenes = contar_ordenes_filtradas(
                 cur, desde=desde, hasta=hasta, comuna=comuna, estado=estado
@@ -557,6 +577,8 @@ def resumen_productos():
         comuna_filtro=comuna or "",
         estado_filtro=estado or "",
         totales=totales,
+        sort_col=orden_por or "cantidad_total",
+        sort_dir=(orden_dir or "desc").lower(),
     )
 
 
@@ -570,35 +592,44 @@ def resumen_productos_exportar():
     estado = request.args.get("estado", "").strip() or None
     producto = request.args.get("producto", "").strip() or None
 
-    conn = get_db_connection()
     try:
-        with conn.cursor() as cur:
-            resumen = resumir_ventas_por_producto(
-                cur, desde=desde, hasta=hasta, comuna=comuna, estado=estado
-            )
-            lineas = listar_detalle_export_lineas(
-                cur,
-                desde=desde,
-                hasta=hasta,
-                comuna=comuna,
-                estado=estado,
-                producto=producto,
-            )
-    finally:
-        conn.close()
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                resumen = resumir_ventas_por_producto(
+                    cur, desde=desde, hasta=hasta, comuna=comuna, estado=estado
+                )
+                lineas = listar_detalle_export_lineas(
+                    cur,
+                    desde=desde,
+                    hasta=hasta,
+                    comuna=comuna,
+                    estado=estado,
+                    producto=producto,
+                )
+        finally:
+            conn.close()
 
-    filtros = {
-        "Desde": desde or "",
-        "Hasta": hasta or "",
-        "Comuna": comuna or "",
-        "Estado orden": estado or "",
-        "Producto": producto or "",
-    }
-    buf = generar_excel_resumen_productos(resumen, lineas, filtros=filtros)
-    return send_file(
-        buf,
-        as_attachment=True,
-        download_name=nombre_archivo_export(),
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+        filtros = {
+            "Desde": desde or "",
+            "Hasta": hasta or "",
+            "Comuna": comuna or "",
+            "Estado orden": estado or "",
+            "Producto": producto or "",
+        }
+        buf = generar_excel_resumen_productos(resumen, lineas, filtros=filtros)
+        return respuesta_excel(buf, nombre_archivo_export())
+    except Exception as e:
+        current_app.logger.exception("Error export Excel DespachoWeb: %s", e)
+        flash(f"No se pudo generar el Excel: {e}", "danger")
+        return redirect(
+            url_for(
+                "despacho_web.resumen_productos",
+                desde=desde or "",
+                hasta=hasta or "",
+                comuna=comuna or "",
+                estado=estado or "",
+                producto=producto or "",
+            )
+        )
 

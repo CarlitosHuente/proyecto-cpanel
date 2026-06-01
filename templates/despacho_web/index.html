@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "despacho_web/_sort_macros.html" import badge_estado %}
 {% block title %}DespachoWeb{% endblock %}
 {% block content %}
 <div class="container-fluid mt-3">
@@ -82,7 +83,7 @@
                         <td>{{ o.fecha_oc|ddmmaaaa }}</td>
                         <td>{{ o.cliente }}</td>
                         <td>{{ o.comuna or '—' }}</td>
-                        <td><span class="badge bg-secondary">{{ o.estado }}</span></td>
+                        <td>{{ badge_estado(o.estado) }}</td>
                         <td>{{ o.transporte or '—' }}</td>
                         <td>{{ o.celular }}</td>
                     </tr>

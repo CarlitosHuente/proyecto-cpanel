@@ -324,6 +324,7 @@ DDL: `docs/QUERY_CAMBIOS_PRODUCCION.sql` bloque `[2026-05-28] [despacho_web]`.
 ### Reglas
 
 - Celular: `utils/despacho_web_celular.py` → `+569XXXXXXXX`.
+- Estados orden: Pendiente, Armado, En Ruta, Entregada, **Anulado**.
 - Duplicado: PK `n_orden` → mensaje *La Orden N° X ya existe en el sistema*.
 - PDF: `utils/despacho_web_pdf_parser.py` (formato factura web; incluye línea Envío si viene).
 - **Productos:** al procesar PDF, `asegurar_productos()` crea automáticamente nombres nuevos en `Productos` (SKU del PDF o prefijo `DW-`); en validación el usuario puede cambiar el selector a un producto ya existente. Respaldo al guardar si falta alguno.

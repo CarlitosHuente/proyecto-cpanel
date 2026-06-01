@@ -69,8 +69,48 @@ def listar_ordenes_recientes(cursor, limite: int = 20, comuna: Optional[str] = N
     return listar_ordenes(cursor, comuna=comuna, limite=limite)
 
 
-ESTADOS_ORDEN = ("Pendiente", "Armado", "En Ruta", "Entregada")
+ESTADOS_ORDEN = ("Pendiente", "Armado", "En Ruta", "Entregada", "Anulado")
 TRANSPORTES = ("", "Cristobal", "Matias")
+
+_ORDENES_SORT = {
+    "n_orden": "n_orden",
+    "fecha_oc": "fecha_oc",
+    "cliente": "cliente",
+    "comuna": "comuna",
+    "estado": "estado",
+    "transporte": "transporte",
+    "celular": "celular",
+    "creado_at": "creado_at",
+}
+
+_RESUMEN_SORT = {
+    "producto": "d.producto",
+    "cantidad_total": "cantidad_total",
+    "monto_total": "monto_total",
+    "num_pedidos": "num_pedidos",
+}
+
+_DETALLE_SORT = {
+    "n_orden": "o.n_orden",
+    "fecha_oc": "o.fecha_oc",
+    "cliente": "o.cliente",
+    "comuna": "o.comuna",
+    "estado": "o.estado",
+    "estado_linea": "d.estado",
+    "cantidad": "d.cantidad",
+    "total": "d.total",
+    "direccion": "o.direccion",
+}
+
+
+def _dir_sql(sort_dir: Optional[str]) -> str:
+    return "ASC" if (sort_dir or "").lower() == "asc" else "DESC"
+
+
+def _sort_col(sort: Optional[str], allowed: dict[str, str], default: str) -> str:
+    if sort and sort in allowed:
+        return allowed[sort]
+    return default
 
 
 def listar_ordenes(
@@ -80,6 +120,8 @@ def listar_ordenes(
     buscar: Optional[str] = None,
     limite: int = 100,
     offset: int = 0,
+    orden_por: Optional[str] = None,
+    orden_dir: Optional[str] = None,
 ):
     sql = f"""
         SELECT n_orden, fecha_oc, cliente, estado, comuna, transporte, celular, direccion, creado_at
@@ -97,7 +139,8 @@ def listar_ordenes(
         sql += " AND (n_orden LIKE %s OR cliente LIKE %s OR celular LIKE %s)"
         like = f"%{buscar.strip()}%"
         params.extend([like, like, like])
-    sql += " ORDER BY creado_at DESC LIMIT %s OFFSET %s"
+    col = _sort_col(orden_por, _ORDENES_SORT, "creado_at")
+    sql += f" ORDER BY {col} {_dir_sql(orden_dir)} LIMIT %s OFFSET %s"
     params.extend([limite, offset])
     cursor.execute(sql, params)
     return cursor.fetchall() or []
@@ -397,8 +440,11 @@ def resumir_ventas_por_producto(
     hasta: Optional[str] = None,
     comuna: Optional[str] = None,
     estado: Optional[str] = None,
+    orden_por: Optional[str] = None,
+    orden_dir: Optional[str] = None,
 ) -> list[dict]:
     extra, params = _filtros_orden_sql(desde, hasta, comuna, estado)
+    col = _sort_col(orden_por, _RESUMEN_SORT, "cantidad_total")
     cursor.execute(
         f"""
         SELECT
@@ -410,7 +456,7 @@ def resumir_ventas_por_producto(
         INNER JOIN {TBL_ORDEN} o ON o.n_orden = d.n_orden
         WHERE 1=1{extra}
         GROUP BY d.producto
-        ORDER BY cantidad_total DESC, d.producto ASC
+        ORDER BY {col} {_dir_sql(orden_dir)}, d.producto ASC
         """,
         params,
     )
@@ -429,8 +475,11 @@ def listar_lineas_por_producto(
     hasta: Optional[str] = None,
     comuna: Optional[str] = None,
     estado: Optional[str] = None,
+    orden_por: Optional[str] = None,
+    orden_dir: Optional[str] = None,
 ) -> list[dict]:
     extra, params = _filtros_orden_sql(desde, hasta, comuna, estado)
+    col = _sort_col(orden_por, _DETALLE_SORT, "o.fecha_oc")
     cursor.execute(
         f"""
         SELECT
@@ -446,7 +495,7 @@ def listar_lineas_por_producto(
         FROM {TBL_DETALLE} d
         INNER JOIN {TBL_ORDEN} o ON o.n_orden = d.n_orden
         WHERE d.producto = %s{extra}
-        ORDER BY o.fecha_oc DESC, o.n_orden DESC
+        ORDER BY {col} {_dir_sql(orden_dir)}, o.n_orden DESC
         """,
         [producto.strip()] + params,
     )

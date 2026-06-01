@@ -1,0 +1,41 @@
+{% macro sort_th(label, col, sort, dir, extra_params={}) %}
+{% set next_dir = 'desc' if sort == col and dir == 'asc' else 'asc' %}
+<th scope="col">
+    <a href="?{% for k, v in extra_params.items() %}{% if v %}{{ k }}={{ v|urlencode }}&{% endif %}{% endfor %}sort={{ col }}&dir={{ next_dir }}"
+       class="text-white text-decoration-none">
+        {{ label }}
+        {% if sort == col %}
+        <i class="bi bi-caret-{{ 'up' if dir == 'asc' else 'down' }}-fill small"></i>
+        {% else %}
+        <i class="bi bi-arrow-down-up small opacity-50"></i>
+        {% endif %}
+    </a>
+</th>
+{% endmacro %}
+
+{% macro sort_th_end(label, col, sort, dir, extra_params={}, align='') %}
+{% set next_dir = 'desc' if sort == col and dir == 'asc' else 'asc' %}
+<th scope="col" class="{{ align }}">
+    <a href="?{% for k, v in extra_params.items() %}{% if v %}{{ k }}={{ v|urlencode }}&{% endif %}{% endfor %}sort={{ col }}&dir={{ next_dir }}"
+       class="text-white text-decoration-none">
+        {{ label }}
+        {% if sort == col %}
+        <i class="bi bi-caret-{{ 'up' if dir == 'asc' else 'down' }}-fill small"></i>
+        {% else %}
+        <i class="bi bi-arrow-down-up small opacity-50"></i>
+        {% endif %}
+    </a>
+</th>
+{% endmacro %}
+
+{% macro badge_estado(estado) %}
+{% if estado == 'Anulado' %}
+<span class="badge bg-danger">{{ estado }}</span>
+{% elif estado == 'Entregada' %}
+<span class="badge bg-success">{{ estado }}</span>
+{% elif estado == 'En Ruta' %}
+<span class="badge bg-info text-dark">{{ estado }}</span>
+{% else %}
+<span class="badge bg-secondary">{{ estado }}</span>
+{% endif %}
+{% endmacro %}

@@ -1,11 +1,13 @@
 {% extends "base.html" %}
+{% from "despacho_web/_sort_macros.html" import sort_th, badge_estado %}
 {% block title %}DespachoWeb — Órdenes{% endblock %}
 {% block content %}
+{% set qs = {'q': buscar, 'comuna': comuna_filtro, 'estado': estado_filtro} %}
 <div class="container-fluid mt-3">
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
         <div>
             <h2 class="text-white mb-1"><i class="bi bi-database text-danger me-2"></i>Administrar órdenes</h2>
-            <p class="text-muted mb-0">{{ total }} orden(es) en base de datos</p>
+            <p class="text-muted mb-0">{{ total }} orden(es) en base de datos · clic en columna para ordenar</p>
         </div>
         <div class="d-flex gap-2">
             <a href="{{ url_for('despacho_web.index') }}" class="btn btn-outline-light btn-sm">← Carga PDF</a>
@@ -15,6 +17,8 @@
     </div>
 
     <form method="get" class="row g-2 mb-3">
+        <input type="hidden" name="sort" value="{{ sort_col }}">
+        <input type="hidden" name="dir" value="{{ sort_dir }}">
         <div class="col-md-3">
             <input type="text" name="q" class="form-control bg-black text-white border-secondary" placeholder="N°, cliente, celular…" value="{{ buscar }}">
         </div>
@@ -38,13 +42,13 @@
         <table class="table table-dark table-hover table-sm align-middle">
             <thead>
                 <tr>
-                    <th>N° Orden</th>
-                    <th>Fecha</th>
-                    <th>Cliente</th>
-                    <th>Comuna</th>
-                    <th>Estado</th>
-                    <th>Transporte</th>
-                    <th>Celular</th>
+                    {{ sort_th('N° Orden', 'n_orden', sort_col, sort_dir, qs) }}
+                    {{ sort_th('Fecha', 'fecha_oc', sort_col, sort_dir, qs) }}
+                    {{ sort_th('Cliente', 'cliente', sort_col, sort_dir, qs) }}
+                    {{ sort_th('Comuna', 'comuna', sort_col, sort_dir, qs) }}
+                    {{ sort_th('Estado', 'estado', sort_col, sort_dir, qs) }}
+                    {{ sort_th('Transporte', 'transporte', sort_col, sort_dir, qs) }}
+                    {{ sort_th('Celular', 'celular', sort_col, sort_dir, qs) }}
                     <th></th>
                 </tr>
             </thead>
@@ -55,7 +59,7 @@
                     <td>{{ o.fecha_oc|ddmmaaaa }}</td>
                     <td>{{ o.cliente }}</td>
                     <td>{{ o.comuna or '—' }}</td>
-                    <td><span class="badge bg-secondary">{{ o.estado }}</span></td>
+                    <td>{{ badge_estado(o.estado) }}</td>
                     <td>{{ o.transporte or '—' }}</td>
                     <td>{{ o.celular }}</td>
                     <td>
@@ -74,7 +78,7 @@
         <ul class="pagination pagination-sm">
             {% for p in range(1, total_paginas + 1) %}
             <li class="page-item {% if p == pagina %}active{% endif %}">
-                <a class="page-link bg-dark border-secondary text-white" href="?pagina={{ p }}&q={{ buscar }}&comuna={{ comuna_filtro }}&estado={{ estado_filtro }}">{{ p }}</a>
+                <a class="page-link bg-dark border-secondary text-white" href="?pagina={{ p }}&q={{ buscar|urlencode }}&comuna={{ comuna_filtro|urlencode }}&estado={{ estado_filtro|urlencode }}&sort={{ sort_col }}&dir={{ sort_dir }}">{{ p }}</a>
             </li>
             {% endfor %}
         </ul>

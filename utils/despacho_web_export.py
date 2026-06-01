@@ -87,3 +87,16 @@ def generar_excel_resumen_productos(
 def nombre_archivo_export() -> str:
     hoy = datetime.now().strftime("%d%m%Y_%H%M")
     return f"despacho_web_productos_{hoy}.xlsx"
+
+
+def respuesta_excel(buf: io.BytesIO, filename: str):
+    """Response binaria compatible con WSGI/cPanel (evita fallos de send_file+BytesIO)."""
+    from flask import Response
+    from werkzeug.utils import secure_filename
+
+    safe = secure_filename(filename) or "despacho_web_export.xlsx"
+    return Response(
+        buf.getvalue(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{safe}"'},
+    )
