@@ -393,32 +393,58 @@ def api_historico_producto():
     prec_act = [int(act_idx.loc[s, "precio"]) if s in act_idx.index else 0 for s in all_sems]
     prec_ant = [int(ant_idx.loc[s, "precio"]) if s in ant_idx.index else 0 for s in all_sems]
 
-    # Resumen mensual - limitar año anterior al último mes con datos del año actual
     _MESES_ES = {1: "Ene", 2: "Feb", 3: "Mar", 4: "Abr", 5: "May", 6: "Jun",
                  7: "Jul", 8: "Ago", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dic"}
     df_prod["FECHA_DT"] = pd.to_datetime(df_prod["FECHA"], errors="coerce")
     df_prod["MES"] = df_prod["FECHA_DT"].dt.month
     mes_max_actual = int(df_prod[df_prod["AÑO"] == año_max]["MES"].max())
 
+    def _sum_neto_cant(df_slice):
+        if df_slice.empty:
+            return 0, 0
+        return int(df_slice["NETO"].sum()), int(df_slice["CANTIDAD"].sum())
+
     resumen = []
     for mes in range(1, 13):
-        d_act = df_prod[(df_prod["AÑO"] == año_max) & (df_prod["MES"] == mes)]
-        d_ant = df_prod[(df_prod["AÑO"] == año_ant) & (df_prod["MES"] == mes)]
-        n_act = int(d_act["NETO"].sum())
-        n_ant = int(d_ant["NETO"].sum())
-        c_act = int(d_act["CANTIDAD"].sum())
-        c_ant = int(d_ant["CANTIDAD"].sum())
+        d_ant_full = df_prod[(df_prod["AÑO"] == año_ant) & (df_prod["MES"] == mes)]
+        n_ant_full, c_ant_full = _sum_neto_cant(d_ant_full)
+
+        if mes > mes_max_actual:
+            d_act = df_prod.iloc[0:0]
+            d_ant = df_prod.iloc[0:0]
+            es_parcial = False
+            es_futuro = True
+        elif mes == mes_max_actual:
+            d_act = df_prod[(df_prod["AÑO"] == año_max) & (df_prod["MES"] == mes)]
+            d_ant = d_ant_full[d_ant_full["SEMANA"] <= semana_max_actual]
+            es_parcial = True
+            es_futuro = False
+        else:
+            d_act = df_prod[(df_prod["AÑO"] == año_max) & (df_prod["MES"] == mes)]
+            d_ant = d_ant_full
+            es_parcial = False
+            es_futuro = False
+
+        n_act, c_act = _sum_neto_cant(d_act)
+        n_ant, c_ant = _sum_neto_cant(d_ant)
         resumen.append({
             "mes": _MESES_ES[mes],
-            "neto_actual": n_act, "neto_anterior": n_ant,
-            "cantidad_actual": c_act, "cantidad_anterior": c_ant,
+            "neto_actual": n_act,
+            "neto_anterior": n_ant,
+            "neto_anterior_mes_completo": n_ant_full,
+            "cantidad_actual": c_act,
+            "cantidad_anterior": c_ant,
+            "cantidad_anterior_mes_completo": c_ant_full,
             "precio_actual": round(n_act / c_act) if c_act else 0,
             "precio_anterior": round(n_ant / c_ant) if c_ant else 0,
+            "precio_anterior_mes_completo": round(n_ant_full / c_ant_full) if c_ant_full else 0,
+            "mes_parcial": es_parcial,
+            "mes_futuro": es_futuro,
         })
 
-    # Totales comparables: solo los meses que existen en el año actual
-    df_act_total = df_prod[(df_prod["AÑO"] == año_max)]
-    df_ant_total = df_prod[(df_prod["AÑO"] == año_ant) & (df_prod["MES"] <= mes_max_actual)]
+    # Totales comparables: mismas semanas que las cards (Sem 1–N en ambos años)
+    df_act_total = df_prod[df_prod["AÑO"] == año_max]
+    df_ant_total = df_prod[(df_prod["AÑO"] == año_ant) & (df_prod["SEMANA"] <= semana_max_actual)]
     total_neto_act = int(df_act_total["NETO"].sum())
     total_neto_ant = int(df_ant_total["NETO"].sum())
     total_cant_act = int(df_act_total["CANTIDAD"].sum())
@@ -428,7 +454,9 @@ def api_historico_producto():
     return jsonify({
         "producto": producto,
         "año_actual": año_max, "año_anterior": año_ant,
-        "periodo_comparado": f"Sem 1-{semana_max_actual} ({_M[1]}-{_M.get(mes_max_actual,'?')})",
+        "semana_limite": semana_max_actual,
+        "periodo_comparado": f"Sem 1-{semana_max_actual}",
+        "periodo_comparado_label": f"Sem 1-{semana_max_actual} ({_M[1]}-{_M.get(mes_max_actual, '?')})",
         "semanas": semanas,
         "neto_actual": neto_act, "neto_anterior": neto_ant,
         "cant_actual": cant_act, "cant_anterior": cant_ant,

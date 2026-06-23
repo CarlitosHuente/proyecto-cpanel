@@ -200,16 +200,18 @@
 
     function renderKPIs(data) {
         const t = data.totales;
+        const periodo = data.periodo_comparado_label || data.periodo_comparado || "";
         const varNeto = t.neto_anterior ? (((t.neto_actual - t.neto_anterior) / Math.abs(t.neto_anterior)) * 100).toFixed(1) : 0;
         const varCant = t.cantidad_anterior ? (((t.cantidad_actual - t.cantidad_anterior) / Math.abs(t.cantidad_anterior)) * 100).toFixed(1) : 0;
         const kpis = [
             { label: "Neto " + data.año_actual, value: fmt(t.neto_actual), color: "info",
-              sub: `<span class="${varNeto >= 0 ? "text-success" : "text-danger"}">${varNeto >= 0 ? "&#9650;" : "&#9660;"} ${Math.abs(varNeto)}% vs ${data.año_anterior}</span>` },
-            { label: "Neto " + data.año_anterior, value: fmt(t.neto_anterior), color: "secondary", sub: "" },
+              sub: `<span class="${varNeto >= 0 ? "text-success" : "text-danger"}">${varNeto >= 0 ? "&#9650;" : "&#9660;"} ${Math.abs(varNeto)}% vs ${data.año_anterior}</span><br><span class="text-muted">${periodo}</span>` },
+            { label: "Neto " + data.año_anterior + " (comparable)", value: fmt(t.neto_anterior), color: "secondary",
+              sub: `<span class="text-muted">${periodo}</span>` },
             { label: "Cantidad " + data.año_actual, value: fmtN(t.cantidad_actual), color: "info",
-              sub: `<span class="${varCant >= 0 ? "text-success" : "text-danger"}">${varCant >= 0 ? "&#9650;" : "&#9660;"} ${Math.abs(varCant)}%</span>` },
+              sub: `<span class="${varCant >= 0 ? "text-success" : "text-danger"}">${varCant >= 0 ? "&#9650;" : "&#9660;"} ${Math.abs(varCant)}%</span><br><span class="text-muted">${periodo}</span>` },
             { label: "Precio Prom. " + data.año_actual, value: fmt(t.precio_actual), color: "warning",
-              sub: `Anterior: ${fmt(t.precio_anterior)}` },
+              sub: `Comparable ${data.año_anterior}: ${fmt(t.precio_anterior)}` },
         ];
         $("producto-kpis").innerHTML = kpis.map(k => `
             <div class="col">
@@ -253,24 +255,56 @@
         ], { ...plotlyLayout }, plotlyConfig);
     }
 
+    function tooltipProy(data, r, proyVal, fmtFn) {
+        if (!proyVal) return "";
+        if (r.mes_futuro) {
+            return `Sin datos en ${data.año_actual}. Proyección mes completo ${data.año_anterior}: ${fmtFn(proyVal)}`;
+        }
+        if (r.mes_parcial) {
+            return `Comparable ${data.periodo_comparado}. Mes completo ${data.año_anterior}: ${fmtFn(proyVal)}`;
+        }
+        return "";
+    }
+
+    function celdaComparable(display, extraCls, title) {
+        const cls = (extraCls || "") + (title ? " celda-proyeccion" : "");
+        const attrs = title ? ` title="${title.replace(/"/g, "&quot;")}"` : "";
+        return `<td class="${cls.trim()}"${attrs}>${display}</td>`;
+    }
+
     function renderTabla(data) {
+        const periodo = data.periodo_comparado_label || data.periodo_comparado || "";
+        $("lbl-tabla-periodo").textContent =
+            `Valores comparables: ${periodo}. Mes parcial (*) o futuro: pase el cursor sobre columna anterior para ver mes completo proyectado.`;
+
         $("th-año-act").textContent = data.año_actual;
-        $("th-año-ant").textContent = data.año_anterior;
+        $("th-año-ant").textContent = data.año_anterior + " comp.";
         $("th-año-act2").textContent = data.año_actual;
-        $("th-año-ant2").textContent = data.año_anterior;
+        $("th-año-ant2").textContent = data.año_anterior + " comp.";
         $("th-año-act3").textContent = data.año_actual;
-        $("th-año-ant3").textContent = data.año_anterior;
+        $("th-año-ant3").textContent = data.año_anterior + " comp.";
 
         $("tabla-resumen-body").innerHTML = data.resumen_mensual.map(r => {
-            const clsNeto = r.neto_actual > r.neto_anterior ? "text-success" : r.neto_actual < r.neto_anterior ? "text-danger" : "";
+            const clsNeto = r.mes_futuro ? "" : (r.neto_actual > r.neto_anterior ? "text-success" : r.neto_actual < r.neto_anterior ? "text-danger" : "");
+            const mesCls = r.mes_parcial ? "mes-parcial" : "";
+            const titNetoAnt = tooltipProy(data, r, r.neto_anterior_mes_completo, fmt);
+            const titCantAnt = tooltipProy(data, r, r.cantidad_anterior_mes_completo, fmtN);
+            const titPrecAnt = tooltipProy(data, r, r.precio_anterior_mes_completo, fmt);
+            const dash = "—";
+            const actNeto = r.mes_futuro ? dash : fmt(r.neto_actual);
+            const actCant = r.mes_futuro ? dash : fmtN(r.cantidad_actual);
+            const actPrec = r.mes_futuro ? dash : fmt(r.precio_actual);
+            const antNeto = r.mes_futuro ? dash : fmt(r.neto_anterior);
+            const antCant = r.mes_futuro ? dash : fmtN(r.cantidad_anterior);
+            const antPrec = r.mes_futuro ? dash : fmt(r.precio_anterior);
             return `<tr>
-                <td class="text-start ps-3 fw-bold">${r.mes}</td>
-                <td class="${clsNeto}">${fmt(r.neto_actual)}</td>
-                <td class="text-secondary">${fmt(r.neto_anterior)}</td>
-                <td>${fmtN(r.cantidad_actual)}</td>
-                <td class="text-secondary">${fmtN(r.cantidad_anterior)}</td>
-                <td>${fmt(r.precio_actual)}</td>
-                <td class="text-secondary">${fmt(r.precio_anterior)}</td>
+                <td class="text-start ps-3 fw-bold ${mesCls}"${r.mes_parcial ? ` title="Mes en curso — comparable ${data.periodo_comparado}"` : ""}>${r.mes}</td>
+                <td class="${clsNeto}">${actNeto}</td>
+                ${celdaComparable(antNeto, "text-secondary", titNetoAnt)}
+                <td>${actCant}</td>
+                ${celdaComparable(antCant, "text-secondary", titCantAnt)}
+                <td>${actPrec}</td>
+                ${celdaComparable(antPrec, "text-secondary", titPrecAnt)}
             </tr>`;
         }).join("");
 

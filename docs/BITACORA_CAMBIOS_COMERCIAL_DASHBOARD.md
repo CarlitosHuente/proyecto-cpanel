@@ -2,7 +2,7 @@
 
 **Objetivo:** registrar cambios recientes, reglas de negocio y **cómo trabajar en este repo** para que cualquier persona (o IA) que lea este archivo sepa **qué tocar**, **qué no romper** y **dónde seguir el hilo**.
 
-**Última actualización (contenido):** 2026-05-14 — Cierre del **barrido de presentación** (CLP sin decimales, métricos, %): `HuenteFmt` global, tooltips Plotly unificados (`customdata` + `HuenteFmt` en `dashboard.js`, `ventas_historico.js`, gráfico top en `rentabilidad_gerencia.html`), plantillas contab/ventas/arqueo/utilidades/fábrica alineadas; **rama** `feature/comercial-ventas-dashboard` **subida** a `origin` (commit `b63e640`). Pendientes de **negocio/hosting** siguen en sección L y N.2; el pendiente técnico de “formato en todo el front” quedó cubierto salvo planillas `print_*.html` Seremi si se decide homogeneizar después.
+**Última actualización (contenido):** 2026-06-23 — Histórico de Productos: KPIs y tabla mensual alineados a **mismas semanas** que las cards; mes parcial/futuro con proyección en tooltip (mes completo año anterior).
 
 ---
 
@@ -174,7 +174,10 @@
 
 - **Cards (`/api/historico-resumen`):** el % de variación compara **las mismas semanas** del año actual y del anterior (según la última semana con datos del año actual, p. ej. Sem 1–18 en ambos años). Así no se penaliza un año parcial frente a un año completo.
 - **Etiqueta en pantalla:** los títulos de sección muestran el rango de semanas comparado (ej. `Sem 1-18 — 2026 vs 2025`).
-- **Detalle de producto (`/api/historico-producto`):** los **gráficos** usan el año anterior **completo** (52 semanas) para ver tendencia y “proyección”; los **KPIs / totales** de variación siguen alineados al periodo comparable (mismas semanas y totales por meses comparables en la fila de totales).
+- **Detalle de producto (`/api/historico-producto`):**
+  - **KPIs y fila TOTAL** de la tabla mensual: **mismas semanas** que las cards (`Sem 1–N` en ambos años). El KPI “Neto año anterior” es el monto **comparable**, no el año completo.
+  - **Tabla mensual (filas):** meses cerrados = mes completo vs mes completo; **mes en curso** = parcial actual vs mismo mes anterior **recortado a las mismas semanas**; **meses futuros** = sin datos comparables (`—`), con **tooltip** al pasar el cursor mostrando el mes completo del año anterior como proyección.
+  - **Gráficos semanales:** el año anterior se muestra **completo** (referencia / proyección visual); no usar esos totales para calcular variación %.
 - **Caché en navegador:** `static/js/ventas_historico.js` guarda en memoria las respuestas de resumen y de detalle por combinación de filtros/producto; repetir la misma consulta no vuelve a llamar al servidor hasta recargar la página.
 - **Presentación $ en cards:** montos en pesos **sin decimales** (`HuenteFmt` en `static/js/formato_huente.js`, incluido desde `base.html`). Cards de crecimiento/caída muestran la **variación en $** (entero) como importe principal y el neto actual/anterior como línea secundaria.
 
@@ -194,7 +197,7 @@
 | `templates/config/comercial_cargas_historial.html` | Lista completa de cargas |
 | `templates/contab/acumulado_gestion.html` | **Vista acumulado de gestión (nueva)** |
 | `templates/ventas_historico.html` | **Vista histórico de productos (nueva)** |
-| `static/js/ventas_historico.js` | Cards, gráficos Plotly, tabla; tooltips **`customdata` + `HuenteFmt`**; cache-bust `?v=5` |
+| `static/js/ventas_historico.js` | Cards, gráficos Plotly, tabla; tooltips **`customdata` + `HuenteFmt`**; comparación mensual/KPI por semanas; cache-bust `?v=6` |
 | `templates/dashboard.html` | Overlays, modales ticket/neto, versión JS |
 | `static/js/dashboard.js` | KPIs, caché navegador, modales, barras, overlay inicial; Plotly tooltips **`customdata` + `HuenteFmt`**; `?v=2.8` |
 | `routes/arqueo_caja_routes.py` | Blueprint arqueo: import, terreno, cuadratura, auditoría, export, canales UI, bundles eliminar/notas |

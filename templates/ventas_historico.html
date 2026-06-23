@@ -9,6 +9,8 @@
     .spark-canvas { height: 35px; width: 100%; }
     .section-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
     #detalle-producto { display: none; }
+    .celda-proyeccion { cursor: help; text-decoration: underline dotted; text-underline-offset: 3px; }
+    .mes-parcial::after { content: " *"; color: #ffc107; font-weight: normal; }
 </style>
 
 <div class="container-fluid">
@@ -92,6 +94,7 @@
                 <div class="card bg-dark border-secondary shadow">
                     <div class="card-header bg-black border-secondary">
                         <h6 class="m-0 text-white">Evolución Semanal del Neto</h6>
+                        <small class="text-muted">Año anterior: curva completa (referencia / proyección visual)</small>
                     </div>
                     <div class="card-body p-2"><div id="chart-neto" style="height:320px;"></div></div>
                 </div>
@@ -120,6 +123,7 @@
         <div class="card bg-dark border-secondary shadow mb-5">
             <div class="card-header bg-black border-secondary">
                 <h6 class="m-0 text-white">Resumen Mensual</h6>
+                <small id="lbl-tabla-periodo" class="text-muted d-block mt-1"></small>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -150,5 +154,5 @@
 </div>
 
 <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-<script src="{{ url_for('static', filename='js/ventas_historico.js') }}?v=5"></script>
+<script src="{{ url_for('static', filename='js/ventas_historico.js') }}?v=6"></script>
 {% endblock %}
