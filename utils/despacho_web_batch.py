@@ -12,6 +12,12 @@ TEMP_ROOT = os.path.join(BASE_DIR, "uploads", "despacho_web", "temp")
 RESPALDO_ROOT = os.path.join(BASE_DIR, "uploads", "despacho_web", "respaldos")
 
 MAX_PDFS = 5
+MAX_PAGINAS_MASIVO = 100
+
+
+def _escribir_manifest(batch_id: str, manifest: dict) -> None:
+    with open(_manifest_path(batch_id), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, ensure_ascii=False, indent=2)
 
 
 def _batch_dir(batch_id: str) -> str:
@@ -52,12 +58,62 @@ def crear_batch(usuario: str, archivos: list[tuple[str, bytes, dict]]) -> str:
 
     manifest = {
         "batch_id": batch_id,
+        "modo": "unit",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "usuario": usuario,
         "items": items,
     }
-    with open(_manifest_path(batch_id), "w", encoding="utf-8") as f:
-        json.dump(manifest, f, ensure_ascii=False, indent=2)
+    _escribir_manifest(batch_id, manifest)
+    return batch_id
+
+
+def crear_batch_masivo(
+    usuario: str,
+    nombre_original: str,
+    pdf_original: bytes,
+    archivos: list[tuple[str, bytes, dict]],
+) -> str:
+    """
+    PDF multipágina: una orden por página.
+    archivos: lista de (etiqueta, pdf_bytes_pagina, parsed_dict)
+    """
+    if not archivos:
+        raise ValueError("Sin páginas")
+    if len(archivos) > MAX_PAGINAS_MASIVO:
+        raise ValueError(f"Máximo {MAX_PAGINAS_MASIVO} páginas por PDF masivo")
+
+    batch_id = uuid.uuid4().hex
+    bdir = _batch_dir(batch_id)
+    os.makedirs(bdir, exist_ok=True)
+
+    with open(os.path.join(bdir, "original.pdf"), "wb") as f:
+        f.write(pdf_original)
+
+    items = []
+    for idx, (nombre, pdf_bytes, parsed) in enumerate(archivos):
+        stored = f"{idx}.pdf"
+        with open(os.path.join(bdir, stored), "wb") as f:
+            f.write(pdf_bytes)
+        items.append(
+            {
+                "idx": idx,
+                "filename": nombre,
+                "pdf_stored": stored,
+                "parsed": parsed,
+                "status": "pending",
+                "pagina": parsed.get("pagina_origen") or (idx + 1),
+            }
+        )
+
+    manifest = {
+        "batch_id": batch_id,
+        "modo": "bulk",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "usuario": usuario,
+        "original_filename": nombre_original,
+        "items": items,
+    }
+    _escribir_manifest(batch_id, manifest)
     return batch_id
 
 
@@ -71,8 +127,7 @@ def cargar_batch(batch_id: str) -> Optional[Dict[str, Any]]:
 
 def guardar_batch(manifest: dict) -> None:
     batch_id = manifest["batch_id"]
-    with open(_manifest_path(batch_id), "w", encoding="utf-8") as f:
-        json.dump(manifest, f, ensure_ascii=False, indent=2)
+    _escribir_manifest(batch_id, manifest)
 
 
 def pdf_path(batch_id: str, idx: int) -> Optional[str]:
@@ -128,6 +183,26 @@ def mover_respaldo(batch_id: str, idx: int, n_orden: str) -> str:
     if not src or not os.path.isfile(src):
         return ""
     dest_name = f"{n_orden}.pdf"
+    dest = os.path.join(RESPALDO_ROOT, dest_name)
+    with open(src, "rb") as fsrc:
+        data = fsrc.read()
+    with open(dest, "wb") as fdst:
+        fdst.write(data)
+    return os.path.join("despacho_web", "respaldos", dest_name).replace("\\", "/")
+
+
+def archivar_original_masivo(batch_id: str, manifest: dict) -> str:
+    """Copia el PDF multipágina original a respaldos/ al completar el lote."""
+    if manifest.get("modo") != "bulk":
+        return ""
+    src = os.path.join(_batch_dir(batch_id), "original.pdf")
+    if not os.path.isfile(src):
+        return ""
+    os.makedirs(RESPALDO_ROOT, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    base = (manifest.get("original_filename") or "lote").rsplit(".", 1)[0]
+    base = "".join(c if c.isalnum() or c in "-_" else "_" for c in base)[:40]
+    dest_name = f"lote_{base}_{ts}.pdf"
     dest = os.path.join(RESPALDO_ROOT, dest_name)
     with open(src, "rb") as fsrc:
         data = fsrc.read()

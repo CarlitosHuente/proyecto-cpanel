@@ -13,3 +13,4 @@ beautifulsoup4
 python-dotenv
 pymysql
 pdfplumber
+pypdf

@@ -64,6 +64,7 @@
                     <td>{{ o.celular }}</td>
                     <td>
                         <a href="{{ url_for('despacho_web.orden_editar', n_orden=o.n_orden) }}" class="btn btn-sm btn-outline-light">Editar</a>
+                        <a href="{{ url_for('despacho_web.orden_imprimir', n_orden=o.n_orden) }}" class="btn btn-sm btn-outline-secondary" target="_blank" title="Imprimir">🖨</a>
                     </td>
                 </tr>
                 {% else %}

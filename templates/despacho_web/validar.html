@@ -35,10 +35,16 @@
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
         <div>
             <h2 class="text-white h4 mb-0">Validar orden {{ idx_actual }} de {{ total_items }}</h2>
-            <small class="text-muted">{{ item.filename }} — {{ pendientes }} pendiente(s)</small>
+            <small class="text-muted">
+                {% if modo_lote == 'bulk' %}Pág. {{ pagina_origen }} — {% endif %}
+                {{ item.filename }} — {{ pendientes }} pendiente(s)
+            </small>
         </div>
         <div class="d-flex gap-2">
             <button type="button" class="btn btn-outline-secondary btn-sm" id="btnOmitir">Omitir</button>
+            {% if modo_lote == 'bulk' %}
+            <a href="{{ url_for('despacho_web.resumen_lote', batch_id=batch_id) }}" class="btn btn-outline-light btn-sm">Resumen lote</a>
+            {% endif %}
             <a href="{{ url_for('despacho_web.index') }}" class="btn btn-outline-danger btn-sm">Cancelar lote</a>
         </div>
     </div>

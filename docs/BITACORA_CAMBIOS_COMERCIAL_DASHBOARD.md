@@ -323,6 +323,18 @@ DDL: `docs/QUERY_CAMBIOS_PRODUCCION.sql` bloque `[2026-05-28] [despacho_web]`.
 | `POST /despacho-web/omitir` | Salta ítem de la cola. |
 | `GET /despacho-web/resumen-productos` | Sumatoria ventas por producto + detalle de pedidos al hacer clic. |
 | `GET /despacho-web/resumen-productos/exportar` | Excel: hojas Resumen, Detalle_lineas y Filtros. |
+| `POST /despacho-web/procesar-masivo` | PDF multipágina (máx. 100 hojas): split por página, resumen previo. |
+| `GET /despacho-web/resumen-lote/<batch>` | Tabla resumen antes de validar lote masivo. |
+| `GET /despacho-web/ordenes/<n>/imprimir` | HTML imprimible tipo factura Huentelauquen (`window.print()`). |
+
+### Carga PDF (dos modos)
+
+| Modo | Entrada | Flujo |
+|------|---------|--------|
+| **A — unitario** | 1–5 PDFs separados | Validación split-screen directa. |
+| **B — masivo** | 1 PDF multipágina | Resumen lote → validación una por una → respaldo PDF original al cerrar lote. |
+
+Parser mejorado para variantes «Enviar a:» en cabecera (PDF masivo). Siempre revisión humana; no auto-guardado.
 
 ### Reglas
 
@@ -335,7 +347,7 @@ DDL: `docs/QUERY_CAMBIOS_PRODUCCION.sql` bloque `[2026-05-28] [despacho_web]`.
 
 ### Archivos clave
 
-`routes/despacho_web_routes.py`, `utils/despacho_web_*.py`, `templates/despacho_web/*`, `static/js/despacho_web_validar.js?v=1`, `requirements.txt` (+ `pdfplumber`).
+`routes/despacho_web_routes.py`, `utils/despacho_web_*.py` (incl. `despacho_web_pdf_split.py`, `despacho_web_imprimir.py`), `templates/despacho_web/*` (+ `imprimir_factura.html`, `resumen_lote.html`), `static/js/despacho_web_validar.js?v=3`, `requirements.txt` (+ `pdfplumber`, `pypdf`).
 
 ---
 

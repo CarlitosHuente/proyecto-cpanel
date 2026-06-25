@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% from "despacho_web/_sort_macros.html" import badge_estado %}
+{% block title %}DespachoWeb — Resumen lote{% endblock %}
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <h2 class="text-white mb-1"><i class="bi bi-files text-danger me-2"></i>Resumen del lote masivo</h2>
+            <p class="text-muted mb-0">
+                {{ manifest.original_filename }} — {{ total }} página(s) detectada(s)
+                · {{ pendientes }} pendiente(s) de validar
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('despacho_web.index') }}" class="btn btn-outline-secondary btn-sm">Cancelar</a>
+            {% if pendientes > 0 %}
+            <a href="{{ url_for('despacho_web.validar', batch_id=batch_id) }}" class="btn btn-danger btn-sm">
+                <i class="bi bi-check2-square me-1"></i>Validar una por una
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="alert alert-info py-2 small">
+        Revise el resumen antes de validar. Cada página se guardará por separado tras confirmación manual (split-screen).
+        Al completar el lote se archiva el PDF original en respaldos.
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-dark table-hover table-sm align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Pág.</th>
+                    <th>N° Orden</th>
+                    <th>Cliente</th>
+                    <th>Comuna</th>
+                    <th>Estado</th>
+                    <th>Líneas</th>
+                    <th>Advertencias</th>
+                    <th>BD</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for f in filas %}
+                <tr class="{% if f.duplicado %}table-danger{% elif f.advertencias %}table-warning{% endif %}">
+                    <td>{{ f.pagina }}</td>
+                    <td class="fw-bold">{{ f.n_orden or '—' }}</td>
+                    <td>{{ f.cliente or '—' }}</td>
+                    <td>{{ f.comuna or '—' }}</td>
+                    <td>{{ badge_estado(f.estado) }}</td>
+                    <td>{{ f.num_lineas }}</td>
+                    <td class="small text-muted">
+                        {% if f.advertencias %}
+                        {{ f.advertencias|join(' · ') }}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if f.duplicado %}
+                        <span class="badge bg-danger">Duplicado</span>
+                        {% elif f.status == 'saved' %}
+                        <span class="badge bg-success">Guardada</span>
+                        {% elif f.status == 'skipped' %}
+                        <span class="badge bg-secondary">Omitida</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark">Pendiente</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -140,29 +140,96 @@ def _detectar_estado_pdf(texto: str) -> str:
     return "Pendiente"
 
 
-def parse_factura_pdf_bytes(data: bytes) -> dict[str, Any]:
-    """
-    Parsea factura web Huentelauquen.
-    Devuelve dict con campos de orden + lineas + advertencias.
-    """
-    try:
-        import pdfplumber
-    except ImportError as e:
-        raise RuntimeError("Instale pdfplumber: pip install pdfplumber") from e
+def _limpiar_nombre_cliente(texto: str) -> str:
+    t = (texto or "").strip()
+    if "Enviar a:" in t or "enviar a:" in t.lower():
+        t = re.split(r"\s*Enviar a:", t, flags=re.I)[0].strip()
+    if "Fecha de factura:" in t:
+        t = t.split("Fecha de factura:")[0].strip()
+    return t
 
+
+def _parse_cabecera(head: list[str]) -> dict[str, Any]:
+    n_orden = ""
+    fecha_oc = None
+    for ln in head:
+        if re.search(r"N[uú]mero de pedido:", ln, re.I):
+            n_orden = re.split(r"N[uú]mero de pedido:", ln, flags=re.I)[1].strip()
+        if "Fecha de factura:" in ln and not fecha_oc:
+            fecha_oc = _parse_fecha_es(ln.split("Fecha de factura:", 1)[1])
+        if "Fecha de pedido:" in ln and not fecha_oc:
+            fecha_oc = _parse_fecha_es(ln.split(":", 1)[1])
+
+    tiene_enviar_a = any("enviar a:" in ln.lower() for ln in head)
+    cliente = ""
+    calle = ""
+    comuna = ""
+
+    if head:
+        cliente = _limpiar_nombre_cliente(head[0])
+
+    if len(head) > 1:
+        ln1 = head[1]
+        if re.search(r"N[uú]mero de pedido:", ln1, re.I):
+            calle = re.split(r"N[uú]mero de pedido:", ln1, flags=re.I)[0].strip()
+            if tiene_enviar_a:
+                m_nom = re.match(
+                    r"^(.+?)\s+[\d.\-]+\s*$",
+                    calle,
+                )
+                if m_nom and not re.match(r"^[\d.\-\s]+$", m_nom.group(1)):
+                    nombre_envio = m_nom.group(1).strip()
+                    if len(nombre_envio) > 4:
+                        cliente = nombre_envio
+                calle = re.sub(r"\s+" + re.escape(cliente) + r"\s*$", "", calle).strip()
+        else:
+            calle = ln1
+
+    if tiene_enviar_a and len(head) > 1:
+        ln1 = head[1]
+        m = re.match(
+            r"^(.+?)\s+[\d.]+\-?\s*N[uú]mero de pedido:",
+            ln1,
+            re.I,
+        )
+        if m:
+            posible = m.group(1).strip()
+            if posible and not re.match(r"^[\d.\-\s]+$", posible):
+                cliente = posible
+            calle = re.split(r"N[uú]mero de pedido:", ln1, flags=re.I)[0].strip()
+            calle = re.sub(r"\s+" + re.escape(cliente) + r"\s*$", "", calle).strip()
+
+    meta_prefixes = ("fecha de", "método de", "metodo de")
+    for ln in head[2:]:
+        low = ln.lower()
+        if any(low.startswith(p) for p in meta_prefixes):
+            continue
+        if "@" in ln:
+            continue
+        digits = re.sub(r"\D", "", ln)
+        if len(digits) >= 8 and len(digits) <= 12:
+            continue
+        if not comuna:
+            comuna = ln.strip()
+            break
+
+    return {
+        "cliente": cliente,
+        "n_orden": n_orden,
+        "fecha_oc": fecha_oc,
+        "calle": calle,
+        "comuna": comuna,
+    }
+
+
+def _parse_factura_texto(texto: str) -> dict[str, Any]:
     advertencias: list[str] = []
-    with pdfplumber.open(io.BytesIO(data)) as pdf:
-        if not pdf.pages:
-            raise ValueError("PDF sin páginas")
-        texto = pdf.pages[0].extract_text() or ""
-
     texto = texto.replace("\r\n", "\n")
     lineas = [ln.strip() for ln in texto.split("\n") if ln.strip()]
 
     if "FACTURA" not in texto.upper() and "HUENTELAUQUEN" not in texto.upper():
         advertencias.append("El PDF no parece una factura Huentelauquen.")
 
-    # Cabecera: tras FACTURA hasta bloque productos
     try:
         idx_factura = next(
             i for i, ln in enumerate(lineas) if ln.upper() == "FACTURA"
@@ -178,50 +245,20 @@ def parse_factura_pdf_bytes(data: bytes) -> dict[str, Any]:
     head = cabecera[:idx_prod]
     prod_bloque = cabecera[idx_prod + 1 :]
 
-    cliente = ""
-    fecha_oc = None
-    n_orden = ""
-    calle = ""
-    comuna = ""
-
-    if head:
-        ln0 = head[0]
-        if "Fecha de factura:" in ln0:
-            partes = ln0.split("Fecha de factura:", 1)
-            cliente = partes[0].strip()
-            fecha_oc = _parse_fecha_es(partes[1])
-        else:
-            cliente = ln0
-
-    if len(head) > 1:
-        ln1 = head[1]
-        if "Número de pedido:" in ln1 or "Numero de pedido:" in ln1:
-            partes = re.split(r"N[uú]mero de pedido:", ln1, flags=re.I)
-            calle = partes[0].strip()
-            n_orden = partes[1].strip() if len(partes) > 1 else ""
-        else:
-            calle = ln1
-
-    if len(head) > 2:
-        ln2 = head[2]
-        if not ln2.lower().startswith("fecha de pedido"):
-            comuna = ln2.strip()
-
-    for ln in head:
-        if "Fecha de pedido:" in ln and not fecha_oc:
-            fecha_oc = _parse_fecha_es(ln.split(":", 1)[1])
-        if ("Número de pedido:" in ln or "Numero de pedido:" in ln) and not n_orden:
-            n_orden = re.split(r"N[uú]mero de pedido:", ln, flags=re.I)[1].strip()
+    cab = _parse_cabecera(head)
+    cliente = cab["cliente"]
+    n_orden = cab["n_orden"]
+    fecha_oc = cab["fecha_oc"]
+    calle = cab["calle"]
+    comuna = cab["comuna"]
 
     email = _extraer_email(head)
     celular_raw = _extraer_celular(head)
-
     lineas_prod = _parse_lineas_producto(prod_bloque)
 
     direccion = calle
-    if comuna:
-        if comuna.lower() not in (direccion or "").lower():
-            direccion = f"{calle}, {comuna}".strip(", ")
+    if comuna and comuna.lower() not in (direccion or "").lower():
+        direccion = f"{calle}, {comuna}".strip(", ")
 
     if not n_orden:
         advertencias.append("No se detectó N° de pedido.")
@@ -252,3 +289,34 @@ def parse_factura_pdf_bytes(data: bytes) -> dict[str, Any]:
         "lineas": lineas_prod,
         "advertencias": advertencias,
     }
+
+
+def parse_factura_pdf_multipage(data: bytes) -> list[dict[str, Any]]:
+    """Parsea cada página de un PDF como orden independiente."""
+    from utils.despacho_web_pdf_split import dividir_pdf_por_paginas
+
+    paginas = dividir_pdf_por_paginas(data)
+    resultados = []
+    for i, page_bytes in enumerate(paginas):
+        parsed = parse_factura_pdf_bytes(page_bytes)
+        parsed["pagina_origen"] = i + 1
+        resultados.append(parsed)
+    return resultados
+
+
+def parse_factura_pdf_bytes(data: bytes) -> dict[str, Any]:
+    """
+    Parsea factura web Huentelauquen.
+    Devuelve dict con campos de orden + lineas + advertencias.
+    """
+    try:
+        import pdfplumber
+    except ImportError as e:
+        raise RuntimeError("Instale pdfplumber: pip install pdfplumber") from e
+
+    with pdfplumber.open(io.BytesIO(data)) as pdf:
+        if not pdf.pages:
+            raise ValueError("PDF sin páginas")
+        texto = pdf.pages[0].extract_text() or ""
+
+    return _parse_factura_texto(texto)

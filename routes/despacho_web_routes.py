@@ -18,10 +18,13 @@ from werkzeug.utils import secure_filename
 from utils.auth import login_requerido, permiso_modulo
 from utils.db import get_db_connection
 from utils.despacho_web_batch import (
+    MAX_PAGINAS_MASIVO,
     MAX_PDFS,
+    archivar_original_masivo,
     cargar_batch,
     contar_pendientes,
     crear_batch,
+    crear_batch_masivo,
     item_pendiente,
     limpiar_batch,
     marcar_item,
@@ -34,7 +37,9 @@ from utils.despacho_web_export import (
     nombre_archivo_export,
     respuesta_excel,
 )
+from utils.despacho_web_imprimir import preparar_factura_impresion
 from utils.despacho_web_pdf_parser import parse_factura_pdf_bytes
+from utils.despacho_web_pdf_split import dividir_pdf_por_paginas
 from utils.despacho_web_service import (
     ESTADOS_ORDEN,
     TRANSPORTES,
@@ -93,6 +98,7 @@ def index():
         comuna_filtro=comuna_filtro,
         total_inbox=total_inbox,
         max_pdfs=MAX_PDFS,
+        max_paginas_masivo=MAX_PAGINAS_MASIVO,
     )
 
 
@@ -230,6 +236,128 @@ def procesar():
     return redirect(url_for("despacho_web.validar", batch_id=batch_id))
 
 
+@despacho_web_bp.route("/procesar-masivo", methods=["POST"])
+@login_requerido
+@permiso_modulo("despacho_web")
+def procesar_masivo():
+    f = request.files.get("pdf_masivo")
+    if not f or not f.filename:
+        flash("Seleccione un PDF multipágina.", "warning")
+        return redirect(url_for("despacho_web.index"))
+
+    if not f.filename.lower().endswith(".pdf"):
+        flash("El archivo debe ser PDF.", "warning")
+        return redirect(url_for("despacho_web.index"))
+
+    data = f.read()
+    if not data:
+        flash("Archivo vacío.", "warning")
+        return redirect(url_for("despacho_web.index"))
+
+    errores = []
+    try:
+        paginas = dividir_pdf_por_paginas(data)
+    except Exception as e:
+        flash(f"No se pudo leer el PDF: {e}", "danger")
+        return redirect(url_for("despacho_web.index"))
+
+    if len(paginas) > MAX_PAGINAS_MASIVO:
+        flash(f"Máximo {MAX_PAGINAS_MASIVO} páginas por PDF masivo.", "warning")
+        return redirect(url_for("despacho_web.index"))
+
+    nombre_orig = secure_filename(f.filename) or "facturas_masivas.pdf"
+    archivos = []
+    for i, page_bytes in enumerate(paginas):
+        etiqueta = f"{nombre_orig} — pág. {i + 1}"
+        try:
+            parsed = parse_factura_pdf_bytes(page_bytes)
+            parsed["pagina_origen"] = i + 1
+            archivos.append((etiqueta, page_bytes, parsed))
+        except Exception as e:
+            errores.append(f"Pág. {i + 1}: {e}")
+
+    if not archivos:
+        flash(
+            "No se pudo procesar ninguna página: " + "; ".join(errores),
+            "danger",
+        )
+        return redirect(url_for("despacho_web.index"))
+
+    nombres_nuevos: list[str] = []
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            for _etiq, _data, parsed in archivos:
+                creados = asegurar_productos(cur, parsed.get("lineas") or [])
+                parsed["productos_auto_creados"] = creados
+                nombres_nuevos.extend(creados)
+        conn.commit()
+    finally:
+        conn.close()
+
+    if nombres_nuevos:
+        unicos = list(dict.fromkeys(nombres_nuevos))
+        flash(
+            "Productos nuevos agregados al catálogo: " + ", ".join(unicos),
+            "info",
+        )
+
+    usuario = session.get("usuario", "desconocido")
+    batch_id = crear_batch_masivo(usuario, nombre_orig, data, archivos)
+    session["despacho_web_batch"] = batch_id
+
+    if errores:
+        flash("Algunas páginas fallaron: " + "; ".join(errores), "warning")
+
+    return redirect(url_for("despacho_web.resumen_lote", batch_id=batch_id))
+
+
+@despacho_web_bp.route("/resumen-lote/<batch_id>")
+@login_requerido
+@permiso_modulo("despacho_web")
+def resumen_lote(batch_id):
+    manifest = cargar_batch(batch_id)
+    if not manifest or manifest.get("modo") != "bulk":
+        flash("Lote masivo no encontrado o expirado.", "warning")
+        return redirect(url_for("despacho_web.index"))
+
+    filas = []
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            for it in manifest.get("items", []):
+                parsed = it.get("parsed") or {}
+                n_orden = str(parsed.get("n_orden") or "").strip()
+                duplicado = bool(n_orden and orden_existe(cur, n_orden))
+                adv = parsed.get("advertencias") or []
+                filas.append(
+                    {
+                        "idx": it.get("idx"),
+                        "pagina": it.get("pagina") or (it.get("idx", 0) + 1),
+                        "n_orden": n_orden,
+                        "cliente": parsed.get("cliente") or "",
+                        "comuna": parsed.get("comuna") or "",
+                        "estado": parsed.get("estado") or "Pendiente",
+                        "num_lineas": len(parsed.get("lineas") or []),
+                        "advertencias": adv,
+                        "duplicado": duplicado,
+                        "status": it.get("status"),
+                    }
+                )
+    finally:
+        conn.close()
+
+    pendientes = contar_pendientes(manifest)
+    return render_template(
+        "despacho_web/resumen_lote.html",
+        batch_id=batch_id,
+        manifest=manifest,
+        filas=filas,
+        pendientes=pendientes,
+        total=len(filas),
+    )
+
+
 @despacho_web_bp.route("/validar/<batch_id>")
 @login_requerido
 @permiso_modulo("despacho_web")
@@ -241,6 +369,7 @@ def validar(batch_id):
 
     item = item_pendiente(manifest)
     if not item:
+        archivar_original_masivo(batch_id, manifest)
         limpiar_batch(batch_id)
         session.pop("despacho_web_batch", None)
         flash("Todas las órdenes del lote fueron procesadas.", "success")
@@ -274,6 +403,8 @@ def validar(batch_id):
         procesados=procesados,
         idx_actual=idx_actual,
         estados=ESTADOS_ORDEN,
+        modo_lote=manifest.get("modo") or "unit",
+        pagina_origen=item.get("pagina") or parsed.get("pagina_origen"),
     )
 
 
@@ -327,6 +458,7 @@ def guardar():
 
         restantes = contar_pendientes(manifest)
         if restantes == 0:
+            archivar_original_masivo(batch_id, manifest)
             limpiar_batch(batch_id)
             session.pop("despacho_web_batch", None)
             return jsonify(
@@ -371,6 +503,7 @@ def omitir():
     marcar_item(manifest, idx, "skipped")
     restantes = contar_pendientes(manifest)
     if restantes == 0:
+        archivar_original_masivo(batch_id, manifest)
         limpiar_batch(batch_id)
         session.pop("despacho_web_batch", None)
         return jsonify(
@@ -503,6 +636,25 @@ def orden_editar(n_orden):
         estados=ESTADOS_ORDEN,
         transportes=TRANSPORTES,
     )
+
+
+@despacho_web_bp.route("/ordenes/<n_orden>/imprimir")
+@login_requerido
+@permiso_modulo("despacho_web")
+def orden_imprimir(n_orden):
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            orden = obtener_orden(cur, n_orden)
+            if not orden:
+                flash(f"Orden N° {n_orden} no encontrada.", "warning")
+                return redirect(url_for("despacho_web.ordenes"))
+            detalle = listar_detalle_orden(cur, n_orden)
+    finally:
+        conn.close()
+
+    factura = preparar_factura_impresion(orden, detalle)
+    return render_template("despacho_web/imprimir_factura.html", factura=factura)
 
 
 @despacho_web_bp.route("/ordenes/<n_orden>/eliminar", methods=["POST"])

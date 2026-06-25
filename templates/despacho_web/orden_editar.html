@@ -4,7 +4,10 @@
 <div class="container mt-3" style="max-width: 960px;">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2 class="text-white h4 mb-0">Editar orden N° {{ orden.n_orden }}</h2>
-        <a href="{{ url_for('despacho_web.ordenes') }}" class="btn btn-outline-light btn-sm">← Volver</a>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('despacho_web.orden_imprimir', n_orden=orden.n_orden) }}" class="btn btn-outline-light btn-sm" target="_blank">🖨 Imprimir factura</a>
+            <a href="{{ url_for('despacho_web.ordenes') }}" class="btn btn-outline-light btn-sm">← Volver</a>
+        </div>
     </div>
 
     <div id="alertOk" class="alert alert-success d-none"></div>
