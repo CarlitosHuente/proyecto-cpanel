@@ -31,6 +31,8 @@
 {% macro badge_estado(estado) %}
 {% if estado == 'Anulado' %}
 <span class="badge bg-danger">{{ estado }}</span>
+{% elif estado == 'Retiro Costanera' %}
+<span class="badge bg-warning text-dark">{{ estado }}</span>
 {% elif estado == 'Entregada' %}
 <span class="badge bg-success">{{ estado }}</span>
 {% elif estado == 'En Ruta' %}

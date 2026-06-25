@@ -69,7 +69,12 @@
                     </div>
                     <div class="col-md-4">
                         <label class="form-label text-white-50 small">Estado</label>
-                        <input type="text" class="form-control bg-black text-white border-secondary" value="Pendiente" readonly>
+                        <select name="estado" class="form-select bg-black text-white border-secondary">
+                            {% for e in estados %}
+                            <option value="{{ e }}" {% if (parsed.estado or 'Pendiente') == e %}selected{% endif %}>{{ e }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text text-muted">Se detecta «Retiro Costanera» del PDF; puede cambiarlo aquí.</div>
                     </div>
                     <div class="col-12">
                         <label class="form-label text-white-50 small">Cliente</label>

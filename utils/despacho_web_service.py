@@ -69,7 +69,16 @@ def listar_ordenes_recientes(cursor, limite: int = 20, comuna: Optional[str] = N
     return listar_ordenes(cursor, comuna=comuna, limite=limite)
 
 
-ESTADOS_ORDEN = ("Pendiente", "Armado", "En Ruta", "Entregada", "Anulado")
+ESTADOS_ORDEN = (
+    "Pendiente",
+    "Retiro Costanera",
+    "Armado",
+    "En Ruta",
+    "Entregada",
+    "Anulado",
+)
+ESTADOS_INDEX_INBOX = ("Pendiente", "Retiro Costanera")
+ESTADO_RETIRO_COSTANERA = "Retiro Costanera"
 TRANSPORTES = ("", "Cristobal", "Matias")
 
 _ORDENES_SORT = {
@@ -111,6 +120,47 @@ def _sort_col(sort: Optional[str], allowed: dict[str, str], default: str) -> str
     if sort and sort in allowed:
         return allowed[sort]
     return default
+
+
+def normalizar_estado_orden(estado: Optional[str], default: str = "Pendiente") -> str:
+    e = (estado or default).strip()
+    if e in ESTADOS_ORDEN:
+        return e
+    return default
+
+
+def listar_ordenes_index_inbox(
+    cursor,
+    comuna: Optional[str] = None,
+    limite: int = 500,
+) -> list[dict]:
+    """Pendientes + Retiro Costanera para la bandeja de la página inicial."""
+    placeholders = ", ".join(["%s"] * len(ESTADOS_INDEX_INBOX))
+    sql = f"""
+        SELECT n_orden, fecha_oc, cliente, estado, comuna, transporte, celular, direccion, creado_at
+        FROM {TBL_ORDEN}
+        WHERE estado IN ({placeholders})
+    """
+    params: list[Any] = list(ESTADOS_INDEX_INBOX)
+    if comuna:
+        sql += " AND comuna LIKE %s"
+        params.append(f"%{comuna.strip()}%")
+    sql += " ORDER BY fecha_oc ASC, creado_at DESC LIMIT %s"
+    params.append(limite)
+    cursor.execute(sql, params)
+    return cursor.fetchall() or []
+
+
+def contar_ordenes_index_inbox(cursor, comuna: Optional[str] = None) -> int:
+    placeholders = ", ".join(["%s"] * len(ESTADOS_INDEX_INBOX))
+    sql = f"SELECT COUNT(*) AS c FROM {TBL_ORDEN} WHERE estado IN ({placeholders})"
+    params: list[Any] = list(ESTADOS_INDEX_INBOX)
+    if comuna:
+        sql += " AND comuna LIKE %s"
+        params.append(f"%{comuna.strip()}%")
+    cursor.execute(sql, params)
+    row = cursor.fetchone()
+    return int(row["c"] if isinstance(row, dict) else row[0])
 
 
 def listar_ordenes(
@@ -258,6 +308,8 @@ def guardar_orden(
     if not lineas:
         raise ValueError("Debe incluir al menos una línea de detalle.")
 
+    estado_inicial = normalizar_estado_orden(datos.get("estado"))
+
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -266,7 +318,7 @@ def guardar_orden(
                 n_orden, fecha_oc, cliente, estado, transporte, fecha_estado,
                 respaldo, direccion, comuna, celular, email, url, obs, creado_por
             ) VALUES (
-                %s, %s, %s, 'Pendiente', %s, %s,
+                %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s, %s
             )
             """,
@@ -274,6 +326,7 @@ def guardar_orden(
                 n_orden,
                 datos.get("fecha_oc"),
                 (datos.get("cliente") or "").strip(),
+                estado_inicial,
                 (datos.get("transporte") or "").strip() or None,
                 datetime.now(),
                 respaldo_ruta,

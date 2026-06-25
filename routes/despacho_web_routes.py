@@ -49,8 +49,10 @@ from utils.despacho_web_service import (
     listar_detalle_orden,
     listar_lineas_por_producto,
     listar_ordenes,
+    listar_ordenes_index_inbox,
     listar_ordenes_recientes,
     listar_productos_activos,
+    contar_ordenes_index_inbox,
     obtener_orden,
     orden_existe,
     resumir_ventas_por_producto,
@@ -81,13 +83,15 @@ def index():
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            ordenes = listar_ordenes_recientes(cur, comuna=comuna_filtro or None)
+            ordenes = listar_ordenes_index_inbox(cur, comuna=comuna_filtro or None)
+            total_inbox = contar_ordenes_index_inbox(cur, comuna=comuna_filtro or None)
     finally:
         conn.close()
     return render_template(
         "despacho_web/index.html",
         ordenes=ordenes,
         comuna_filtro=comuna_filtro,
+        total_inbox=total_inbox,
         max_pdfs=MAX_PDFS,
     )
 
@@ -269,6 +273,7 @@ def validar(batch_id):
         pendientes=pendientes,
         procesados=procesados,
         idx_actual=idx_actual,
+        estados=ESTADOS_ORDEN,
     )
 
 

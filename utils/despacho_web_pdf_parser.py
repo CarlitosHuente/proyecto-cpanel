@@ -133,6 +133,13 @@ def _parse_lineas_producto(bloque: list[str]) -> list[dict[str, Any]]:
     return lineas
 
 
+def _detectar_estado_pdf(texto: str) -> str:
+    """Si el PDF menciona retiro en Costanera, estado inicial Retiro Costanera."""
+    if re.search(r"retiro\s+costanera", texto or "", re.IGNORECASE):
+        return "Retiro Costanera"
+    return "Pendiente"
+
+
 def parse_factura_pdf_bytes(data: bytes) -> dict[str, Any]:
     """
     Parsea factura web Huentelauquen.
@@ -225,11 +232,15 @@ def parse_factura_pdf_bytes(data: bytes) -> dict[str, Any]:
     if not lineas_prod:
         advertencias.append("No se detectaron líneas de producto.")
 
+    estado = _detectar_estado_pdf(texto)
+    if estado == "Retiro Costanera":
+        advertencias.append("Detectado «Retiro Costanera» en PDF — estado inicial asignado.")
+
     return {
         "n_orden": n_orden,
         "fecha_oc": fecha_oc or date.today().isoformat(),
         "cliente": cliente,
-        "estado": "Pendiente",
+        "estado": estado,
         "transporte": "",
         "direccion": direccion,
         "comuna": comuna,
