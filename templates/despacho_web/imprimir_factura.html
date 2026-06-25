@@ -2,89 +2,125 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Factura {{ factura.n_orden }} — Huentelauquen</title>
   <style>
     * { box-sizing: border-box; }
     body {
-      font-family: Georgia, "Times New Roman", serif;
+      font-family: Helvetica, Arial, sans-serif;
       color: #111;
-      background: #f5f5f5;
+      background: #ececec;
       margin: 0;
-      padding: 24px;
-      line-height: 1.45;
+      padding: 32px 20px;
+      line-height: 1.5;
+      font-size: 14px;
     }
     .factura {
-      max-width: 720px;
+      max-width: 680px;
       margin: 0 auto;
       background: #fff;
-      padding: 40px 48px 48px;
-      box-shadow: 0 2px 12px rgba(0,0,0,.08);
+      padding: 48px 52px 56px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.12);
     }
     .marca {
-      font-size: 22px;
-      font-weight: normal;
-      letter-spacing: 0.02em;
-      margin-bottom: 28px;
+      font-size: 15px;
+      font-weight: 400;
+      margin: 0 0 18px;
+      color: #222;
     }
     .titulo {
-      font-size: 28px;
-      font-weight: bold;
-      margin: 0 0 24px;
-      letter-spacing: 0.04em;
+      font-size: 26px;
+      font-weight: 700;
+      margin: 0 0 28px;
+      letter-spacing: 0.02em;
+      color: #000;
     }
-    .bloque-cliente {
+    .cabecera {
+      margin-bottom: 32px;
       font-size: 14px;
-      margin-bottom: 28px;
+      color: #111;
     }
-    .bloque-cliente p { margin: 0 0 6px; }
-    .bloque-cliente .nombre {
-      font-size: 15px;
-      font-weight: bold;
+    .cabecera .linea {
+      margin: 0 0 7px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0.35em 1.25em;
+    }
+    .cabecera .linea-sola {
+      margin: 0 0 7px;
+    }
+    .cabecera .cliente {
+      font-weight: 400;
+    }
+    .cabecera .inline-label {
+      color: #111;
+    }
+    .cabecera .pedido {
+      font-weight: 700;
+    }
+    .cabecera .email {
+      text-transform: lowercase;
     }
     table.productos {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 20px;
+      margin-bottom: 24px;
       font-size: 14px;
     }
-    table.productos th {
+    table.productos thead th {
       text-align: left;
-      font-weight: bold;
-      padding: 8px 0;
-      border-bottom: 1px solid #ccc;
+      font-weight: 700;
+      padding: 0 0 10px;
+      border-bottom: 1px solid #bbb;
+      color: #000;
     }
-    table.productos th:nth-child(2),
-    table.productos th:nth-child(3),
-    table.productos td.num {
+    table.productos thead th.col-cant,
+    table.productos thead th.col-precio {
       text-align: right;
+      width: 90px;
     }
-    table.productos td {
-      padding: 10px 0;
+    table.productos tbody td {
+      padding: 14px 0 0;
       vertical-align: top;
-      border-bottom: 1px solid #eee;
+      color: #111;
+    }
+    table.productos tbody td.col-cant,
+    table.productos tbody td.col-precio {
+      text-align: right;
+      white-space: nowrap;
+    }
+    table.productos tbody tr:first-child td {
+      padding-top: 16px;
     }
     .meta-linea {
-      font-size: 12px;
-      color: #444;
-      margin-top: 4px;
+      font-size: 13px;
+      color: #333;
+      margin-top: 5px;
+      line-height: 1.35;
     }
     .totales {
-      margin-top: 8px;
+      margin-top: 28px;
       font-size: 14px;
-      max-width: 320px;
+      max-width: 340px;
       margin-left: auto;
     }
     .totales .fila {
       display: flex;
       justify-content: space-between;
-      padding: 4px 0;
+      align-items: baseline;
+      gap: 24px;
+      padding: 3px 0;
     }
     .totales .fila.total {
-      font-weight: bold;
-      font-size: 16px;
-      border-top: 1px solid #ccc;
-      margin-top: 8px;
-      padding-top: 10px;
+      font-weight: 700;
+      font-size: 15px;
+      border-top: 1px solid #bbb;
+      margin-top: 10px;
+      padding-top: 12px;
+    }
+    .totales .monto {
+      white-space: nowrap;
     }
     .btn-print {
       position: fixed;
@@ -95,15 +131,20 @@
       color: #fff;
       border: none;
       font-size: 14px;
-      font-weight: bold;
+      font-weight: 700;
       cursor: pointer;
       border-radius: 4px;
       z-index: 10;
+      font-family: Helvetica, Arial, sans-serif;
     }
     .btn-print:hover { background: #a01818; }
     @media print {
       body { background: #fff; padding: 0; }
-      .factura { box-shadow: none; padding: 0; max-width: none; }
+      .factura {
+        box-shadow: none;
+        padding: 0;
+        max-width: none;
+      }
       .btn-print { display: none !important; }
     }
   </style>
@@ -112,43 +153,54 @@
 <button type="button" class="btn-print" onclick="window.print()">Imprimir / Guardar PDF</button>
 
 <div class="factura">
-  <div class="marca">{{ factura.marca }}</div>
+  <p class="marca">{{ factura.marca }}</p>
   <h1 class="titulo">{{ factura.titulo }}</h1>
 
-  <div class="bloque-cliente">
-    <p class="nombre">{{ factura.cliente }} <span style="font-weight:normal">Fecha de factura: {{ factura.fecha_factura }}</span></p>
-    {% if factura.direccion %}
-    <p>{{ factura.direccion }} <span style="font-weight:bold">Número de pedido: {{ factura.n_orden }}</span></p>
+  <div class="cabecera">
+    <p class="linea">
+      <span class="cliente">{{ factura.cliente }}</span>
+      <span class="inline-label">Fecha de factura: {{ factura.fecha_factura }}</span>
+    </p>
+    {% if factura.calle %}
+    <p class="linea">
+      <span>{{ factura.calle }}</span>
+      <span class="pedido">Número de pedido: {{ factura.n_orden }}</span>
+    </p>
     {% else %}
-    <p><span style="font-weight:bold">Número de pedido: {{ factura.n_orden }}</span></p>
+    <p class="linea-sola"><span class="pedido">Número de pedido: {{ factura.n_orden }}</span></p>
     {% endif %}
-    {% if factura.comuna %}<p>{{ factura.comuna }}</p>{% endif %}
-    <p>Fecha de pedido: {{ factura.fecha_pedido }}</p>
-    {% if factura.email %}<p>{{ factura.email }}</p>{% endif %}
-    <p>Método de pago: {{ factura.metodo_pago }}</p>
-    {% if factura.celular %}<p>{{ factura.celular }}</p>{% endif %}
+    {% if factura.comuna %}
+    <p class="linea-sola">{{ factura.comuna }}</p>
+    {% endif %}
+    <p class="linea-sola">Fecha de pedido: {{ factura.fecha_pedido }}</p>
+    {% if factura.email %}
+    <p class="linea-sola email">{{ factura.email }}</p>
+    {% endif %}
+    <p class="linea-sola">Método de pago: {{ factura.metodo_pago }}</p>
+    {% if factura.celular %}
+    <p class="linea-sola">{{ factura.celular }}</p>
+    {% endif %}
   </div>
 
   <table class="productos">
     <thead>
       <tr>
         <th>Producto</th>
-        <th>Cantidad</th>
-        <th>Precio</th>
+        <th class="col-cant">Cantidad</th>
+        <th class="col-precio">Precio</th>
       </tr>
     </thead>
     <tbody>
       {% for ln in factura.lineas %}
-      {% set es_envio = ln.producto|lower in ['envío', 'envio'] %}
       <tr>
         <td>
           {{ ln.producto }}
-          {% if ln.sku and not es_envio %}
+          {% if ln.sku %}
           <div class="meta-linea">SKU: {{ ln.sku }}</div>
           {% endif %}
         </td>
-        <td class="num">{% if not es_envio %}{{ ln.cantidad|metrico(0) if ln.cantidad == (ln.cantidad|round(0, 'common')) else ln.cantidad|metrico }}{% endif %}</td>
-        <td class="num">${{ ln.total|dinero }}</td>
+        <td class="col-cant">{{ ln.cantidad|metrico(0) if ln.cantidad == (ln.cantidad|round(0, 'common')) else ln.cantidad|metrico }}</td>
+        <td class="col-precio">${{ ln.total|dinero }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -156,12 +208,21 @@
 
   <div class="totales">
     {% if factura.subtotal %}
-    <div class="fila"><span>Subtotal</span><span>${{ factura.subtotal|dinero }}</span></div>
+    <div class="fila">
+      <span>Subtotal</span>
+      <span class="monto">${{ factura.subtotal|dinero }}</span>
+    </div>
     {% endif %}
-    {% if factura.envio_total %}
-    <div class="fila"><span>Envío</span><span>${{ factura.envio_total|dinero }} via Envío</span></div>
+    {% if factura.mostrar_envio %}
+    <div class="fila">
+      <span>Envío</span>
+      <span class="monto">${{ factura.envio_total|dinero }} via Envío</span>
+    </div>
     {% endif %}
-    <div class="fila total"><span>Total</span><span>${{ factura.total|dinero }}</span></div>
+    <div class="fila total">
+      <span>Total</span>
+      <span class="monto">${{ factura.total|dinero }}</span>
+    </div>
   </div>
 </div>
 </body>
