@@ -78,7 +78,13 @@ def preparar_factura_impresion(orden: dict, detalle: list[dict]) -> dict[str, An
 
     return {
         "marca": "Huentelauquen",
-        "titulo": "FACTURA",
+        "titulo": "COMPROBANTE DE PEDIDO",
+        "tipo_doc": "Pedido web",
+        "empresa": {
+            "nombre": "Huentelauquen",
+            "sitio": "huentelauquen.cl",
+            "giro": "Elaboración y comercialización de empanadas",
+        },
         "cliente": orden.get("cliente") or "",
         "fecha_factura": _fmt_fecha_larga(fecha_oc),
         "fecha_pedido": _fmt_fecha_larga(fecha_oc),
