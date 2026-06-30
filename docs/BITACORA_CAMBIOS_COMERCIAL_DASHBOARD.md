@@ -19,10 +19,19 @@
 | `papaya_dia_mp` | 1 fila/día: entradas, elaboración, descarte + comentario, venta calibre |
 | `papaya_dia_elaboracion` | 1 fila/día: kg elaborados, directa, congelada, `rendimiento_pct` |
 | `papaya_dia_transformacion` | N filas/día: producto, fuente `directa`\|`congelada`, kg fuente, producido |
-| `papaya_dia_despacho` | N filas/día: despacho por concepto |
+| `papaya_despacho_guia` | Cabecera guía: fecha, `numero_doc`, `destino` (AppSheet) |
+| `papaya_dia_despacho` | Líneas de despacho (`guia_id` FK o NULL = histórico import Excel) |
 | `papaya_semana_stock_real` | Conteo físico semanal (anio + semana_iso + concepto) |
 
-DDL: `docs/QUERY_CAMBIOS_PRODUCCION.sql` bloque `[2026-06-29] [fabrica_papaya]`.
+DDL: `docs/QUERY_FABRICA_PAPAYA_PRODUCCION.sql` + migraciones en `docs/QUERY_CAMBIOS_PRODUCCION.sql`.
+
+### AppSheet — guías de despacho
+
+1. **Tabla `papaya_despacho_guia`** (formulario principal): `fecha`, `numero_doc`, `destino`, `observaciones`, `capturado_por`. Calcular `anio` y `semana_iso` con expresión desde `fecha` o dejar que la web los rellene al sincronizar.
+2. **Tabla `papaya_dia_despacho`** (detalle / inline): ref `guia_id` → guía, ref `concepto_id` → `papaya_conceptos`, `cantidad`. **No** repetir `numero_doc`/`destino` en líneas nuevas.
+3. **Flujo:** crear guía → agregar 1+ líneas con el mismo `guia_id`. Stock descuenta por cada línea.
+4. **Histórico:** import Excel deja `guia_id` NULL (totales semanales sin guía).
+5. **Edición/borrado guía:** borrar fila en `papaya_despacho_guia` elimina líneas (CASCADE). Casi solo desde AppSheet.
 
 ### Reglas
 

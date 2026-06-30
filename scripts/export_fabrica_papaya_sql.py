@@ -48,7 +48,11 @@ TABLES = [
     ),
     (
         "papaya_dia_despacho",
-        ["id", "fecha", "anio", "semana_iso", "concepto_id", "cantidad", "observaciones", "capturado_por"],
+        ["id", "fecha", "anio", "semana_iso", "guia_id", "concepto_id", "cantidad", "numero_doc", "destino", "observaciones", "capturado_por"],
+    ),
+    (
+        "papaya_despacho_guia",
+        ["id", "fecha", "anio", "semana_iso", "numero_doc", "destino", "observaciones", "capturado_por"],
     ),
     (
         "papaya_semana_stock_real",
@@ -86,6 +90,7 @@ def main() -> int:
         "-- Orden: vaciar tablas (instalación limpia) y cargar snapshot.",
         "TRUNCATE TABLE papaya_semana_stock_real;",
         "TRUNCATE TABLE papaya_dia_despacho;",
+        "TRUNCATE TABLE papaya_despacho_guia;",
         "TRUNCATE TABLE papaya_dia_transformacion;",
         "TRUNCATE TABLE papaya_dia_elaboracion;",
         "TRUNCATE TABLE papaya_dia_mp;",

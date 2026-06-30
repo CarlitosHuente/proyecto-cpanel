@@ -223,6 +223,7 @@ def limpiar_tablas(cur, dry_run: bool) -> None:
     tablas = [
         "papaya_semana_stock_real",
         "papaya_dia_despacho",
+        "papaya_despacho_guia",
         "papaya_dia_transformacion",
         "papaya_dia_elaboracion",
         "papaya_dia_mp",

@@ -684,11 +684,12 @@ def detalle_dia(fecha: date) -> dict:
         SELECT d.*, c.nombre AS concepto_nombre, c.unidad, c.tipo
         FROM papaya_dia_despacho d
         JOIN papaya_conceptos c ON c.id = d.concepto_id
-        WHERE d.fecha = %s ORDER BY d.id
+        WHERE d.fecha = %s ORDER BY d.guia_id, d.id
         """,
         (fecha,),
     )
-    desp = cur.fetchall() or []
+    desp_all = cur.fetchall() or []
+    despacho_guias, despachos_sueltos = _agrupar_despachos_dia(cur, fecha, desp_all)
 
     cur.execute(
         "SELECT * FROM papaya_conceptos WHERE activo = 1 AND tipo = 'terminado' ORDER BY orden, nombre"
@@ -735,7 +736,9 @@ def detalle_dia(fecha: date) -> dict:
         "mp": mp,
         "elaboracion": elab,
         "transformaciones": transf,
-        "despachos": desp,
+        "despachos": desp_all,
+        "despacho_guias": despacho_guias,
+        "despachos_sueltos": despachos_sueltos,
         "terminados": terminados,
         "conceptos_despacho": conceptos_despacho,
         "stock_resumen": stock_resumen,
@@ -869,16 +872,40 @@ def guardar_transformacion(fecha: date, data: dict, capturado_por: str, registro
     return rid
 
 
+def _agrupar_despachos_dia(cur, fecha: date, desp_all: list) -> Tuple[list, list]:
+    """Guías con líneas + filas históricas sin guia_id."""
+    cur.execute(
+        "SELECT * FROM papaya_despacho_guia WHERE fecha = %s ORDER BY id",
+        (fecha,),
+    )
+    guias_raw = cur.fetchall() or []
+    lineas_por_guia: Dict[int, list] = {}
+    sueltos: list = []
+    for row in desp_all:
+        gid = row.get("guia_id")
+        if gid:
+            lineas_por_guia.setdefault(gid, []).append(row)
+        else:
+            sueltos.append(row)
+    guias = [{"guia": g, "lineas": lineas_por_guia.get(g["id"], [])} for g in guias_raw]
+    return guias, sueltos
+
+
 def guardar_despacho(fecha: date, data: dict, capturado_por: str, registro_id: Optional[int] = None) -> int:
     anio, semana = iso_anio_semana(fecha)
+    numero_doc = (data.get("numero_doc") or "").strip() or None
+    destino = (data.get("destino") or "").strip() or None
     conn = get_db_connection()
     cur = conn.cursor()
     vals = (
         fecha,
         anio,
         semana,
+        None,
         int(data["concepto_id"]),
         _dec(data.get("cantidad")),
+        numero_doc,
+        destino,
         (data.get("observaciones") or "").strip() or None,
         capturado_por,
     )
@@ -886,8 +913,8 @@ def guardar_despacho(fecha: date, data: dict, capturado_por: str, registro_id: O
         cur.execute(
             """
             UPDATE papaya_dia_despacho SET
-                anio=%s, semana_iso=%s, concepto_id=%s, cantidad=%s,
-                observaciones=%s, capturado_por=%s
+                anio=%s, semana_iso=%s, guia_id=%s, concepto_id=%s, cantidad=%s,
+                numero_doc=%s, destino=%s, observaciones=%s, capturado_por=%s
             WHERE id=%s
             """,
             vals[1:] + (registro_id,),
@@ -897,8 +924,9 @@ def guardar_despacho(fecha: date, data: dict, capturado_por: str, registro_id: O
         cur.execute(
             """
             INSERT INTO papaya_dia_despacho (
-                fecha, anio, semana_iso, concepto_id, cantidad, observaciones, capturado_por
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s)
+                fecha, anio, semana_iso, guia_id, concepto_id, cantidad,
+                numero_doc, destino, observaciones, capturado_por
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """,
             vals,
         )
@@ -906,6 +934,80 @@ def guardar_despacho(fecha: date, data: dict, capturado_por: str, registro_id: O
     conn.commit()
     conn.close()
     return rid
+
+
+def guardar_guia_despacho(
+    fecha: date,
+    guia_data: dict,
+    lineas: List[dict],
+    capturado_por: str,
+    guia_id: Optional[int] = None,
+) -> int:
+    """Cabecera + N líneas (AppSheet). Reemplaza líneas al editar guia_id existente."""
+    if not lineas:
+        raise ValueError("La guía debe tener al menos una línea de producto")
+    anio, semana = iso_anio_semana(fecha)
+    numero_doc = (guia_data.get("numero_doc") or "").strip() or None
+    destino = (guia_data.get("destino") or "").strip() or None
+    observaciones = (guia_data.get("observaciones") or "").strip() or None
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        if guia_id:
+            cur.execute(
+                """
+                UPDATE papaya_despacho_guia SET
+                    fecha=%s, anio=%s, semana_iso=%s,
+                    numero_doc=%s, destino=%s, observaciones=%s, capturado_por=%s
+                WHERE id=%s
+                """,
+                (fecha, anio, semana, numero_doc, destino, observaciones, capturado_por, guia_id),
+            )
+            cur.execute("DELETE FROM papaya_dia_despacho WHERE guia_id = %s", (guia_id,))
+        else:
+            cur.execute(
+                """
+                INSERT INTO papaya_despacho_guia (
+                    fecha, anio, semana_iso, numero_doc, destino, observaciones, capturado_por
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s)
+                """,
+                (fecha, anio, semana, numero_doc, destino, observaciones, capturado_por),
+            )
+            guia_id = cur.lastrowid
+
+        for line in lineas:
+            cur.execute(
+                """
+                INSERT INTO papaya_dia_despacho (
+                    fecha, anio, semana_iso, guia_id, concepto_id, cantidad, capturado_por
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s)
+                """,
+                (
+                    fecha,
+                    anio,
+                    semana,
+                    guia_id,
+                    int(line["concepto_id"]),
+                    _dec(line.get("cantidad")),
+                    capturado_por,
+                ),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    return guia_id
+
+
+def eliminar_guia_despacho(guia_id: int) -> None:
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM papaya_despacho_guia WHERE id = %s", (guia_id,))
+    conn.commit()
+    conn.close()
 
 
 def eliminar_transformacion(registro_id: int) -> None:

@@ -340,20 +340,41 @@ CREATE TABLE IF NOT EXISTS papaya_dia_transformacion (
     CONSTRAINT fk_papaya_transf_concepto FOREIGN KEY (concepto_id) REFERENCES papaya_conceptos (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS papaya_despacho_guia (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    fecha DATE NOT NULL,
+    anio SMALLINT NOT NULL,
+    semana_iso TINYINT UNSIGNED NOT NULL,
+    numero_doc VARCHAR(64) NULL DEFAULT NULL COMMENT 'N° guía / documento (opcional)',
+    destino VARCHAR(255) NULL DEFAULT NULL COMMENT 'Destino / cliente (opcional)',
+    observaciones VARCHAR(500) NULL DEFAULT NULL,
+    capturado_por VARCHAR(120) NULL DEFAULT NULL,
+    creado_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    actualizado_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_papaya_guia_fecha (fecha),
+    KEY idx_papaya_guia_semana (anio, semana_iso),
+    KEY idx_papaya_guia_numero (numero_doc)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS papaya_dia_despacho (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     fecha DATE NOT NULL,
     anio SMALLINT NOT NULL,
     semana_iso TINYINT UNSIGNED NOT NULL,
+    guia_id INT NULL DEFAULT NULL COMMENT 'FK guía; NULL = histórico / línea suelta',
     concepto_id INT NOT NULL COMMENT 'Terminado o intermedio (venta bulk directa/congelada)',
     cantidad DECIMAL(12,3) NOT NULL DEFAULT 0,
+    numero_doc VARCHAR(64) NULL DEFAULT NULL COMMENT 'Legacy línea suelta',
+    destino VARCHAR(255) NULL DEFAULT NULL COMMENT 'Legacy línea suelta',
     observaciones VARCHAR(500) NULL DEFAULT NULL,
     capturado_por VARCHAR(120) NULL DEFAULT NULL,
     creado_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
     actualizado_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     KEY idx_papaya_despacho_fecha (fecha),
     KEY idx_papaya_despacho_semana (anio, semana_iso),
+    KEY idx_papaya_despacho_guia (guia_id),
     KEY idx_papaya_despacho_concepto (concepto_id),
+    CONSTRAINT fk_papaya_despacho_guia FOREIGN KEY (guia_id) REFERENCES papaya_despacho_guia (id) ON DELETE CASCADE,
     CONSTRAINT fk_papaya_despacho_concepto FOREIGN KEY (concepto_id) REFERENCES papaya_conceptos (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -409,4 +430,49 @@ UPDATE papaya_cierre_stock SET tipo = 'inicial' WHERE es_manual = 1;
 
 -- Rollback:
 -- ALTER TABLE papaya_cierre_stock DROP COLUMN tipo;
+
+
+-- [2026-06-30] [IA] [fabrica_papaya.despacho_doc_destino]
+-- Motivo: Despachos — N° documento y destino opcionales (captura AppSheet; histórico sin backfill).
+-- Entorno probado: local
+-- SQL:
+
+ALTER TABLE papaya_dia_despacho
+ADD COLUMN numero_doc VARCHAR(64) NULL DEFAULT NULL COMMENT 'N° documento despacho (opcional)' AFTER cantidad,
+ADD COLUMN destino VARCHAR(255) NULL DEFAULT NULL COMMENT 'Destino / cliente (opcional)' AFTER numero_doc;
+
+-- Rollback:
+-- ALTER TABLE papaya_dia_despacho DROP COLUMN destino, DROP COLUMN numero_doc;
+
+
+-- [2026-06-30] [IA] [fabrica_papaya.despacho_guia]
+-- Motivo: Guía de despacho (cabecera) + líneas en papaya_dia_despacho (AppSheet).
+--         Histórico importado queda con guia_id NULL.
+-- Entorno probado: local
+-- SQL:
+
+CREATE TABLE IF NOT EXISTS papaya_despacho_guia (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    fecha DATE NOT NULL,
+    anio SMALLINT NOT NULL,
+    semana_iso TINYINT UNSIGNED NOT NULL,
+    numero_doc VARCHAR(64) NULL DEFAULT NULL COMMENT 'N° guía / documento (opcional)',
+    destino VARCHAR(255) NULL DEFAULT NULL COMMENT 'Destino / cliente (opcional)',
+    observaciones VARCHAR(500) NULL DEFAULT NULL,
+    capturado_por VARCHAR(120) NULL DEFAULT NULL,
+    creado_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    actualizado_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_papaya_guia_fecha (fecha),
+    KEY idx_papaya_guia_semana (anio, semana_iso),
+    KEY idx_papaya_guia_numero (numero_doc)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE papaya_dia_despacho
+ADD COLUMN guia_id INT NULL DEFAULT NULL COMMENT 'FK guía; NULL = histórico / línea suelta' AFTER semana_iso,
+ADD KEY idx_papaya_despacho_guia (guia_id),
+ADD CONSTRAINT fk_papaya_despacho_guia FOREIGN KEY (guia_id) REFERENCES papaya_despacho_guia (id) ON DELETE CASCADE;
+
+-- Rollback:
+-- ALTER TABLE papaya_dia_despacho DROP FOREIGN KEY fk_papaya_despacho_guia, DROP COLUMN guia_id;
+-- DROP TABLE IF EXISTS papaya_despacho_guia;
 
