@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block title %}Fábrica Papaya — Semana {{ semana }} / {{ anio }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <a href="{{ url_for('fabrica_papaya.informe_semanal', anio=prev_anio, semana=prev_semana) }}" class="btn btn-outline-danger btn-sm">◀</a>
+            <div class="text-center">
+                <h2 class="text-white mb-0">Semana {{ semana }} · {{ anio }}</h2>
+                <p class="text-secondary small mb-0">{{ informe.lun|ddmmaaaa }} — {{ informe.dom|ddmmaaaa }}</p>
+            </div>
+            <a href="{{ url_for('fabrica_papaya.informe_semanal', anio=next_anio, semana=next_semana) }}" class="btn btn-outline-danger btn-sm">▶</a>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{{ url_for('fabrica_papaya.informe_semanal') }}" class="btn btn-outline-light btn-sm">Semana actual</a>
+            <a href="{{ url_for('fabrica_papaya.informe_mensual', anio=anio, mes=informe.lun.month) }}" class="btn btn-outline-info btn-sm">Resumen mes</a>
+            <a href="{{ url_for('fabrica_papaya.stock_real', anio=anio, semana=semana) }}" class="btn btn-outline-info btn-sm">Stock real</a>
+            {% if puede_editar %}
+            <a href="{{ url_for('fabrica_papaya.cierre_stock') }}" class="btn btn-outline-warning btn-sm">Stock inicial / Ajuste</a>
+            {% endif %}
+            {% if puede_admin %}
+            <a href="{{ url_for('fabrica_papaya.conceptos') }}" class="btn btn-outline-warning btn-sm">Conceptos</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-body text-center">
+                    <div class="text-secondary small text-uppercase">Días con captura</div>
+                    <div class="fs-3 fw-bold text-white">{{ informe.dias_capturados }} / 7</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-body text-center">
+                    <div class="text-secondary small text-uppercase">Kg elaborados</div>
+                    <div class="fs-3 fw-bold text-white">{{ informe.tot_elab.kg_elaborados|metrico }} kg</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-body text-center">
+                    <div class="text-secondary small text-uppercase">Directa + partida cong.</div>
+                    <div class="fs-5 fw-bold text-warning">{{ informe.tot_elab.kg_directa|metrico }} + {{ informe.tot_elab.kg_congelada|metrico }} kg</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-body text-center">
+                    <div class="text-secondary small text-uppercase">Rendimiento pelador</div>
+                    <div class="fs-3 fw-bold text-info">
+                        {% if informe.rendimiento_semana_pct is not none %}{{ "%.1f"|format(informe.rendimiento_semana_pct) }}%{% else %}—{% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-black border-secondary mb-3">
+        <div class="card-header border-secondary text-white fw-bold">Materia prima — totales semana</div>
+        <div class="card-body">
+            <div class="row row-cols-2 row-cols-md-5 g-2 text-center small">
+                <div class="col"><span class="text-secondary d-block">Entrada huerto</span><strong>{{ informe.tot_mp.entrada_huerto_kg|metrico }} kg</strong></div>
+                <div class="col"><span class="text-secondary d-block">Entrada externa</span><strong>{{ informe.tot_mp.entrada_externa_kg|metrico }} kg</strong></div>
+                <div class="col"><span class="text-secondary d-block">A elaboración</span><strong>{{ informe.tot_mp.kg_a_elaboracion|metrico }} kg</strong></div>
+                <div class="col"><span class="text-secondary d-block">Descarte</span><strong>{{ informe.tot_mp.kg_descarte|metrico }} kg</strong></div>
+                <div class="col"><span class="text-secondary d-block">Venta calibre</span><strong>{{ informe.tot_mp.kg_venta_calibre|metrico }} kg</strong></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-black border-secondary mb-3">
+        <div class="card-header border-secondary text-white fw-bold">Calendario semanal</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-sm table-bordered mb-0 align-middle">
+                    <thead>
+                        <tr class="text-center small">
+                            <th>Día</th>
+                            <th>Fecha</th>
+                            <th>Entrada huerto</th>
+                            <th>Elaborados</th>
+                            <th>Directa</th>
+                            <th>Partida cong.</th>
+                            <th>Rend. pelador</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in informe.detalle_dias %}
+                        <tr class="{% if row.tiene_datos %}table-secondary bg-opacity-10{% endif %}">
+                            <td>{{ row.nombre_dia }}</td>
+                            <td>{{ row.fecha|ddmmaaaa }}</td>
+                            <td class="text-end">{% if row.mp %}{{ row.mp.entrada_huerto_kg|metrico }}{% else %}—{% endif %}</td>
+                            <td class="text-end">{% if row.elaboracion %}{{ row.elaboracion.kg_elaborados|metrico }}{% elif row.mp and row.mp.kg_a_elaboracion %}{{ row.mp.kg_a_elaboracion|metrico }}{% else %}—{% endif %}</td>
+                            <td class="text-end">{% if row.pelador.kg_utiles or row.pelador.kg_elaborados %}{{ row.pelador.kg_directa|metrico }}{% else %}—{% endif %}</td>
+                            <td class="text-end">{% if row.pelador.kg_utiles or row.pelador.kg_elaborados %}{{ row.pelador.kg_congelada|metrico }}{% else %}—{% endif %}</td>
+                            <td class="text-end">{% if row.rendimiento_pct is not none %}{{ "%.1f"|format(row.rendimiento_pct) }}%{% else %}—{% endif %}</td>
+                            <td class="text-center">
+                                <a href="{{ url_for('fabrica_papaya.ver_dia', fecha_str=row.fecha.isoformat()) }}" class="btn btn-sm btn-outline-light">Ver</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-6">
+            <div class="card bg-black border-secondary h-100">
+                <div class="card-header border-secondary text-white fw-bold">Producción terminados (semana)</div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-sm mb-0">
+                            <thead><tr><th>Producto</th><th class="text-end">Producido</th><th class="text-end">Despachado</th></tr></thead>
+                            <tbody>
+                                {% for p in informe.produccion_terminados %}
+                                <tr>
+                                    <td>{{ p.concepto.nombre }} <span class="text-secondary">({{ p.concepto.unidad }})</span></td>
+                                    <td class="text-end">{{ p.producido|metrico }}</td>
+                                    <td class="text-end">{{ p.despachado|metrico }}</td>
+                                </tr>
+                                {% else %}
+                                <tr><td colspan="3" class="text-secondary text-center">Sin productos terminados en catálogo</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card bg-black border-secondary h-100">
+                <div class="card-header border-secondary text-white fw-bold d-flex justify-content-between">
+                    <span>Propuesta stock al {{ informe.dom|ddmmaaaa }}</span>
+                    <a href="{{ url_for('fabrica_papaya.stock_real', anio=anio, semana=semana) }}" class="btn btn-sm btn-outline-info">Ingresar real</a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Concepto</th>
+                                    <th class="text-end">Propuesta</th>
+                                    <th class="text-end">Real</th>
+                                    <th class="text-end">Dif.</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for f in informe.filas_stock %}
+                                <tr class="{% if f.diferencia is not none and f.diferencia != 0 %}table-warning bg-opacity-10{% endif %}">
+                                    <td>{{ f.concepto.nombre }}</td>
+                                    <td class="text-end">{{ f.propuesta|metrico }}</td>
+                                    <td class="text-end">{% if f.real is not none %}{{ f.real|metrico }}{% else %}—{% endif %}</td>
+                                    <td class="text-end fw-bold">
+                                        {% if f.diferencia is not none %}{{ f.diferencia|metrico }}{% else %}—{% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <p class="text-secondary small mt-3 mb-0">
+        Transformación semana: {{ informe.cons_directa_kg|metrico }} kg directa · {{ informe.cons_congelada_kg|metrico }} kg congelada consumidos.
+        {% if not puede_editar %}Captura diaria vía AppSheet; correcciones solo supervisor/superusuario.{% endif %}
+    </p>
+</div>
+{% endblock %}

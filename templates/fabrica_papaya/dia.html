@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block title %}Fábrica Papaya — {{ fecha|ddmmaaaa }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div>
+            <h2 class="text-white mb-0">{{ fecha|ddmmaaaa }}</h2>
+            <p class="text-secondary small mb-0">Semana ISO {{ semana_iso }} · {{ anio_iso }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('fabrica_papaya.informe_semanal', anio=anio_iso, semana=semana_iso) }}" class="btn btn-outline-light btn-sm">← Informe semanal</a>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        {% for cod, st in d.stock_resumen.items() %}
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary">
+                <div class="card-body text-center py-2">
+                    <div class="text-secondary small">{{ st.nombre }}</div>
+                    <div class="fs-5 fw-bold text-white">{{ st.cantidad|metrico }} kg</div>
+                    <div class="text-muted" style="font-size:0.7rem;">Stock teórico al cierre del día</div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        {% if d.rendimiento_pct is not none %}
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary">
+                <div class="card-body text-center py-2">
+                    <div class="text-secondary small">Rendimiento pelador</div>
+                    <div class="fs-5 fw-bold text-info">{{ "%.1f"|format(d.rendimiento_pct) }}%</div>
+                    {% if d.pelador.kg_utiles %}
+                    <div class="text-muted" style="font-size:0.7rem;">
+                        Directa {{ d.pelador.kg_directa|metrico }} kg · Partida {{ d.pelador.kg_congelada|metrico }} kg
+                    </div>
+                    {% endif %}
+                    {% if d.kg_merma_elaboracion %}<div class="text-warning small">Merma implícita: {{ d.kg_merma_elaboracion|metrico }} kg</div>{% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {# --- Materia prima --- #}
+    <div class="card bg-black border-secondary mb-3">
+        <div class="card-header border-secondary text-white fw-bold">Materia prima</div>
+        <div class="card-body">
+            {% if puede_editar %}
+            <form method="post" action="{{ url_for('fabrica_papaya.guardar_mp', fecha_str=fecha.isoformat()) }}" class="row g-2">
+                <div class="col-md-4 col-lg-2">
+                    <label class="form-label small text-secondary">Entrada huerto (kg)</label>
+                    <input type="number" step="0.001" min="0" name="entrada_huerto_kg" class="form-control form-control-sm bg-dark text-white border-secondary"
+                           value="{{ d.mp.entrada_huerto_kg if d.mp else '' }}">
+                </div>
+                <div class="col-md-4 col-lg-2">
+                    <label class="form-label small text-secondary">Entrada externa (kg)</label>
+                    <input type="number" step="0.001" min="0" name="entrada_externa_kg" class="form-control form-control-sm bg-dark text-white border-secondary"
+                           value="{{ d.mp.entrada_externa_kg if d.mp else '' }}">
+                </div>
+                <div class="col-md-4 col-lg-2">
+                    <label class="form-label small text-secondary">Kg a elaboración</label>
+                    <input type="number" step="0.001" min="0" name="kg_a_elaboracion" class="form-control form-control-sm bg-dark text-white border-secondary"
+                           value="{{ d.mp.kg_a_elaboracion if d.mp else '' }}">
+                </div>
+                <div class="col-md-4 col-lg-2">
+                    <label class="form-label small text-secondary">Descarte (kg)</label>
+                    <input type="number" step="0.001" min="0" name="kg_descarte" class="form-control form-control-sm bg-dark text-white border-secondary"
+                           value="{{ d.mp.kg_descarte if d.mp else '' }}">
+                </div>
+                <div class="col-md-4 col-lg-2">
+                    <label class="form-label small text-secondary">Venta calibre (kg)</label>
+                    <input type="number" step="0.001" min="0" name="kg_venta_calibre" class="form-control form-control-sm bg-dark text-white border-secondary"
+                           value="{{ d.mp.kg_venta_calibre if d.mp else '' }}">
+                </div>
+                <div class="col-12 col-lg-4">
+                    <label class="form-label small text-secondary">Comentario descarte</label>
+                    <input type="text" name="comentario_descarte" maxlength="500" class="form-control form-control-sm bg-dark text-white border-secondary"
+                           value="{{ d.mp.comentario_descarte if d.mp and d.mp.comentario_descarte else '' }}">
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-danger btn-sm">Guardar MP</button>
+                </div>
+            </form>
+            {% elif d.mp %}
+            <div class="row small">
+                <div class="col">Entrada huerto: <strong>{{ d.mp.entrada_huerto_kg|metrico }}</strong> kg</div>
+                <div class="col">A elaboración: <strong>{{ d.mp.kg_a_elaboracion|metrico }}</strong> kg</div>
+                <div class="col">Descarte: <strong>{{ d.mp.kg_descarte|metrico }}</strong> kg {% if d.mp.comentario_descarte %}<em>({{ d.mp.comentario_descarte }})</em>{% endif %}</div>
+                <div class="col">Venta calibre: <strong>{{ d.mp.kg_venta_calibre|metrico }}</strong> kg</div>
+            </div>
+            {% else %}
+            <p class="text-secondary mb-0">Sin captura de materia prima.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    {# --- Elaboración --- #}
+    <div class="card bg-black border-secondary mb-3">
+        <div class="card-header border-secondary text-white fw-bold">Elaboración</div>
+        <div class="card-body">
+            {% if puede_editar %}
+            <form method="post" action="{{ url_for('fabrica_papaya.guardar_elaboracion', fecha_str=fecha.isoformat()) }}" class="row g-2">
+                <div class="col-md-3">
+                    <label class="form-label small text-secondary">Kg elaborados</label>
+                    <input type="number" step="0.001" min="0" name="kg_elaborados" class="form-control form-control-sm bg-dark text-white border-secondary"
+                           value="{{ d.elaboracion.kg_elaborados if d.elaboracion else '' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small text-secondary">Kg directa</label>
+                    <input type="number" step="0.001" min="0" name="kg_directa" class="form-control form-control-sm bg-dark text-white border-secondary"
+                           value="{{ d.elaboracion.kg_directa if d.elaboracion else '' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small text-secondary">Kg a congelar</label>
+                    <input type="number" step="0.001" min="0" name="kg_congelada" class="form-control form-control-sm bg-dark text-white border-secondary"
+                           value="{{ d.elaboracion.kg_congelada if d.elaboracion else '' }}">
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-danger btn-sm">Guardar elaboración</button>
+                </div>
+            </form>
+            {% elif d.elaboracion %}
+            <p class="mb-0 small">Elaborados <strong>{{ d.elaboracion.kg_elaborados|metrico }}</strong> kg · Directa <strong>{{ d.elaboracion.kg_directa|metrico }}</strong> · Congelada <strong>{{ d.elaboracion.kg_congelada|metrico }}</strong> kg</p>
+            {% else %}
+            <p class="text-secondary mb-0">Sin elaboración registrada.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    {# --- Transformación --- #}
+    <div class="card bg-black border-secondary mb-3">
+        <div class="card-header border-secondary text-white fw-bold">Transformación</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-sm mb-0">
+                    <thead><tr><th>Producto</th><th>Fuente</th><th class="text-end">Kg fuente</th><th class="text-end">Producido</th>{% if puede_editar %}<th></th>{% endif %}</tr></thead>
+                    <tbody>
+                        {% for t in d.transformaciones %}
+                        <tr>
+                            <td>{{ t.concepto_nombre }}</td>
+                            <td><span class="badge {% if t.fuente == 'directa' %}bg-warning text-dark{% else %}bg-info{% endif %}">{{ t.fuente }}</span></td>
+                            <td class="text-end">{{ t.kg_fuente|metrico }}</td>
+                            <td class="text-end">{{ t.cantidad_producida|metrico }} {{ t.unidad }}</td>
+                            {% if puede_editar %}
+                            <td class="text-end">
+                                <form method="post" action="{{ url_for('fabrica_papaya.borrar_transformacion', reg_id=t.id) }}" class="d-inline" onsubmit="return confirm('¿Eliminar?');">
+                                    <input type="hidden" name="fecha" value="{{ fecha.isoformat() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">×</button>
+                                </form>
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="5" class="text-secondary text-center">Sin transformaciones</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if puede_editar %}
+            <div class="card-body border-top border-secondary">
+                <form method="post" action="{{ url_for('fabrica_papaya.guardar_transformacion_route', fecha_str=fecha.isoformat()) }}" class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label small text-secondary">Producto</label>
+                        <select name="concepto_id" class="form-select form-select-sm bg-dark text-white border-secondary" required>
+                            <option value="">—</option>
+                            {% for p in d.terminados %}<option value="{{ p.id }}">{{ p.nombre }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small text-secondary">Fuente</label>
+                        <select name="fuente" class="form-select form-select-sm bg-dark text-white border-secondary" required>
+                            <option value="directa">Directa</option>
+                            <option value="congelada">Congelada</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small text-secondary">Kg fuente</label>
+                        <input type="number" step="0.001" min="0" name="kg_fuente" class="form-control form-control-sm bg-dark text-white border-secondary" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small text-secondary">Cant. producida</label>
+                        <input type="number" step="0.001" min="0" name="cantidad_producida" class="form-control form-control-sm bg-dark text-white border-secondary" required>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-danger btn-sm w-100">+ Línea</button>
+                    </div>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# --- Despacho --- #}
+    <div class="card bg-black border-secondary mb-4">
+        <div class="card-header border-secondary text-white fw-bold">Despacho / ventas</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-sm mb-0">
+                    <thead><tr><th>Concepto</th><th class="text-end">Cantidad</th>{% if puede_editar %}<th></th>{% endif %}</tr></thead>
+                    <tbody>
+                        {% for row in d.despachos %}
+                        <tr>
+                            <td>{{ row.concepto_nombre }} <span class="text-secondary">({{ row.unidad }})</span></td>
+                            <td class="text-end">{{ row.cantidad|metrico }}</td>
+                            {% if puede_editar %}
+                            <td class="text-end">
+                                <form method="post" action="{{ url_for('fabrica_papaya.borrar_despacho', reg_id=row.id) }}" class="d-inline" onsubmit="return confirm('¿Eliminar?');">
+                                    <input type="hidden" name="fecha" value="{{ fecha.isoformat() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">×</button>
+                                </form>
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="3" class="text-secondary text-center">Sin despachos</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if puede_editar %}
+            <div class="card-body border-top border-secondary">
+                <form method="post" action="{{ url_for('fabrica_papaya.guardar_despacho_route', fecha_str=fecha.isoformat()) }}" class="row g-2 align-items-end">
+                    <div class="col-md-6">
+                        <label class="form-label small text-secondary">Concepto</label>
+                        <select name="concepto_id" class="form-select form-select-sm bg-dark text-white border-secondary" required>
+                            <option value="">—</option>
+                            {% for p in d.conceptos_despacho %}<option value="{{ p.id }}">{{ p.nombre }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-secondary">Cantidad</label>
+                        <input type="number" step="0.001" min="0" name="cantidad" class="form-control form-control-sm bg-dark text-white border-secondary" required>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-danger btn-sm w-100">+ Despacho</button>
+                    </div>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

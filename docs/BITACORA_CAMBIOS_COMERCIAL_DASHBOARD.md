@@ -2,7 +2,63 @@
 
 **Objetivo:** registrar cambios recientes, reglas de negocio y **cómo trabajar en este repo** para que cualquier persona (o IA) que lea este archivo sepa **qué tocar**, **qué no romper** y **dónde seguir el hilo**.
 
-**Última actualización (contenido):** 2026-06-25 — Módulo **Buk**: nómina vigente + **Presencia hoy** (marcajes vía API Asistencia); sin persistencia MySQL.
+**Última actualización (contenido):** 2026-06-29 — Fábrica Papaya: rendimiento **pelador** alineado al Excel.
+
+---
+
+## Fábrica Papaya (`/fabrica-papaya`)
+
+**Objetivo:** control diario de MP, elaboración (directa/congelada), transformación y despacho; informe semanal con **propuesta de stock** vs stock real. Captura principal vía **AppSheet** sobre MySQL; web consulta y corrige (supervisor+).
+
+### Datos (MySQL)
+
+| Tabla | Rol |
+|--------|-----|
+| `papaya_conceptos` | Catálogo MP / intermedios / terminados; `producto_erp` opcional |
+| `papaya_cierre_stock` | Snapshot concreto al cierre del día: `tipo` **inicial** (arranque) o **ajuste** (corrección) |
+| `papaya_dia_mp` | 1 fila/día: entradas, elaboración, descarte + comentario, venta calibre |
+| `papaya_dia_elaboracion` | 1 fila/día: kg elaborados, directa, congelada, `rendimiento_pct` |
+| `papaya_dia_transformacion` | N filas/día: producto, fuente `directa`\|`congelada`, kg fuente, producido |
+| `papaya_dia_despacho` | N filas/día: despacho por concepto |
+| `papaya_semana_stock_real` | Conteo físico semanal (anio + semana_iso + concepto) |
+
+DDL: `docs/QUERY_CAMBIOS_PRODUCCION.sql` bloque `[2026-06-29] [fabrica_papaya]`.
+
+### Reglas
+
+- Semana **lun–dom**, **semana_iso ISO** (Chile).
+- Stock MP cierre = anterior + entradas − elaboración − descarte − venta calibre.
+- Intermedios: directa y congelada por separado; transformación consume fuente explícita.
+- **Rendimiento pelador (día)** = `(kg directa en bloques + partida congelada kg) / kg elaborados` — misma lógica que Excel fila 40 (filas 14+20+26+32+34 + fila 30). No incluye congelada consumida en néctar (fila 13). Se calcula en informes desde transformación (`metricas_pelador_dia`); **no** se mezcla con stock.
+- **Promedio semana/mes:** solo días con elaboración **y** kg útiles &gt; 0; días sin pelado no cuentan (no se promedia como 0%).
+- Propuesta stock domingo = simulación movimientos; snapshots **inicial/ajuste** reemplazan stock calculado al cierre de su fecha. Terminados: cierre + `cantidad_producida` − despacho. `kg_fuente` no descuenta intermedios (solo KPI pelador).
+- Transformación Excel por **bloques**: fila fuente (directa/congelada) → productos debajo; import reparte `kg_fuente` y **cantidad_producida** proporcional si hay dos fuentes el mismo día (evita duplicar unidades).
+
+### Rutas web
+
+| Ruta | Descripción |
+|------|-------------|
+| `GET /fabrica-papaya/semana` | Informe semanal (principal) |
+| `GET /fabrica-papaya/mes` | Resumen mensual + néctar por fuente/fecha |
+| `GET /fabrica-papaya/dia/<fecha>` | Detalle día (MP, elaboración, transformación, despacho) |
+| `POST …/mp`, `…/elaboracion`, `…/transformacion`, `…/despacho` | Corrección supervisor/superusuario |
+| `GET/POST /fabrica-papaya/stock-real` | Grilla stock real semanal |
+| `GET/POST /fabrica-papaya/conceptos` | Admin catálogo (superusuario) |
+| `GET/POST /fabrica-papaya/cierre-stock` | Stock inicial o ajuste por fecha (supervisor+ edita) |
+
+### Permisos y roles
+
+- Permiso: `fabrica_papaya` (menú **Fábrica Papaya**).
+- Roles default: `supervisor` y `digitador` (solo módulo papaya); edición web `supervisor` + `superusuario`.
+- AppSheet: mismas tablas MySQL; columnas `capturado_por`, `anio`, `semana_iso` para filtros.
+
+### Archivos
+
+`routes/fabrica_papaya_routes.py`, `utils/fabrica_papaya_service.py`, `utils/fabrica_papaya_semana.py`, `templates/fabrica_papaya/*`, `scripts/import_fabrica_papaya_excel.py` (carga histórica desde `docs/Inf. Sem. Fca. Papaya 2026.rev1.xlsx`).
+
+**Import Excel:** `python3 scripts/import_fabrica_papaya_excel.py --clear` — alternativa local al SQL de datos.
+
+**Producción:** `docs/QUERY_FABRICA_PAPAYA_PRODUCCION.sql` (DDL) + `docs/DATA_FABRICA_PAPAYA_IMPORT.sql` (datos). Regenerar datos: `python3 scripts/export_fabrica_papaya_sql.py`.
 
 ---
 

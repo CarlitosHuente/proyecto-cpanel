@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Conceptos — Fábrica Papaya{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between mb-3">
+        <h2 class="text-white mb-0">Catálogo de conceptos</h2>
+        <a href="{{ url_for('fabrica_papaya.informe_semanal') }}" class="btn btn-outline-light btn-sm">← Volver</a>
+    </div>
+
+    <div class="card bg-black border-secondary mb-4">
+        <div class="card-header border-secondary text-white">Nuevo concepto</div>
+        <div class="card-body">
+            <form method="post" class="row g-2">
+                <input type="hidden" name="accion" value="nuevo">
+                <div class="col-md-2">
+                    <input type="text" name="codigo" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="codigo" required>
+                </div>
+                <div class="col-md-3">
+                    <input type="text" name="nombre" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="Nombre visible" required>
+                </div>
+                <div class="col-md-2">
+                    <select name="tipo" class="form-select form-select-sm bg-dark text-white border-secondary" required>
+                        <option value="terminado">Terminado</option>
+                        <option value="intermedio">Intermedio</option>
+                        <option value="materia_prima">Materia prima</option>
+                        <option value="movimiento">Movimiento</option>
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <select name="unidad" class="form-select form-select-sm bg-dark text-white border-secondary">
+                        <option value="und">und</option>
+                        <option value="kg">kg</option>
+                        <option value="lt">lt</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <input type="text" name="producto_erp" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="Producto ERP">
+                </div>
+                <div class="col-md-1">
+                    <input type="number" name="orden" value="500" class="form-control form-control-sm bg-dark text-white border-secondary">
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-danger btn-sm w-100">Crear</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card bg-black border-secondary">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-sm mb-0">
+                    <thead><tr><th>Código</th><th>Nombre</th><th>Tipo</th><th>Unidad</th><th>ERP</th><th>Activo</th><th></th></tr></thead>
+                    <tbody>
+                        {% for c in conceptos %}
+                        <tr class="{% if not c.activo %}text-secondary{% endif %}">
+                            <td><code>{{ c.codigo }}</code></td>
+                            <td>{{ c.nombre }}</td>
+                            <td>{{ c.tipo }}</td>
+                            <td>{{ c.unidad }}</td>
+                            <td class="small">{{ c.producto_erp or '—' }}</td>
+                            <td>{% if c.activo %}Sí{% else %}No{% endif %}</td>
+                            <td>
+                                <form method="post" class="d-inline">
+                                    <input type="hidden" name="accion" value="toggle">
+                                    <input type="hidden" name="id" value="{{ c.id }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary">{% if c.activo %}Desactivar{% else %}Activar{% endif %}</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

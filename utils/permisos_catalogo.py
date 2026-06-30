@@ -111,6 +111,12 @@ CATALOGO: List[dict] = [
         "hijos": [],
     },
     {
+        "id": "fabrica_papaya",
+        "label": "Fábrica Papaya",
+        "desc": "Producción papaya: captura AppSheet, informe semanal y stock.",
+        "hijos": [],
+    },
+    {
         "id": "utilidades",
         "label": "Utilidades",
         "desc": "Calculadoras y herramientas de apoyo.",
@@ -168,6 +174,7 @@ PAGINAS_INICIO: List[dict] = [
     {"endpoint": "contab.comparativo", "label": "Comparativo Contable"},
     {"endpoint": "costeo.rentabilidad_gerencia", "label": "Rentabilidad Productos"},
     {"endpoint": "fabrica.calendario_produccion", "label": "Fábrica — Calendario"},
+    {"endpoint": "fabrica_papaya.informe_semanal", "label": "Fábrica Papaya — Informe semanal"},
     {"endpoint": "utilidades.calculadora_margen", "label": "Utilidades — Calculadoras"},
     {"endpoint": "config.usuarios", "label": "Config — Usuarios"},
     {"endpoint": "config.accesos", "label": "Config — Centro de Accesos"},

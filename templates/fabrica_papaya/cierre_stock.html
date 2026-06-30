@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Stock inicial y ajustes — Fábrica Papaya{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between mb-3 flex-wrap gap-2">
+        <div>
+            <h2 class="text-white mb-0">Stock inicial y ajustes</h2>
+            <p class="text-secondary small mb-0">
+                Registra un <strong>snapshot concreto</strong> al cierre del día que elijas.
+                Ese valor reemplaza el stock calculado desde el día siguiente (inicial) o en esa fecha (ajuste tras movimientos del día).
+            </p>
+        </div>
+        <a href="{{ url_for('fabrica_papaya.informe_semanal') }}" class="btn btn-outline-light btn-sm">← Volver</a>
+    </div>
+
+    <form method="post" class="card bg-black border-secondary mb-4">
+        <div class="card-header border-secondary">
+            <div class="row g-2 align-items-end">
+                <div class="col-auto">
+                    <label class="form-label small text-secondary mb-0">Fecha (cierre del día)</label>
+                    <input type="date" name="fecha" class="form-control form-control-sm bg-dark text-white border-secondary"
+                           value="{{ fecha_sel.isoformat() if fecha_sel else '' }}" required>
+                </div>
+                <div class="col-auto">
+                    <label class="form-label small text-secondary mb-0 d-block">Tipo</label>
+                    {% if puede_editar %}
+                    <div class="btn-group btn-group-sm" role="group">
+                        <input type="radio" class="btn-check" name="tipo" id="tipo_inicial" value="inicial"
+                               {% if tipo_sel != 'ajuste' %}checked{% endif %}>
+                        <label class="btn btn-outline-warning" for="tipo_inicial">Stock inicial</label>
+                        <input type="radio" class="btn-check" name="tipo" id="tipo_ajuste" value="ajuste"
+                               {% if tipo_sel == 'ajuste' %}checked{% endif %}>
+                        <label class="btn btn-outline-info" for="tipo_ajuste">Ajuste</label>
+                    </div>
+                    {% else %}
+                    <span class="badge {% if tipo_sel == 'ajuste' %}bg-info{% else %}bg-warning text-dark{% endif %}">
+                        {{ 'Ajuste' if tipo_sel == 'ajuste' else 'Stock inicial' }}
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-sm mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th>Concepto</th>
+                            <th class="text-end">Propuesta calculada*</th>
+                            <th class="text-end" style="min-width:140px">Stock concreto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in conceptos %}
+                        <tr>
+                            <td>{{ c.nombre }} <span class="text-secondary">({{ c.unidad }})</span></td>
+                            <td class="text-end text-secondary">
+                                {% if c.id in propuesta %}{{ propuesta[c.id]|metrico }}{% else %}—{% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if puede_editar %}
+                                <input type="number" step="0.001" name="cant_{{ c.id }}"
+                                       class="form-control form-control-sm bg-dark text-white border-secondary text-end ms-auto"
+                                       style="max-width:120px"
+                                       placeholder="—"
+                                       value="{% if c.id in actuales %}{{ actuales[c.id].cantidad }}{% endif %}">
+                                {% else %}
+                                {% if c.id in actuales %}{{ actuales[c.id].cantidad|metrico }}{% else %}—{% endif %}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer border-secondary">
+            <p class="small text-secondary mb-2">* Propuesta al cierre de la fecha elegida (sin incluir el snapshot que estás guardando).</p>
+            {% if puede_editar %}
+            <input type="text" name="notas" class="form-control form-control-sm bg-dark text-white border-secondary mb-2"
+                   placeholder="Notas (opcional)" value="{{ notas_sel or '' }}">
+            <button type="submit" class="btn btn-danger btn-sm">Guardar snapshot</button>
+            {% else %}
+            <p class="text-secondary small mb-0">Solo lectura. Captura vía AppSheet o solicita a supervisor.</p>
+            {% endif %}
+        </div>
+    </form>
+
+    <div class="card bg-dark border-secondary">
+        <div class="card-header border-secondary text-white small fw-bold">Registros guardados</div>
+        <ul class="list-group list-group-flush">
+            {% for h in historial %}
+            <li class="list-group-item bg-dark text-white border-secondary d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <a href="{{ url_for('fabrica_papaya.cierre_stock', fecha=h.fecha.isoformat() if h.fecha else '') }}" class="text-white fw-bold">{{ h.fecha|ddmmaaaa }}</a>
+                    {% if h.tipo == 'inicial' %}
+                    <span class="badge bg-warning text-dark ms-1">Inicial</span>
+                    {% else %}
+                    <span class="badge bg-info ms-1">Ajuste</span>
+                    {% endif %}
+                    <span class="text-secondary small ms-2">{{ h.n }} concepto(s)</span>
+                    {% if h.notas %}<span class="text-secondary small d-block">{{ h.notas }}</span>{% endif %}
+                </div>
+                {% if puede_editar %}
+                <form method="post" action="{{ url_for('fabrica_papaya.eliminar_snapshot') }}" class="d-inline"
+                      onsubmit="return confirm('¿Eliminar snapshot del {{ h.fecha|ddmmaaaa }}?');">
+                    <input type="hidden" name="fecha" value="{{ h.fecha.isoformat() if h.fecha else '' }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Eliminar</button>
+                </form>
+                {% endif %}
+            </li>
+            {% else %}
+            <li class="list-group-item bg-dark text-secondary">Sin snapshots registrados</li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endblock %}

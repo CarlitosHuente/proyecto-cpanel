@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Stock real — Semana {{ semana }} / {{ anio }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <a href="{{ url_for('fabrica_papaya.stock_real', anio=prev_anio, semana=prev_semana) }}" class="btn btn-outline-danger btn-sm">◀</a>
+            <div>
+                <h2 class="text-white mb-0">Stock real — Semana {{ semana }}</h2>
+                <p class="text-secondary small mb-0">{{ lun|ddmmaaaa }} — {{ dom|ddmmaaaa }}</p>
+            </div>
+            <a href="{{ url_for('fabrica_papaya.stock_real', anio=next_anio, semana=next_semana) }}" class="btn btn-outline-danger btn-sm">▶</a>
+        </div>
+        <a href="{{ url_for('fabrica_papaya.informe_semanal', anio=anio, semana=semana) }}" class="btn btn-outline-light btn-sm">Informe semanal</a>
+    </div>
+
+    <form method="post">
+        <div class="card bg-black border-secondary">
+            <div class="card-header border-secondary text-white fw-bold">Conteo físico al cierre de semana</div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-dark table-sm mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Concepto</th>
+                                <th class="text-end">Propuesta</th>
+                                <th class="text-end" style="min-width:140px">Stock real</th>
+                                <th class="text-end">Dif.</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for f in filas %}
+                            <tr>
+                                <td>{{ f.concepto.nombre }} <span class="text-secondary small">({{ f.concepto.unidad }})</span></td>
+                                <td class="text-end text-secondary">{{ f.propuesta|metrico }}</td>
+                                <td class="text-end">
+                                    {% if puede_editar %}
+                                    <input type="number" step="0.001" name="cant_{{ f.concepto.id }}"
+                                           class="form-control form-control-sm bg-dark text-white border-secondary text-end ms-auto"
+                                           style="max-width:120px"
+                                           value="{% if f.real is not none %}{{ f.real }}{% endif %}">
+                                    {% else %}
+                                    {% if f.real is not none %}{{ f.real|metrico }}{% else %}—{% endif %}
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    {% if f.real is not none %}
+                                    {% set dif = f.real - f.propuesta %}
+                                    <span class="{% if dif != 0 %}text-warning fw-bold{% endif %}">{{ dif|metrico }}</span>
+                                    {% else %}—{% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% if puede_editar %}
+            <div class="card-footer border-secondary">
+                <button type="submit" class="btn btn-danger btn-sm">Guardar stock real</button>
+            </div>
+            {% endif %}
+        </div>
+    </form>
+</div>
+{% endblock %}

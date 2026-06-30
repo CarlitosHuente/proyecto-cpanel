@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}Fábrica Papaya — {{ informe.mes_nombre }} {{ anio }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <a href="{{ url_for('fabrica_papaya.informe_mensual', anio=prev_anio, mes=prev_mes) }}" class="btn btn-outline-danger btn-sm">◀</a>
+            <div class="text-center">
+                <h2 class="text-white mb-0">{{ informe.mes_nombre }} {{ anio }}</h2>
+                <p class="text-secondary small mb-0">Resumen mensual · {{ informe.d_ini|ddmmaaaa }} — {{ informe.d_fin|ddmmaaaa }}</p>
+            </div>
+            <a href="{{ url_for('fabrica_papaya.informe_mensual', anio=next_anio, mes=next_mes) }}" class="btn btn-outline-danger btn-sm">▶</a>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{{ url_for('fabrica_papaya.informe_mensual') }}" class="btn btn-outline-light btn-sm">Mes actual</a>
+            <a href="{{ url_for('fabrica_papaya.informe_semanal') }}" class="btn btn-outline-info btn-sm">Vista semanal</a>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-body text-center">
+                    <div class="text-secondary small">Días con captura</div>
+                    <div class="fs-4 fw-bold text-white">{{ informe.dias_con_datos }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-body text-center">
+                    <div class="text-secondary small">Kg elaborados</div>
+                    <div class="fs-4 fw-bold text-white">{{ informe.tot_elab.kg_elaborados|metrico }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-body text-center">
+                    <div class="text-secondary small">Rendimiento pelador</div>
+                    <div class="fs-4 fw-bold text-info">
+                        {% if informe.rendimiento_mes_pct is not none %}{{ "%.1f"|format(informe.rendimiento_mes_pct) }}%{% else %}—{% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-body text-center">
+                    <div class="text-secondary small">Entrada huerto</div>
+                    <div class="fs-4 fw-bold text-white">{{ informe.tot_mp.entrada_huerto_kg|metrico }} kg</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-black border-secondary mb-3">
+        <div class="card-header border-secondary text-white fw-bold">Producción terminados (mes)</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-sm mb-0">
+                    <thead><tr><th>Producto</th><th class="text-end">Producido</th><th class="text-end">Despachado</th></tr></thead>
+                    <tbody>
+                        {% for p in informe.produccion_terminados %}
+                        {% if p.producido or p.despachado %}
+                        <tr>
+                            <td>{{ p.concepto.nombre }}</td>
+                            <td class="text-end">{{ p.producido|metrico }} {{ p.concepto.unidad }}</td>
+                            <td class="text-end">{{ p.despachado|metrico }} {{ p.concepto.unidad }}</td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-black border-secondary mb-3">
+        <div class="card-header border-secondary text-white fw-bold">Néctar — resumen por fuente (mes)</div>
+        <div class="card-body">
+            <div class="row g-3 mb-3 text-center">
+                <div class="col-md-4">
+                    <div class="text-secondary small">Con papaya directa</div>
+                    <div class="fw-bold text-warning">{{ informe.nectar_por_fuente.directa.unidades|metrico }} und</div>
+                    <div class="small text-secondary">{{ informe.nectar_por_fuente.directa.kg_fuente|metrico }} kg fuente · {{ informe.nectar_por_fuente.directa.registros }} reg.</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="text-secondary small">Con papaya congelada</div>
+                    <div class="fw-bold text-info">{{ informe.nectar_por_fuente.congelada.unidades|metrico }} und</div>
+                    <div class="small text-secondary">{{ informe.nectar_por_fuente.congelada.kg_fuente|metrico }} kg fuente · {{ informe.nectar_por_fuente.congelada.registros }} reg.</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="text-secondary small">Sin fuente registrada</div>
+                    <div class="fw-bold text-secondary">{{ informe.nectar_sin_fuente.unidades|metrico }} und</div>
+                    <div class="small text-muted">{{ informe.nectar_sin_fuente.registros }} reg. (import Excel u omisión kg)</div>
+                </div>
+            </div>
+            {% if informe.nectar_sin_fuente.registros > 0 %}
+            <p class="small text-warning mb-0">
+                Los registros «sin fuente» no permiten saber si fue directa o congelada. Corrige en el detalle del día o captura en AppSheet con fuente + kg.
+            </p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card bg-black border-secondary mb-4">
+        <div class="card-header border-secondary text-white fw-bold">Néctar — detalle por fecha y fuente</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-sm mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Producto</th>
+                            <th>Fuente</th>
+                            <th class="text-end">Kg fuente</th>
+                            <th class="text-end">Producido</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ln in informe.nectar_lineas %}
+                        <tr class="{% if ln.sin_kg_fuente %}table-secondary bg-opacity-10{% endif %}">
+                            <td>{{ ln.fecha|ddmmaaaa }}</td>
+                            <td>{{ ln.producto }}</td>
+                            <td>
+                                {% if ln.sin_kg_fuente %}
+                                <span class="text-secondary">—</span>
+                                {% else %}
+                                <span class="badge {% if ln.fuente == 'directa' %}bg-warning text-dark{% else %}bg-info{% endif %}">{{ ln.fuente }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">{% if ln.sin_kg_fuente %}—{% else %}{{ ln.kg_fuente|metrico }}{% endif %}</td>
+                            <td class="text-end">{{ ln.cantidad|metrico }} {{ ln.unidad }}</td>
+                            <td><a href="{{ url_for('fabrica_papaya.ver_dia', fecha_str=ln.fecha.isoformat()) }}" class="btn btn-sm btn-outline-light">Día</a></td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="6" class="text-secondary text-center">Sin producción de néctar este mes</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

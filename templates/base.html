@@ -304,6 +304,12 @@
             <span class="texto-menu">Fábrica Empanadas</span>
         </a>
         {% endif %}
+
+        {% if tiene_permiso(rol_actual, 'fabrica_papaya') %}
+        <a href="{{ url_for('fabrica_papaya.informe_semanal') }}">
+            <span class="texto-menu">Fábrica Papaya</span>
+        </a>
+        {% endif %}
         
         {% if tiene_permiso(session.get('rol'), 'utilidades') %}
         <div class="dropdown">
