@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Buk — Encuesta Capacitación{% endblock %}
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <h2 class="text-white mb-1"><i class="bi bi-clipboard-check text-info me-2"></i>Encuesta — Capacitación (POC)</h2>
+            <p class="text-muted mb-0">5 respuestas + RUT → PDF en carpeta <strong>Capacitacion</strong> en Buk → firma del colaborador en portal Buk.</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{{ url_for('buk.index') }}" class="btn btn-outline-secondary btn-sm">Nómina</a>
+            <a href="{{ url_for('buk.presencia') }}" class="btn btn-outline-secondary btn-sm">Presencia</a>
+        </div>
+    </div>
+
+    {% if resultado and resultado.ok %}
+    <div class="alert alert-success">
+        <strong>Encuesta enviada a Buk.</strong>
+        Colaborador: {{ resultado.empleado.full_name }} ({{ resultado.empleado.rut }}).
+        Archivo: <code>{{ resultado.upload.filename }}</code>
+        en carpeta <code>{{ resultado.upload.carpeta }}</code>.
+        {% if resultado.upload.requiere_firma_empleado %}
+        <br>El trabajador debe <strong>firmar en Buk</strong> (app o portal). ID archivo: {{ resultado.upload.file_id }}.
+        {% if resultado.upload.notificacion %}
+            {% if resultado.upload.notificacion.ok %}
+        <br><span class="text-success"><i class="bi bi-bell-fill me-1"></i>
+            Aviso enviado vía {% if resultado.upload.notificacion.canal == 'buk_api' %}Buk{% else %}correo Huente{% endif %}
+            {% if resultado.upload.notificacion.detalle and resultado.upload.notificacion.detalle.destino %}
+            → {{ resultado.upload.notificacion.detalle.destino }}
+            {% endif %}
+        </span>
+            {% else %}
+        <br><span class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>
+            {{ resultado.upload.notificacion.error }}
+            {% if resultado.upload.notificacion.detalle and resultado.upload.notificacion.detalle.portal_buk %}
+            <a href="{{ resultado.upload.notificacion.detalle.portal_buk }}" class="alert-link" target="_blank" rel="noopener">Abrir Buk</a>
+            y use la campana «Notificar» si no llegó el correo.
+            {% endif %}
+        </span>
+            {% endif %}
+        {% endif %}
+        {% endif %}
+    </div>
+    {% elif resultado and resultado.error %}
+    <div class="alert alert-danger">{{ resultado.error }}</div>
+    {% endif %}
+
+    <div class="row g-3">
+        <div class="col-lg-7">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header border-secondary text-white">Formulario de prueba</div>
+                <div class="card-body">
+                    <form method="post" action="{{ url_for('buk.encuestas') }}" id="formEncuesta">
+                        <div class="mb-3">
+                            <label class="form-label text-white-50" for="rut">RUT colaborador</label>
+                            <input type="text" class="form-control bg-black text-white border-secondary" name="rut" id="rut"
+                                required placeholder="12.345.678-9" value="{{ form.rut if form else '' }}">
+                            <div class="form-text text-muted">Solo identificación; validación estricta más adelante.</div>
+                        </div>
+                        {% for key, label in campos %}
+                        <div class="mb-3">
+                            <label class="form-label text-white-50" for="{{ key }}">{{ label }}</label>
+                            <textarea class="form-control bg-black text-white border-secondary" name="{{ key }}" id="{{ key }}"
+                                rows="2" required placeholder="Respuesta">{{ form[key] if form and form.get(key) else '' }}</textarea>
+                        </div>
+                        {% endfor %}
+                        <button type="submit" class="btn btn-info w-100">
+                            <i class="bi bi-cloud-upload me-1"></i> Generar PDF y enviar a Buk
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-header border-secondary text-white">Flujo</div>
+                <div class="card-body small text-white-50">
+                    <ol class="mb-0 ps-3">
+                        <li class="mb-2">Se busca el RUT entre colaboradores <em>vigentes</em> en Buk.</li>
+                        <li class="mb-2">Se genera un PDF con las 5 respuestas.</li>
+                        <li class="mb-2">Se sube a la ficha del colaborador (carpeta <code>Capacitacion</code>).</li>
+                        <li>Se solicita firma electrónica del colaborador en Buk.</li>
+                        <li>Se intenta <strong>notificar</strong> al firmar (flujo automático + API Buk; respaldo SMTP si está configurado).</li>
+                    </ol>
+                    <hr class="border-secondary">
+                    <p class="mb-0">Nada se guarda en MySQL Huente. Token Buk debe tener permiso de <strong>documentos</strong> (lectura y modificación).</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Buk — Asistencia / Presencia{% endblock %}
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <h2 class="text-white mb-1"><i class="bi bi-clock-history text-info me-2"></i>Asistencia — Marcajes</h2>
+            <p class="text-muted mb-0">Vigentes + estado del día ({{ resultado.fecha }}). Fuente: API Buk Asistencia.</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap align-items-center">
+            <form method="get" class="d-flex gap-2 align-items-center" action="{{ url_for('buk.asistencia') }}">
+                <label class="text-white-50 small mb-0" for="fecha">Fecha</label>
+                <input type="date" name="fecha" id="fecha" class="form-control form-control-sm bg-black text-white border-secondary"
+                    value="{{ request.args.get('fecha') or '' }}">
+                <button type="submit" class="btn btn-outline-light btn-sm">Ir</button>
+            </form>
+            <a href="{{ url_for('buk.ausencias') }}" class="btn btn-outline-warning btn-sm">Ausencias mes</a>
+            <a href="{{ url_for('buk.index') }}" class="btn btn-outline-secondary btn-sm">Nómina</a>
+            <button type="button" class="btn btn-outline-info btn-sm" onclick="location.reload()">
+                <i class="bi bi-arrow-clockwise me-1"></i> Refrescar
+            </button>
+        </div>
+    </div>
+
+    {% for w in resultado.warnings or [] %}
+    <div class="alert alert-warning py-2 small">{{ w }}</div>
+    {% endfor %}
+
+    {% if resultado.error %}
+    <div class="alert alert-danger py-2">{{ resultado.error }}</div>
+    {% endif %}
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary text-center">
+                <div class="card-body">
+                    <div class="display-6 text-white">{{ resultado.total or 0 }}</div>
+                    <div class="text-muted small">Vigentes</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary text-center">
+                <div class="card-body">
+                    <div class="display-6 text-success">{{ resultado.trabajando or 0 }}</div>
+                    <div class="text-muted small">Trabajando ahora</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary text-center">
+                <div class="card-body">
+                    <div class="display-6 text-info">
+                        {% if resultado.asistencia_ok %}{{ resultado.con_marca or 0 }}{% else %}—{% endif %}
+                    </div>
+                    <div class="text-muted small">Con marca hoy</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary text-center">
+                <div class="card-body">
+                    {% if resultado.asistencia_config.token_configurado %}
+                    <span class="badge bg-success mt-3">Token Asistencia OK</span>
+                    {% else %}
+                    <span class="badge bg-warning text-dark mt-3">Falta BUK_ASISTENCIA_TOKEN</span>
+                    {% endif %}
+                    <div class="text-muted small mt-2">Marcajes del día</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary">
+        <div class="card-header border-secondary d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <span class="text-white">Reporte — vigentes + presencia</span>
+            <div class="d-flex gap-2 align-items-center">
+                <label class="text-white-50 small mb-0" for="filtroEstado">Filtrar</label>
+                <select id="filtroEstado" class="form-select form-select-sm bg-black text-white border-secondary" style="width:auto;">
+                    <option value="">Todos</option>
+                    <option value="Trabajando">Trabajando</option>
+                    <option value="Jornada cerrada">Jornada cerrada</option>
+                    <option value="Sin marca hoy">Sin marca hoy</option>
+                </select>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-dark table-hover table-sm mb-0 align-middle">
+                <thead>
+                    <tr class="text-white-50">
+                        <th>Nombre</th>
+                        <th>RUT</th>
+                        <th>Cargo</th>
+                        <th>Recinto asignado</th>
+                        <th>Estado presencia</th>
+                        <th>Sucursal marcaje</th>
+                        <th>Entrada</th>
+                        <th>Salida</th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyPresencia">
+                    {% for f in resultado.filas %}
+                    <tr data-estado="{{ f.estado_presencia or '' }}">
+                        <td class="fw-semibold">{{ f.full_name or '—' }}</td>
+                        <td>{{ f.rut or '—' }}</td>
+                        <td>{{ f.cargo or '—' }}</td>
+                        <td>{{ f.recinto_nombre or f.recinto_codigo or '—' }}</td>
+                        <td>
+                            {% if f.estado_presencia == 'Trabajando' %}
+                            <span class="badge bg-success">{{ f.estado_presencia }}</span>
+                            {% elif f.estado_presencia == 'Sin marca hoy' %}
+                            <span class="badge bg-secondary">{{ f.estado_presencia }}</span>
+                            {% elif f.estado_presencia == 'Jornada cerrada' %}
+                            <span class="badge bg-info text-dark">{{ f.estado_presencia }}</span>
+                            {% else %}
+                            <span class="badge bg-outline-light border text-white-50">{{ f.estado_presencia }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ f.recinto_marca or '—' }}</td>
+                        <td>{{ f.hora_entrada or '—' }}</td>
+                        <td>{{ f.hora_salida or '—' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="8" class="text-center text-muted py-4">Sin datos.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    var sel = document.getElementById('filtroEstado');
+    var rows = document.querySelectorAll('#tbodyPresencia tr[data-estado]');
+    if (!sel || !rows.length) return;
+    sel.addEventListener('change', function () {
+        var v = sel.value;
+        rows.forEach(function (tr) {
+            tr.style.display = (!v || tr.getAttribute('data-estado') === v) ? '' : 'none';
+        });
+    });
+})();
+</script>
+{% endblock %}

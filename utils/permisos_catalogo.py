@@ -66,6 +66,12 @@ CATALOGO: List[dict] = [
         "hijos": [],
     },
     {
+        "id": "buk",
+        "label": "Buk (RRHH)",
+        "desc": "Consulta en vivo de colaboradores vigentes desde Buk. Solo lectura.",
+        "hijos": [],
+    },
+    {
         "id": "flujo",
         "label": "Finanzas / Tesorería",
         "desc": "Flujo de caja y pagos.",
@@ -154,6 +160,9 @@ PAGINAS_INICIO: List[dict] = [
     {"endpoint": "sucursales.pizarra", "label": "Sucursales / Pedidos"},
     {"endpoint": "arqueo_caja.index", "label": "Arqueo de Caja"},
     {"endpoint": "despacho_web.index", "label": "DespachoWeb"},
+    {"endpoint": "buk.asistencia", "label": "Buk — Asistencia / Marcajes"},
+    {"endpoint": "buk.ausencias", "label": "Buk — Ausencias mensuales"},
+    {"endpoint": "buk.encuestas", "label": "Buk — Encuestas Capacitación"},
     {"endpoint": "finanzas.flujo", "label": "Flujo de Caja"},
     {"endpoint": "contab.dashboard_gestion", "label": "Informe Gerencial"},
     {"endpoint": "contab.comparativo", "label": "Comparativo Contable"},

@@ -24,5 +24,5 @@ alwaysApply: true
 ## Flujo de trabajo (IA y equipo)
 
 1. **Alinear antes de implementar:** en cambios de negocio, alcance ambiguo o varias opciones válidas, proponer enfoque (archivos, riesgos, impacto en BD) y acordar **antes** de escribir código extenso.
-2. **Pruebas y comandos:** ejecutar pruebas locales, scripts y lectura de archivos **sin pedir permiso** al usuario para “poder correr comandos”; asumir entorno de desarrollo real según reglas del proyecto.
+2. **Pruebas y comandos:** ejecutar pruebas locales, scripts, lint y lectura de archivos **sin pedir permiso ni esperar que el usuario pulse RUN** en cada paso; asumir entorno de desarrollo real. El usuario no debe autorizar comando por comando salvo acciones destructivas o despliegue a producción.
 3. Tras cambios de comportamiento visible, actualizar **`docs/BITACORA_CAMBIOS_COMERCIAL_DASHBOARD.md`** (secciones relevantes) y subir `?v=` en templates que enlazan JS tocado.

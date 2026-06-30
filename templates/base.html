@@ -256,6 +256,12 @@
         </a>
         {% endif %}
 
+        {% if tiene_permiso(session.get('rol'), 'buk') %}
+        <a href="{{ url_for('buk.index') }}">
+            <span class="texto-menu">Buk</span>
+        </a>
+        {% endif %}
+
         {% if tiene_permiso(session.get('rol'), 'flujo') %}
         <div class="dropdown">
             <a class="dropdown-toggle d-block px-3 py-2 text-white" href="#" role="button" id="finanzasDropdown" data-bs-toggle="dropdown" aria-expanded="false">

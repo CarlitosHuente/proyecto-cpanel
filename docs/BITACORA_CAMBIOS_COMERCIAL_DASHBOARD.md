@@ -2,7 +2,56 @@
 
 **Objetivo:** registrar cambios recientes, reglas de negocio y **cómo trabajar en este repo** para que cualquier persona (o IA) que lea este archivo sepa **qué tocar**, **qué no romper** y **dónde seguir el hilo**.
 
-**Última actualización (contenido):** 2026-06-23 — Histórico de Productos: KPIs y tabla mensual alineados a **mismas semanas** que las cards; mes parcial/futuro con proyección en tooltip (mes completo año anterior).
+**Última actualización (contenido):** 2026-06-25 — Módulo **Buk**: nómina vigente + **Presencia hoy** (marcajes vía API Asistencia); sin persistencia MySQL.
+
+---
+
+## Buk (RRHH + Asistencia — solo lectura)
+
+| Pieza | Rol |
+|--------|-----|
+| `utils/env_config.py` | Config central `.env`: `DB_*`, `BUK_*`, `BUK_ASISTENCIA_*`. |
+| `utils/buk_api.py` | Buk RRHH: `GET /employees/active`, `/areas`, `/recintos`. |
+| `utils/buk_asistencia_api.py` | Buk Asistencia: `GET /v2/asistencia-empresa`, `/informacionRecinto`. |
+| `utils/buk_presencia.py` | Cruce nómina vigente + marcaje del día (por RUT). |
+| `routes/buk_routes.py` | `/buk`, `/buk/asistencia`, `/buk/presencia`, APIs JSON. |
+| `templates/buk/presencia.html` | Reporte: estado presencia, sucursal marcaje, hora entrada/salida (hora CL). |
+
+**Variables `.env`:**
+
+| Variable | API |
+|----------|-----|
+| `BUK_TENANT`, `BUK_AUTH_TOKEN` | RRHH (`huentelauquen.buk.cl/api/v1/chile`) |
+| `BUK_ASISTENCIA_TOKEN` | Asistencia ([doc SAC](https://supportcenter.buk.cl/hc/es-419/articles/50240904785051-APIs-de-Buk-Asistencia); **token distinto** al RRHH) |
+| `BUK_ASISTENCIA_API_BASE` | Default `https://app.ctrlit.cl/ctrl/api` |
+
+**Estados presencia (con token Asistencia):** `Trabajando` (entrada sin salida), `Jornada cerrada`, `Sin marca hoy`. Sin token Asistencia: solo contrato `activo` + recinto asignado (`ctrlit_recinto`).
+
+**Consultas por código/ID, no por nombre:** `area_id`, `code_recinto`, `rut`; nombres se resuelven cruzando catálogos.
+
+**Reglas:** no guarda en Huente; horas de marcaje UTC → `America/Santiago` en pantalla.
+
+### Encuestas Capacitación (POC)
+
+| Pieza | Rol |
+|--------|-----|
+| `utils/buk_encuesta_pdf.py` | Genera PDF con 5 respuestas (reportlab). |
+| `utils/buk_documentos.py` | Busca vigente por RUT; `POST /employees/{id}/docs` con firma empleado. |
+| `utils/buk_notificacion.py` | Tras subida: flujo automático + notify API / SMTP. |
+| `/buk/encuestas` | Formulario admin: RUT + 5 campos → PDF → carpeta `Capacitacion` en Buk. |
+
+### Asistencia — ausencias mensuales
+
+| Pieza | Rol |
+|--------|-----|
+| `utils/buk_ausencias.py` | Reporte mensual: días sin marcaje vs nómina vigente. |
+| `/buk/ausencias` | Selector mes → ausencias por colaborador (lista de días sin entrada). |
+
+**Ausencias:** día calendario del mes (hasta hoy si es el mes en curso) sin `entrada` en `v2/asistencia-empresa`. Cruce por RUT normalizado.
+
+Carpeta Buk: env `BUK_ENCUESTA_CARPETA` (default `Capacitacion`). Token RRHH con permiso **documentos** (modificación). Firma la completa el colaborador en portal Buk.
+
+**Notificación al subir:** `BUK_INICIAR_FLUJO_AUTOMATICO` y `BUK_NOTIFICAR_TRAS_SUBIDA` (default true). La API pública de Buk **no expone** el botón «Notificar» (campana); si no llega correo de Buk, usar campana en UI o `SMTP_*` en `.env`. Script: `python3 scripts/probar_buk_notificacion.py`.
 
 ---
 
@@ -51,7 +100,7 @@
 2. **Propuesta:** resumir en pocas líneas o bullets el enfoque (archivos, rutas, riesgos, si hace falta SQL en `QUERY_CAMBIOS_PRODUCCION.sql`). Conviene que el dueño del negocio o quien pide el cambio **valide** antes de implementar.
 3. **Implementación:** recién ahí commits acotados + actualizar esta bitácora si cambia comportamiento documentado.
 
-**Sobre “pedir permiso” para ejecutar:** en este proyecto el agente **no** necesita autorización explícita del usuario para correr comandos de comprobación (tests, `DESCRIBE`, lint, etc.) en el entorno de desarrollo; sí debe **alinear el enfoque** (puntos 1–2) cuando el alcance o el criterio de negocio no esté claro, para no implementar a ciegas.
+**Sobre “pedir permiso” / botón RUN:** en desarrollo, la IA y el agente **ejecutan solos** pruebas, scripts, lint y consultas de verificación **sin pedir autorización paso a paso**. Solo se alinea el enfoque cuando el alcance de negocio no está claro. El usuario no debe pulsar RUN en cada comando intermedio.
 
 **Operativo (siempre, también en cambios pequeños):**
 
@@ -299,7 +348,9 @@ Rutas con `@permiso_modulo("arqueo_caja")` (detalle de roles según tu `utils/au
 
 ## M-bis. Módulo DespachoWeb (`/despacho-web`) — 2026-05-28
 
-**Objetivo:** carga de facturas PDF tienda web Huentelauquen (máx. 5), validación split-screen (PDF | formulario), persistencia en MySQL para AppSheet (sin Google Sheets). AppSheet solo visualiza; la carga es 100 % web.
+**Objetivo:** carga de facturas PDF tienda web Huentelauquen, validación split-screen (PDF | formulario), persistencia en MySQL para AppSheet (sin Google Sheets). AppSheet solo visualiza; la carga es 100 % web.
+
+**Dos modos de carga:** unitario (1–5 PDFs) y masivo (1 PDF multipágina, máx. 100 hojas).
 
 ### Datos (MySQL)
 
@@ -325,7 +376,7 @@ DDL: `docs/QUERY_CAMBIOS_PRODUCCION.sql` bloque `[2026-05-28] [despacho_web]`.
 | `GET /despacho-web/resumen-productos/exportar` | Excel: hojas Resumen, Detalle_lineas y Filtros. |
 | `POST /despacho-web/procesar-masivo` | PDF multipágina (máx. 100 hojas): split por página, resumen previo. |
 | `GET /despacho-web/resumen-lote/<batch>` | Tabla resumen antes de validar lote masivo. |
-| `GET /despacho-web/ordenes/<n>/imprimir` | HTML imprimible tipo factura Huentelauquen (`window.print()`). |
+| `GET /despacho-web/ordenes/<n>/imprimir` | Comprobante HTML imprimible (`window.print()` / Guardar PDF del navegador). |
 
 ### Carga PDF (dos modos)
 
@@ -335,6 +386,17 @@ DDL: `docs/QUERY_CAMBIOS_PRODUCCION.sql` bloque `[2026-05-28] [despacho_web]`.
 | **B — masivo** | 1 PDF multipágina | Resumen lote → validación una por una → respaldo PDF original al cerrar lote. |
 
 Parser mejorado para variantes «Enviar a:» en cabecera (PDF masivo). Siempre revisión humana; no auto-guardado.
+
+### Impresión de pedido (HTML)
+
+- Ruta `GET /despacho-web/ordenes/<n>/imprimir`; botones en index (bandeja), administrar órdenes y editar orden.
+- Plantilla `templates/despacho_web/imprimir_factura.html` — comprobante **operacional** (no DTE SII): logo (`static/img/logo.png`), recuadro rojo con **N° pedido**, paneles «Datos del cliente» / «Información del pedido», tabla con bordes y totales.
+- Lógica en `utils/despacho_web_imprimir.py`: separa productos de envío, oculta envío en $0, evita comuna duplicada si coincide con dirección.
+- Nota al pie: no reemplaza boleta/factura electrónica del SII cuando corresponda.
+
+### Despliegue (prod)
+
+Tras `git pull`, ejecutar `pip install -r requirements.txt` (dependencia nueva **`pypdf`** para modo masivo) y reiniciar WSGI/Passenger. Sin cambios SQL adicionales respecto al bloque `[despacho_web]` inicial.
 
 ### Reglas
 

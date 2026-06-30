@@ -23,7 +23,7 @@ DEFAULT_PERMISOS: Dict[str, List[str]] = {
     "admin": [
         "dashboard", "ventas", "clientes", "seremi", "contab", "reporte",
         "sucursales", "productos", "categorias", "agricola", "utilidades",
-        "arqueo_caja", "despacho_web", "fabrica", "flujo", "config",
+        "arqueo_caja", "despacho_web", "buk", "fabrica", "flujo", "config",
     ],
     "ventas": ["dashboard", "ventas", "clientes", "utilidades"],
     "seremi2": ["seremi"],

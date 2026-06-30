@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+{% block title %}Buk — Colaboradores vigentes{% endblock %}
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <h2 class="text-white mb-1"><i class="bi bi-people-fill text-info me-2"></i>Buk</h2>
+            <p class="text-muted mb-0">Consulta en vivo de trabajadores vigentes. Solo lectura; no se guarda nada en Huente.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('buk.asistencia') }}" class="btn btn-outline-info btn-sm">
+                <i class="bi bi-clock-history me-1"></i> Asistencia hoy
+            </a>
+            <a href="{{ url_for('buk.ausencias') }}" class="btn btn-outline-warning btn-sm">
+                <i class="bi bi-calendar-x me-1"></i> Ausencias mes
+            </a>
+            <a href="{{ url_for('buk.encuestas') }}" class="btn btn-outline-info btn-sm">
+                <i class="bi bi-clipboard-check me-1"></i> Encuestas
+            </a>
+            <button type="button" class="btn btn-outline-info btn-sm" id="btnRefrescar">
+                <i class="bi bi-arrow-clockwise me-1"></i> Refrescar
+            </button>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-lg-4">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-header border-secondary text-white">Conexión</div>
+                <div class="card-body small">
+                    {% if resultado.ok %}
+                    <div class="alert alert-success py-2 mb-2">
+                        <i class="bi bi-check-circle me-1"></i> Conectado a Buk
+                    </div>
+                    {% else %}
+                    <div class="alert alert-danger py-2 mb-2">
+                        <i class="bi bi-x-circle me-1"></i> {{ resultado.error or 'No se pudo conectar' }}
+                    </div>
+                    {% endif %}
+                    <dl class="mb-0 text-white-50">
+                        <dt class="text-white-50">Tenant</dt>
+                        <dd class="text-white">{{ resultado.config.tenant }}.buk.cl</dd>
+                        <dt class="text-white-50">API base</dt>
+                        <dd class="text-break"><code class="text-info">{{ resultado.config.base_url }}</code></dd>
+                        <dt class="text-white-50">Token</dt>
+                        <dd>
+                            {% if resultado.config.token_configurado %}
+                            <span class="badge bg-success">Configurado</span>
+                            {% else %}
+                            <span class="badge bg-warning text-dark">Falta BUK_AUTH_TOKEN en .env</span>
+                            {% endif %}
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-8">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-header border-secondary text-white">Resumen</div>
+                <div class="card-body">
+                    <div class="row text-center g-3">
+                        <div class="col-md-4">
+                            <div class="display-6 text-white" id="kpiPagina">{{ resultado.empleados|length }}</div>
+                            <div class="text-muted small">En esta página</div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="display-6 text-info" id="kpiTotal">{{ resultado.pagination.count or '—' }}</div>
+                            <div class="text-muted small">Registros (pág. actual)</div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="display-6 text-white" id="kpiPages">{{ resultado.pagination.total_pages or '—' }}</div>
+                            <div class="text-muted small">Total páginas</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary">
+        <div class="card-header border-secondary d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <span class="text-white">Trabajadores vigentes</span>
+            <div class="d-flex align-items-center gap-2">
+                <label class="text-white-50 small mb-0" for="selPageSize">Por página</label>
+                <select id="selPageSize" class="form-select form-select-sm bg-black text-white border-secondary" style="width:auto">
+                    <option value="25" {% if page_size == 25 %}selected{% endif %}>25</option>
+                    <option value="50" {% if page_size == 50 %}selected{% endif %}>50</option>
+                    <option value="100" {% if page_size == 100 %}selected{% endif %}>100</option>
+                </select>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-dark table-hover table-sm mb-0 align-middle" id="tblEmpleados">
+                <thead>
+                    <tr class="text-white-50">
+                        <th>Ficha</th>
+                        <th>Nombre</th>
+                        <th>RUT</th>
+                        <th>Email</th>
+                        <th>Cargo</th>
+                        <th>Centro costo</th>
+                        <th>Estado</th>
+                        <th>Desde</th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyEmpleados">
+                    {% if resultado.empleados %}
+                        {% for e in resultado.empleados %}
+                        <tr>
+                            <td>{{ e.code_sheet or '—' }}</td>
+                            <td class="fw-semibold">{{ e.full_name or '—' }}</td>
+                            <td>{{ e.rut or '—' }}</td>
+                            <td>{{ e.email or '—' }}</td>
+                            <td>{{ e.cargo or '—' }}</td>
+                            <td>{{ e.cost_center or '—' }}</td>
+                            <td><span class="badge bg-secondary">{{ e.status or '—' }}</span></td>
+                            <td>{{ e.active_since or e.job_start_date or '—' }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr id="rowEmpty">
+                            <td colspan="8" class="text-center text-muted py-4">
+                                {% if resultado.ok %}Sin registros en esta página.{% else %}Configure el token y refresque.{% endif %}
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer border-secondary d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <span class="text-muted small" id="lblPaginacion">
+                Página {{ page }}{% if resultado.pagination.total_pages %} de {{ resultado.pagination.total_pages }}{% endif %}
+            </span>
+            <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-light" id="btnPrev" {% if page <= 1 %}disabled{% endif %}>Anterior</button>
+                <button type="button" class="btn btn-outline-light" id="btnNext"
+                    {% if resultado.pagination.total_pages and page >= resultado.pagination.total_pages %}disabled{% endif %}>Siguiente</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var page = {{ page }};
+    var pageSize = {{ page_size }};
+    var totalPages = {{ resultado.pagination.total_pages or 0 }};
+    var apiUrl = {{ url_for('buk.api_trabajadores_vigentes')|tojson }};
+
+    function escHtml(s) {
+        if (s == null || s === '') return '—';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function renderFilas(empleados) {
+        var tbody = document.getElementById('tbodyEmpleados');
+        if (!empleados.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Sin registros en esta página.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = empleados.map(function (e) {
+            return '<tr>' +
+                '<td>' + escHtml(e.code_sheet) + '</td>' +
+                '<td class="fw-semibold">' + escHtml(e.full_name) + '</td>' +
+                '<td>' + escHtml(e.rut) + '</td>' +
+                '<td>' + escHtml(e.email) + '</td>' +
+                '<td>' + escHtml(e.cargo) + '</td>' +
+                '<td>' + escHtml(e.cost_center) + '</td>' +
+                '<td><span class="badge bg-secondary">' + escHtml(e.status) + '</span></td>' +
+                '<td>' + escHtml(e.active_since || e.job_start_date) + '</td>' +
+                '</tr>';
+        }).join('');
+    }
+
+    function actualizarPaginacion(pag) {
+        totalPages = pag.total_pages || 0;
+        document.getElementById('kpiPagina').textContent = document.querySelectorAll('#tbodyEmpleados tr td:first-child').length && document.getElementById('tbodyEmpleados').innerText.indexOf('Sin registros') === -1
+            ? document.querySelectorAll('#tbodyEmpleados tr').length : 0;
+        document.getElementById('kpiTotal').textContent = pag.count != null ? pag.count : '—';
+        document.getElementById('kpiPages').textContent = pag.total_pages != null ? pag.total_pages : '—';
+        document.getElementById('lblPaginacion').textContent = totalPages
+            ? ('Página ' + page + ' de ' + totalPages)
+            : ('Página ' + page);
+        document.getElementById('btnPrev').disabled = page <= 1;
+        document.getElementById('btnNext').disabled = totalPages ? page >= totalPages : true;
+    }
+
+    function cargar(pagina) {
+        page = pagina;
+        pageSize = parseInt(document.getElementById('selPageSize').value, 10) || 25;
+        var url = apiUrl + '?page=' + page + '&page_size=' + pageSize;
+        fetch(url, { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.ok) {
+                    alert(data.error || 'Error al consultar Buk');
+                    return;
+                }
+                renderFilas(data.empleados || []);
+                document.getElementById('kpiPagina').textContent = (data.empleados || []).length;
+                actualizarPaginacion(data.pagination || {});
+            })
+            .catch(function () { alert('Error de red al consultar Buk'); });
+    }
+
+    document.getElementById('btnPrev').addEventListener('click', function () {
+        if (page > 1) cargar(page - 1);
+    });
+    document.getElementById('btnNext').addEventListener('click', function () {
+        if (!totalPages || page < totalPages) cargar(page + 1);
+    });
+    document.getElementById('selPageSize').addEventListener('change', function () {
+        cargar(1);
+    });
+    document.getElementById('btnRefrescar').addEventListener('click', function () {
+        cargar(page);
+    });
+})();
+</script>
+{% endblock %}

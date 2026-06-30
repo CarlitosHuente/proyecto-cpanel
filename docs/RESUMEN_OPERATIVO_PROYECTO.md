@@ -50,7 +50,9 @@ En terminos practicos, centraliza:
 - `finanzas`: flujo de caja, banco, pagos y respaldos.
 - `sucursales`: pizarra operativa, historial, tareas, comprobantes, anuncios.
 - `config`: usuarios, roles, permisos, categorias, productos, anuncios, carga agricola.
+- `despacho_web`: carga PDF facturas tienda web (unitario y masivo), validacion split-screen, ordenes MySQL para AppSheet, resumen ventas por producto, impresion comprobante de pedido.
 - `fabrica` / `utilidades`: funcionalidades complementarias.
+- `buk`: consulta en vivo de colaboradores vigentes desde [Buk](https://huentelauquen.buk.cl/) (solo lectura, sin BD).
 
 ---
 
@@ -66,6 +68,7 @@ En terminos practicos, centraliza:
 - MySQL (local y/o hosting).
 - Google Drive API (subidas y lectura de archivos).
 - Google Sheets publicados como CSV.
+- Buk API RRHH + **Buk Asistencia** (marcajes): `utils/buk_api.py`, `utils/buk_asistencia_api.py`, vista `/buk/presencia`.
 - GitHub (versionado y ramas).
 
 ---
@@ -74,15 +77,17 @@ En terminos practicos, centraliza:
 
 ### Variables esperadas por codigo
 
-- `DB_HOST`
-- `DB_USER`
-- `DB_PASSWORD`
-- `DB_NAME`
+Todas en **`.env`** (raiz del proyecto; plantilla en `.env.example`). Lectura centralizada en `utils/env_config.py`.
+
+- `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`
 - `PORT` (produccion)
+- `BUK_TENANT`, `BUK_AUTH_TOKEN` (RRHH)
+- `BUK_ASISTENCIA_TOKEN`, `BUK_ASISTENCIA_API_BASE` (marcajes; token distinto, SAC Buk)
 
 ### Comportamiento actual del codigo
 
-- Si no existen variables DB, `utils/db.py` cae a conexion local hardcodeada (`localhost`, `root`, `huente_app`).
+- `utils/env_config.py` carga `.env` y expone parametros DB y Buk.
+- Si faltan `DB_*` en entorno, cae a defaults locales de desarrollo (mismos que antes en `utils/db.py`).
 - `app.py` corre en `0.0.0.0` con puerto por variable `PORT` (default `10000`).
 - En local, `utils/auth.py` tiene bypass automatico de login para `localhost/127.0.0.1`.
 
@@ -137,6 +142,7 @@ En terminos practicos, centraliza:
 - Contab/prorrateos.
 - Flujo de caja/pagos.
 - Pizarra sucursales.
+- DespachoWeb: carga PDF (unitario o masivo), validar una orden, imprimir comprobante.
 
 ---
 
@@ -192,6 +198,7 @@ Buenas practicas concretas para evitar quiebres local -> produccion:
 
 Flujo de trabajo obligatorio por tarea:
 
+0. **Ejecución automática en dev:** pruebas, scripts y verificaciones se corren **sin pedir RUN** al usuario en cada paso (regla también en `.cursor/rules/huente-presentacion-trabajo.mdc`).
 1. **Entender primero**: se pregunta objetivo, alcance e impacto.
 2. **Proponer opciones**: se presentan 1-3 alternativas con pros/contras.
 3. **Debatir breve**: se valida contigo el camino elegido.

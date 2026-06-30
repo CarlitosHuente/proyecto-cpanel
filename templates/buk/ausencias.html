@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Buk — Ausencias mensuales{% endblock %}
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <h2 class="text-white mb-1"><i class="bi bi-calendar-x text-warning me-2"></i>Ausencias del mes</h2>
+            <p class="text-muted mb-0">
+                Días <strong>sin marcaje de entrada</strong> — {{ resultado.mes_label }}.
+                Periodo evaluado: {{ resultado.periodo_desde }} → {{ resultado.periodo_hasta }}
+                ({{ resultado.dias_evaluados }} día{{ 's' if resultado.dias_evaluados != 1 else '' }}).
+            </p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap align-items-center">
+            <form method="get" class="d-flex gap-2 align-items-center flex-wrap" action="{{ url_for('buk.ausencias') }}">
+                <label class="text-white-50 small mb-0" for="mes">Mes</label>
+                <input type="month" name="mes" id="mes" class="form-control form-control-sm bg-black text-white border-secondary"
+                    value="{{ mes_input }}" required>
+                <select name="solo_ausencias" class="form-select form-select-sm bg-black text-white border-secondary" style="width:auto;">
+                    <option value="1" {% if solo_ausencias %}selected{% endif %}>Solo con ausencias</option>
+                    <option value="0" {% if not solo_ausencias %}selected{% endif %}>Todos</option>
+                </select>
+                <button type="submit" class="btn btn-outline-light btn-sm">Consultar</button>
+            </form>
+            <a href="{{ url_for('buk.asistencia') }}" class="btn btn-outline-secondary btn-sm">Asistencia hoy</a>
+        </div>
+    </div>
+
+    {% for w in resultado.warnings or [] %}
+    <div class="alert alert-warning py-2 small">{{ w }}</div>
+    {% endfor %}
+    {% if resultado.error and not resultado.ok %}
+    <div class="alert alert-danger py-2">{{ resultado.error }}</div>
+    {% endif %}
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary text-center">
+                <div class="card-body">
+                    <div class="display-6 text-white">{{ resultado.total_vigentes or 0 }}</div>
+                    <div class="text-muted small">Vigentes</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary text-center">
+                <div class="card-body">
+                    <div class="display-6 text-warning">{{ resultado.con_ausencias or 0 }}</div>
+                    <div class="text-muted small">Con al menos 1 día sin marca</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary text-center">
+                <div class="card-body">
+                    <div class="display-6 text-info">{{ resultado.dias_evaluados or 0 }}</div>
+                    <div class="text-muted small">Días evaluados / persona</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary text-center">
+                <div class="card-body">
+                    <div class="display-6 text-white-50">{{ resultado.marcajes_api or '—' }}</div>
+                    <div class="text-muted small">Jornadas API (mes)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary">
+        <div class="card-header border-secondary text-white">
+            Detalle por colaborador
+            <span class="text-white-50 small ms-2">Ausencia = día calendario sin entrada registrada en Buk Asistencia</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-dark table-hover table-sm mb-0 align-middle">
+                <thead>
+                    <tr class="text-white-50">
+                        <th>Nombre</th>
+                        <th>RUT</th>
+                        <th>Cargo</th>
+                        <th class="text-end">Marcados</th>
+                        <th class="text-end">Ausencias</th>
+                        <th class="text-end">% asist.</th>
+                        <th>Días sin marca</th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyAusencias">
+                    {% for f in resultado.filas %}
+                    {% if not solo_ausencias or f.dias_ausencia > 0 %}
+                    <tr class="{% if f.dias_ausencia > 0 %}table-warning table-warning-emphasis{% endif %}" data-aus="{{ f.dias_ausencia }}">
+                        <td class="fw-semibold">{{ f.full_name or '—' }}</td>
+                        <td>{{ f.rut or '—' }}</td>
+                        <td>{{ f.cargo or '—' }}</td>
+                        <td class="text-end">{{ f.dias_marcados }}</td>
+                        <td class="text-end fw-bold {% if f.dias_ausencia > 0 %}text-warning{% endif %}">{{ f.dias_ausencia }}</td>
+                        <td class="text-end">{{ f.pct_asistencia|metrico(1) }}%</td>
+                        <td class="small text-white-50" style="max-width:320px;">
+                            {% if f.fechas_ausencia_txt %}
+                            {{ f.fechas_ausencia_txt }}
+                            {% else %}
+                            <span class="text-success">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% else %}
+                    <tr><td colspan="7" class="text-center text-muted py-4">Sin datos para el mes seleccionado.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
