@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Reporte tipos de pago — arqueo{% endblock %}
+{% block content %}
+<div class="container-fluid mt-4">
+  <h2 class="text-white mb-2"><i class="bi bi-pie-chart text-warning me-2"></i> Ingresos por tipo de pago</h2>
+  <p class="text-muted small">
+    <a href="{{ url_for('arqueo_caja.index') }}" class="text-secondary">← Arqueo</a>
+    · <a href="{{ url_for('arqueo_caja.tipos_pago_config') }}" class="text-info">Configurar tipos de pago</a>
+  </p>
+  {% include "arqueo_caja/_flashes.html" %}
+
+  <form method="get" class="row g-2 align-items-end mb-4">
+    <div class="col-auto">
+      <label class="form-label text-white">Mes</label>
+      <select name="mes" class="form-select bg-secondary text-white border-secondary">
+        {% for n, nom in meses_opts %}
+        <option value="{{ n }}" {% if mes == n %}selected{% endif %}>{{ nom }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-auto">
+      <label class="form-label text-white">Año</label>
+      <select name="anio" class="form-select bg-secondary text-white border-secondary">
+        {% for a in anios_opts %}
+        <option value="{{ a }}" {% if anio == a %}selected{% endif %}>{{ a }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-auto">
+      <label class="form-label text-white">Fuente</label>
+      <select name="fuente" class="form-select bg-secondary text-white border-secondary">
+        <option value="terreno" {% if fuente == 'terreno' %}selected{% endif %}>Terreno (captura cajero)</option>
+        <option value="sistema" {% if fuente == 'sistema' %}selected{% endif %}>Sistema (import Excel)</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <button type="submit" class="btn btn-danger">Ver reporte</button>
+    </div>
+  </form>
+
+  <p class="text-muted small mb-3">
+    Período: <strong>{{ mes_nombre }} {{ anio }}</strong> ({{ reporte.desde }} al {{ reporte.hasta }}).
+    Fuente: <strong>{{ 'Captura terreno (Caja 1 + Caja 2)' if fuente == 'terreno' else 'Import sistema (DEBE−HABER)' }}</strong>.
+    Los tipos de pago se arman agrupando canales en <a href="{{ url_for('arqueo_caja.tipos_pago_config') }}">Configurar tipos de pago</a>;
+    canales sin grupo cuentan como tipo propio.
+  </p>
+
+  {% if reporte.total_mes == 0 %}
+  <div class="alert alert-secondary">No hay montos en este mes para la fuente elegida.</div>
+  {% else %}
+  <div class="card bg-dark border-secondary mb-4">
+    <div class="card-body">
+      <h4 class="text-white mb-0">Total empresa — {{ mes_nombre }} {{ anio }}</h4>
+      <p class="display-6 text-warning mb-0">{{ reporte.total_mes|dinero }}</p>
+    </div>
+  </div>
+
+  <h4 class="text-white mb-3">Distribución por tipo de pago (% del total empresa)</h4>
+  <div class="table-responsive mb-4">
+    <table class="table table-dark table-bordered align-middle">
+      <thead>
+        <tr>
+          <th>Tipo de pago</th>
+          <th class="text-end">Monto</th>
+          <th class="text-end" style="min-width:6rem">% total</th>
+          <th style="min-width:12rem">Participación</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in reporte.por_tipo %}
+        <tr>
+          <td class="fw-semibold">{{ t.label }}</td>
+          <td class="text-end font-monospace">{{ t.monto|dinero }}</td>
+          <td class="text-end">{{ "%.1f"|format(t.pct_del_total) }}%</td>
+          <td>
+            <div class="progress" style="height:1.25rem;background:#333">
+              <div class="progress-bar bg-danger" role="progressbar" style="width:{{ t.pct_del_total }}%">{{ "%.0f"|format(t.pct_del_total) }}%</div>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% for t in reporte.por_tipo %}
+  <div class="card bg-dark border-secondary mb-4">
+    <div class="card-header text-white border-secondary">
+      <strong>{{ t.label }}</strong> — {{ t.monto|dinero }} ({{ "%.1f"|format(t.pct_del_total) }}% del total empresa)
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-dark table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Sucursal</th>
+              <th class="text-end">Monto</th>
+              <th class="text-end">% de este tipo</th>
+              <th class="text-end">% del total empresa</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in t.sucursales %}
+            <tr>
+              <td>{{ s.nombre }}</td>
+              <td class="text-end font-monospace">{{ s.monto|dinero }}</td>
+              <td class="text-end">{{ "%.1f"|format(s.pct_del_tipo) }}%</td>
+              <td class="text-end text-muted">{{ "%.1f"|format(s.pct_del_total) }}%</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="text-muted">Sin datos.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if fuente == 'terreno' and reporte.detalle_filas %}
+  <h4 class="text-white mt-5 mb-2">Corregir condición de pago (captura terreno)</h4>
+  <p class="text-muted small">Si el cajero cargó un monto bajo el canal equivocado, elegí el tipo correcto y guardá. Si ya existe captura ese día/caja/canal, los montos se suman.</p>
+  <div class="table-responsive">
+    <table class="table table-dark table-sm table-striped align-middle">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Sucursal</th>
+          <th>Caja</th>
+          <th>Tipo actual</th>
+          <th>Canal</th>
+          <th class="text-end">Monto</th>
+          <th style="min-width:14rem">Corregir a</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in reporte.detalle_filas %}
+        <tr>
+          <td>{{ f.fecha }}</td>
+          <td>{{ f.nombre_sucursal }}</td>
+          <td>{{ f.caja }}</td>
+          <td><span class="badge bg-secondary">{{ f.tipo_label }}</span></td>
+          <td><small>{{ f.canal_label }}</small></td>
+          <td class="text-end font-monospace">{{ f.monto|dinero }}</td>
+          <td>
+            <form method="post" class="d-flex gap-1 align-items-center">
+              <input type="hidden" name="accion" value="corregir">
+              <input type="hidden" name="registro_id" value="{{ f.id }}">
+              <input type="hidden" name="anio" value="{{ anio }}">
+              <input type="hidden" name="mes" value="{{ mes }}">
+              <input type="hidden" name="fuente" value="{{ fuente }}">
+              <select name="nuevo_canal" class="form-select form-select-sm bg-secondary text-white border-secondary" required>
+                <option value="">— Canal —</option>
+                {% for c in canales_opts %}
+                <option value="{{ c.norm }}" {% if c.norm == f.canal_norm %}selected{% endif %}>{{ c.etiqueta }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="btn btn-sm btn-outline-warning text-nowrap">Guardar</button>
+            </form>
+          </td>
+          <td></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -18,6 +18,12 @@
     <a class="list-group-item list-group-item-action bg-dark text-white border-secondary" href="{{ url_for('arqueo_caja.cuadratura') }}">
       <i class="bi bi-calculator me-2"></i> Cuadratura del día o semana (lun–dom)
     </a>
+    <a class="list-group-item list-group-item-action bg-dark text-white border-secondary" href="{{ url_for('arqueo_caja.reporte_tipos_pago') }}">
+      <i class="bi bi-pie-chart me-2"></i> Reporte tipos de pago (mes / empresa)
+    </a>
+    <a class="list-group-item list-group-item-action bg-dark text-white border-secondary" href="{{ url_for('arqueo_caja.tipos_pago_config') }}">
+      <i class="bi bi-diagram-3 me-2"></i> Agrupar tipos de pago (Efectivo, Redelcom…)
+    </a>
   </div>
 </div>
 {% endblock %}

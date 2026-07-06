@@ -23,6 +23,13 @@ from utils.arqueo_caja_canal_ui_config import (
     save_ui_config,
     sort_tuple_canal,
 )
+from utils.arqueo_reporte_tipos import reporte_tipos_pago_mes
+from utils.arqueo_tipo_pago_config import (
+    listar_grupos_para_ui,
+    load_tipos_pago_config,
+    normalizar_grupos_config,
+    save_tipos_pago_config,
+)
 from utils.arqueo_caja_import import (
     filas_para_insert,
     leer_arqueo_excel,
@@ -1172,4 +1179,193 @@ def export_auditoria_xlsx():
         buf.getvalue(),
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={safe}"},
+    )
+
+
+def _cambiar_canal_terreno(registro_id: int, nuevo_canon: str, usuario: str) -> Optional[str]:
+    """
+    Cambia canal_norm de una fila terreno. Si ya existe fila destino (misma sucursal/fecha/caja/canal),
+    suma montos y elimina la fila origen. Devuelve mensaje de error o None si OK.
+    """
+    nuevo_canon = normalizar_canal(nuevo_canon)
+    if not nuevo_canon:
+        return "Canal inválido."
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM arqueo_caja_terreno WHERE id = %s", (registro_id,))
+            reg = cur.fetchone()
+            if not reg:
+                return "Registro no encontrado."
+            if reg["canal_norm"] == nuevo_canon:
+                return None
+            muestra = _distinct_norms_globales().get(nuevo_canon, nuevo_canon)
+            canal_raw = etiqueta_canal(nuevo_canon, muestra)[:255]
+            cur.execute(
+                """SELECT id, monto, propina FROM arqueo_caja_terreno
+                   WHERE sucursal_id=%s AND fecha=%s AND caja=%s AND canal_norm=%s AND id<>%s""",
+                (
+                    reg["sucursal_id"],
+                    reg["fecha"],
+                    reg["caja"],
+                    nuevo_canon,
+                    registro_id,
+                ),
+            )
+            otro = cur.fetchone()
+            if otro:
+                m1 = Decimal(str(reg["monto"]))
+                m2 = Decimal(str(otro["monto"]))
+                p1 = reg.get("propina")
+                p2 = otro.get("propina")
+                if p1 is not None or p2 is not None:
+                    prop_sum = (Decimal(str(p1)) if p1 is not None else Decimal("0")) + (
+                        Decimal(str(p2)) if p2 is not None else Decimal("0")
+                    )
+                    prop_val = prop_sum
+                else:
+                    prop_val = None
+                cur.execute(
+                    """UPDATE arqueo_caja_terreno SET monto=%s, propina=%s, usuario=%s
+                       WHERE id=%s""",
+                    (m1 + m2, prop_val, usuario, otro["id"]),
+                )
+                cur.execute("DELETE FROM arqueo_caja_terreno WHERE id=%s", (registro_id,))
+            else:
+                cur.execute(
+                    """UPDATE arqueo_caja_terreno SET canal_norm=%s, canal_raw=%s, usuario=%s
+                       WHERE id=%s""",
+                    (nuevo_canon, canal_raw, usuario, registro_id),
+                )
+        conn.commit()
+    except Exception as ex:
+        conn.rollback()
+        return str(ex)
+    finally:
+        conn.close()
+    return None
+
+
+MESES_ES = [
+    "Enero",
+    "Febrero",
+    "Marzo",
+    "Abril",
+    "Mayo",
+    "Junio",
+    "Julio",
+    "Agosto",
+    "Septiembre",
+    "Octubre",
+    "Noviembre",
+    "Diciembre",
+]
+
+
+@arqueo_caja_bp.route("/tipos-pago", methods=["GET", "POST"])
+@login_requerido
+@permiso_modulo("arqueo_caja")
+def tipos_pago_config():
+    """Agrupa canales (EFECTIVO, REDELCOM…) en tipos de pago para el reporte mensual."""
+    canales_bd = _distinct_norms_globales()
+    canales_lista = sorted(
+        canales_bd.keys(), key=lambda cn: (sort_tuple_canal(cn), etiqueta_canal(cn, canales_bd[cn]))
+    )
+    if request.method == "POST":
+        grupos_in = []
+        ids = request.form.getlist("grupo_id")
+        labels = request.form.getlist("grupo_label")
+        sorts = request.form.getlist("grupo_sort")
+        canales_multi = request.form.getlist("grupo_canales")
+        for i, gid in enumerate(ids):
+            canales_txt = canales_multi[i] if i < len(canales_multi) else ""
+            canales = [c.strip() for c in canales_txt.split(",") if c.strip()]
+            grupos_in.append(
+                {
+                    "id": gid,
+                    "label": labels[i] if i < len(labels) else gid,
+                    "sort": sorts[i] if i < len(sorts) else 9999,
+                    "canales": canales,
+                }
+            )
+        save_tipos_pago_config({"grupos": normalizar_grupos_config(grupos_in)})
+        flash("Tipos de pago guardados.", "success")
+        return redirect(url_for("arqueo_caja.tipos_pago_config"))
+    cfg = load_tipos_pago_config()
+    grupos = cfg.get("grupos") or []
+    if not grupos:
+        grupos = [{"id": "", "label": "", "sort": 1, "canales": []}]
+    filas_ui = []
+    for g in grupos:
+        filas_ui.append(
+            {
+                "id": g.get("id", ""),
+                "label": g.get("label", ""),
+                "sort": g.get("sort", 9999),
+                "canales_csv": ", ".join(g.get("canales") or []),
+            }
+        )
+    return render_template(
+        "arqueo_caja/tipos_pago_config.html",
+        filas=filas_ui,
+        canales_sugeridos=[
+            {"norm": cn, "etiqueta": etiqueta_canal(cn, canales_bd[cn])} for cn in canales_lista
+        ],
+    )
+
+
+@arqueo_caja_bp.route("/reporte-tipos-pago", methods=["GET", "POST"])
+@login_requerido
+@permiso_modulo("arqueo_caja")
+def reporte_tipos_pago():
+    hoy = date.today()
+    anio = request.args.get("anio", type=int) or request.form.get("anio", type=int) or hoy.year
+    mes = request.args.get("mes", type=int) or request.form.get("mes", type=int) or hoy.month
+    if mes < 1:
+        mes = 12
+        anio -= 1
+    elif mes > 12:
+        mes = 1
+        anio += 1
+    fuente = (request.args.get("fuente") or request.form.get("fuente") or "terreno").strip().lower()
+    if fuente not in ("terreno", "sistema"):
+        fuente = "terreno"
+
+    if request.method == "POST" and request.form.get("accion") == "corregir":
+        reg_id = request.form.get("registro_id", type=int)
+        nuevo = (request.form.get("nuevo_canal") or "").strip()
+        anio_ret = request.form.get("anio", type=int) or anio
+        mes_ret = request.form.get("mes", type=int) or mes
+        fuente_ret = (request.form.get("fuente") or fuente).strip().lower()
+        if not reg_id or not nuevo:
+            flash("Indicá registro y nuevo tipo de pago (canal).", "warning")
+        else:
+            err = _cambiar_canal_terreno(reg_id, nuevo, session.get("usuario", ""))
+            if err:
+                flash(f"No se pudo corregir: {err}", "danger")
+            else:
+                flash("Condición de pago actualizada.", "success")
+        return redirect(
+            url_for(
+                "arqueo_caja.reporte_tipos_pago",
+                anio=anio_ret,
+                mes=mes_ret,
+                fuente=fuente_ret,
+            )
+        )
+
+    reporte = reporte_tipos_pago_mes(anio, mes, fuente=fuente, incluir_detalle=(fuente == "terreno"))
+    canales_opts = _canales_dropdown(0)
+    meses_opts = [(i, MESES_ES[i - 1]) for i in range(1, 13)]
+    anios_opts = list(range(hoy.year - 2, hoy.year + 2))
+    return render_template(
+        "arqueo_caja/reporte_tipos_pago.html",
+        reporte=reporte,
+        anio=anio,
+        mes=mes,
+        mes_nombre=MESES_ES[mes - 1],
+        fuente=fuente,
+        meses_opts=meses_opts,
+        anios_opts=anios_opts,
+        canales_opts=canales_opts,
     )

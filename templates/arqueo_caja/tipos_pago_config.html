@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Tipos de pago — arqueo{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h2 class="text-white mb-2"><i class="bi bi-diagram-3 text-info me-2"></i> Tipos de pago (agrupación de canales)</h2>
+  <p class="text-muted small">
+    <a href="{{ url_for('arqueo_caja.index') }}" class="text-secondary">← Arqueo</a>
+    · <a href="{{ url_for('arqueo_caja.reporte_tipos_pago') }}" class="text-warning">Ver reporte mensual</a>
+  </p>
+  <p class="text-muted">Agrupá varios canales (p. ej. <code>REDELCOM</code>, <code>TARJETA DEBITO</code>) bajo un mismo tipo para el reporte: Efectivo, Redelcom, Delivery, etc. Canales separados por coma.</p>
+  {% include "arqueo_caja/_flashes.html" %}
+
+  {% if canales_sugeridos %}
+  <details class="mb-3 text-muted small">
+    <summary class="text-white">Canales conocidos en import (referencia)</summary>
+    <ul class="mt-2 mb-0">
+      {% for c in canales_sugeridos %}
+      <li><code>{{ c.norm }}</code> — {{ c.etiqueta }}</li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+
+  <form method="post">
+    <div class="table-responsive mb-3">
+      <table class="table table-dark table-sm align-middle" id="tablaGrupos">
+        <thead>
+          <tr>
+            <th>Id (interno)</th>
+            <th>Nombre reporte</th>
+            <th style="width:5rem">Orden</th>
+            <th>Canales (coma)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in filas %}
+          <tr>
+            <td><input type="text" name="grupo_id" class="form-control form-control-sm bg-secondary text-white border-secondary" value="{{ f.id }}" placeholder="redelcom"></td>
+            <td><input type="text" name="grupo_label" class="form-control form-control-sm bg-secondary text-white border-secondary" value="{{ f.label }}" placeholder="Redelcom"></td>
+            <td><input type="number" name="grupo_sort" class="form-control form-control-sm bg-secondary text-white border-secondary" value="{{ f.sort }}" step="1"></td>
+            <td><input type="text" name="grupo_canales" class="form-control form-control-sm bg-secondary text-white border-secondary" value="{{ f.canales_csv }}" placeholder="REDELCOM, TARJETA"></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <button type="button" class="btn btn-outline-light btn-sm mb-3" id="btnAddFila">+ Agregar tipo</button>
+    <div>
+      <button type="submit" class="btn btn-warning">Guardar tipos de pago</button>
+    </div>
+  </form>
+</div>
+<script>
+(function () {
+  const tbody = document.querySelector('#tablaGrupos tbody');
+  document.getElementById('btnAddFila').addEventListener('click', function () {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td><input type="text" name="grupo_id" class="form-control form-control-sm bg-secondary text-white border-secondary" placeholder="delivery"></td>'
+      + '<td><input type="text" name="grupo_label" class="form-control form-control-sm bg-secondary text-white border-secondary" placeholder="Delivery"></td>'
+      + '<td><input type="number" name="grupo_sort" class="form-control form-control-sm bg-secondary text-white border-secondary" value="10" step="1"></td>'
+      + '<td><input type="text" name="grupo_canales" class="form-control form-control-sm bg-secondary text-white border-secondary" placeholder="UBER, RAPPI"></td>';
+    tbody.appendChild(tr);
+  });
+})();
+</script>
+{% endblock %}

@@ -385,6 +385,9 @@ Esquema y migraciones comentadas: `docs/QUERY_CAMBIOS_PRODUCCION.sql`.
 | `GET …/cuadratura` | **Vista día** o **vista semana** (`?vista=semana`): semana lun–dom que contiene la fecha elegida. |
 | `GET …/cuadratura/auditoria` | Resumen por canal + detalle líneas; **orden** por columnas (`ord_res`/`dir_res`, `ord_det`/`dir_det`). |
 | `GET …/cuadratura/export.xlsx` | Excel resumen + detalle + terreno (montos enteros en hojas exportadas). |
+| `GET …/reporte-tipos-pago` | **Reporte mensual** ingresos por tipo de pago (% empresa) y desglose % por sucursal dentro de cada tipo. Fuente terreno o sistema. |
+| `POST …/reporte-tipos-pago` | Corregir canal/condición de pago en fila terreno (`accion=corregir`). |
+| `GET/POST …/tipos-pago` | Admin agrupación canales → tipos (Efectivo, Redelcom, Delivery…) en `instance/arqueo_tipos_pago.json`. |
 
 ### Terreno — UX
 
@@ -400,6 +403,14 @@ Esquema y migraciones comentadas: `docs/QUERY_CAMBIOS_PRODUCCION.sql`.
 - **Día:** por canal; totales **diferencia** y **propinas** terreno (ambas cajas); observación del día vía `terreno/bundle/notas` con `todas_cajas=1` (replica en filas de Caja 1 y Caja 2).
 - **Semana:** **una fila por día** (no por caja): diferencia total del día, suma propinas, estado, observación, enlaces a cuadratura día y auditoría. **Pie:** suma semanal de diferencias y propinas (solo días con datos).
 - **Conciliado:** `total_diff == 0` y hay sistema o terreno.
+
+### Reporte tipos de pago (mes / empresa)
+
+- **Ruta:** `/arqueo-caja/reporte-tipos-pago` — selector mes/año y fuente **terreno** (captura cajero, recomendado) o **sistema** (import DEBE−HABER).
+- **Nivel 1:** % del total empresa por **tipo de pago** (grupos configurables en `/arqueo-caja/tipos-pago`).
+- **Nivel 2:** dentro de cada tipo, % por **sucursal** (ej. del Redelcom del mes, 50% MUT, 15% Esc Militar…).
+- **Corrección:** tabla inferior (solo fuente terreno) para cambiar el canal de una captura si el cajero se equivocó; si el destino ya existe ese día/caja, **suma montos**.
+- **Config:** `instance/arqueo_tipos_pago.json` — mapeo `canal_norm` → tipo (sin tabla nueva). Canales sin grupo aparecen como tipo propio hasta agruparlos.
 
 ### Presentación monetaria
 
