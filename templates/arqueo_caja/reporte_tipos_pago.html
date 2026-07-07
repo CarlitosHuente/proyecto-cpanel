@@ -27,7 +27,16 @@
       </select>
     </div>
     <div class="col-auto">
-      <label class="form-label text-white">Fuente</label>
+      <label class="form-label text-white">Sucursal</label>
+      <select name="sucursal_id" class="form-select bg-secondary text-white border-secondary">
+        <option value="">Toda la empresa</option>
+        {% for s in sucursales %}
+        <option value="{{ s.sucursal_id }}" {% if sucursal_id == s.sucursal_id %}selected{% endif %}>{{ s.nombre_sucursal }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-auto">
+      <label class="form-label text-white">Fuente montos</label>
       <select name="fuente" class="form-select bg-secondary text-white border-secondary">
         <option value="terreno" {% if fuente == 'terreno' %}selected{% endif %}>Terreno (captura cajero)</option>
         <option value="sistema" {% if fuente == 'sistema' %}selected{% endif %}>Sistema (import Excel)</option>
@@ -40,22 +49,72 @@
 
   <p class="text-muted small mb-3">
     Período: <strong>{{ mes_nombre }} {{ anio }}</strong> ({{ reporte.desde }} al {{ reporte.hasta }}).
-    Fuente: <strong>{{ 'Captura terreno (Caja 1 + Caja 2)' if fuente == 'terreno' else 'Import sistema (DEBE−HABER)' }}</strong>.
-    Los tipos de pago se arman agrupando canales en <a href="{{ url_for('arqueo_caja.tipos_pago_config') }}">Configurar tipos de pago</a>;
-    canales sin grupo cuentan como tipo propio.
+    {% if sucursal_id %}
+    Alcance: <strong>{{ nombre_suc_filtro }}</strong> solamente.
+    {% else %}
+    Alcance: <strong>toda la empresa</strong>.
+    {% endif %}
+    Montos — fuente: <strong>{{ 'Captura terreno (Caja 1 + Caja 2)' if fuente == 'terreno' else 'Import sistema (DEBE−HABER)' }}</strong>.
+    Boletas: <strong>N° distintos (N_COMP)</strong> del import sistema.
   </p>
 
-  {% if reporte.total_mes == 0 %}
-  <div class="alert alert-secondary">No hay montos en este mes para la fuente elegida.</div>
-  {% else %}
-  <div class="card bg-dark border-secondary mb-4">
-    <div class="card-body">
-      <h4 class="text-white mb-0">Total empresa — {{ mes_nombre }} {{ anio }}</h4>
-      <p class="display-6 text-warning mb-0">{{ reporte.total_mes|dinero }}</p>
+  <div class="row g-3 mb-4">
+    <div class="col-md-6">
+      <div class="card bg-dark border-secondary h-100">
+        <div class="card-body">
+          <h5 class="text-white mb-1">Ingresos{% if sucursal_id %} — {{ nombre_suc_filtro }}{% else %} — empresa{% endif %}</h5>
+          <p class="display-6 text-warning mb-0">{% if reporte.total_mes != 0 %}{{ reporte.total_mes|dinero }}{% else %}—{% endif %}</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card bg-dark border-secondary h-100">
+        <div class="card-body">
+          <h5 class="text-white mb-1">Boletas emitidas{% if sucursal_id %} — {{ nombre_suc_filtro }}{% else %} — empresa{% endif %}</h5>
+          <p class="display-6 text-info mb-0">{{ reporte.boletas.total_boletas|default(0) }}</p>
+          <small class="text-muted">Comprobantes distintos (N_COMP) en el mes</small>
+        </div>
+      </div>
     </div>
   </div>
 
-  <h4 class="text-white mb-3">Distribución por tipo de pago (% del total empresa)</h4>
+  {% if not sucursal_id and reporte.boletas.por_sucursal %}
+  <h4 class="text-white mb-2">Boletas por sucursal</h4>
+  <div class="table-responsive mb-4">
+    <table class="table table-dark table-sm table-bordered">
+      <thead>
+        <tr>
+          <th>Sucursal</th>
+          <th class="text-end">Boletas</th>
+          <th class="text-end">% del total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in reporte.boletas.por_sucursal %}
+        <tr>
+          <td>
+            <a href="{{ url_for('arqueo_caja.reporte_tipos_pago', anio=anio, mes=mes, fuente=fuente, sucursal_id=b.sucursal_id) }}" class="text-white">{{ b.nombre }}</a>
+          </td>
+          <td class="text-end font-monospace">{{ b.boletas }}</td>
+          <td class="text-end">{{ "%.1f"|format(b.pct_del_total) }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-secondary text-dark">
+        <tr>
+          <th class="text-end">Total</th>
+          <th class="text-end">{{ reporte.boletas.total_boletas }}</th>
+          <th></th>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if reporte.total_mes == 0 %}
+  <div class="alert alert-secondary">No hay montos en este mes para la fuente y sucursal elegidas.</div>
+  {% else %}
+  <h4 class="text-white mb-3">Distribución por tipo de pago{% if sucursal_id %} — {{ nombre_suc_filtro }}{% else %} — empresa{% endif %}</h4>
   <div class="table-responsive mb-4">
     <table class="table table-dark table-bordered align-middle">
       <thead>
@@ -84,9 +143,10 @@
   </div>
 
   {% for t in reporte.por_tipo %}
+  {% if not sucursal_id %}
   <div class="card bg-dark border-secondary mb-4">
     <div class="card-header text-white border-secondary">
-      <strong>{{ t.label }}</strong> — {{ t.monto|dinero }} ({{ "%.1f"|format(t.pct_del_total) }}% del total empresa)
+      <strong>{{ t.label }}</strong> — {{ t.monto|dinero }} ({{ "%.1f"|format(t.pct_del_total) }}% del total)
     </div>
     <div class="card-body p-0">
       <div class="table-responsive">
@@ -115,6 +175,7 @@
       </div>
     </div>
   </div>
+  {% endif %}
   {% endfor %}
   {% endif %}
 
@@ -151,6 +212,7 @@
               <input type="hidden" name="anio" value="{{ anio }}">
               <input type="hidden" name="mes" value="{{ mes }}">
               <input type="hidden" name="fuente" value="{{ fuente }}">
+              {% if sucursal_id %}<input type="hidden" name="sucursal_id" value="{{ sucursal_id }}">{% endif %}
               <select name="nuevo_canal" class="form-select form-select-sm bg-secondary text-white border-secondary" required>
                 <option value="">— Canal —</option>
                 {% for c in canales_opts %}

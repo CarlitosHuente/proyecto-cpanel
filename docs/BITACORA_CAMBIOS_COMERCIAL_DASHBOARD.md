@@ -410,6 +410,7 @@ Esquema y migraciones comentadas: `docs/QUERY_CAMBIOS_PRODUCCION.sql`.
 - **Nivel 1:** % del total empresa por **tipo de pago** (grupos configurables en `/arqueo-caja/tipos-pago`).
 - **Nivel 2:** dentro de cada tipo, % por **sucursal** (ej. del Redelcom del mes, 50% MUT, 15% Esc Militar…).
 - **Corrección:** tabla inferior (solo fuente terreno) para cambiar el canal de una captura si el cajero se equivocó; si el destino ya existe ese día/caja, **suma montos**.
+- **Boletas:** conteo de **N_COMP distintos** del import sistema en el mes; desglose por sucursal y filtro de sucursal en el mismo reporte (montos + boletas).
 - **Config:** `instance/arqueo_tipos_pago.json` — mapeo `canal_norm` → tipo (sin tabla nueva). Canales sin grupo aparecen como tipo propio hasta agruparlos.
 
 ### Presentación monetaria

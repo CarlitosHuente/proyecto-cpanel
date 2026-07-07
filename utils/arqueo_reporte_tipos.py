@@ -28,36 +28,40 @@ def _pct(parte: Decimal, total: Decimal) -> float:
     )
 
 
-def _filas_terreno_mes(desde: date, hasta: date) -> List[dict]:
+def _filas_terreno_mes(desde: date, hasta: date, sucursal_id: Optional[int] = None) -> List[dict]:
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                """SELECT t.id, t.sucursal_id, s.nombre_sucursal, t.fecha, t.caja,
+            q = """SELECT t.id, t.sucursal_id, s.nombre_sucursal, t.fecha, t.caja,
                           t.canal_norm, t.canal_raw, t.monto, t.propina
                    FROM arqueo_caja_terreno t
                    JOIN Sucursales s ON s.sucursal_id = t.sucursal_id
-                   WHERE t.fecha >= %s AND t.fecha <= %s
-                   ORDER BY t.fecha DESC, s.nombre_sucursal, t.caja, t.canal_norm""",
-                (desde, hasta),
-            )
+                   WHERE t.fecha >= %s AND t.fecha <= %s"""
+            params: list = [desde, hasta]
+            if sucursal_id:
+                q += " AND t.sucursal_id = %s"
+                params.append(sucursal_id)
+            q += " ORDER BY t.fecha DESC, s.nombre_sucursal, t.caja, t.canal_norm"
+            cur.execute(q, params)
             return cur.fetchall() or []
     finally:
         conn.close()
 
 
-def _filas_sistema_mes(desde: date, hasta: date) -> List[dict]:
+def _filas_sistema_mes(desde: date, hasta: date, sucursal_id: Optional[int] = None) -> List[dict]:
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                """SELECT l.sucursal_id, s.nombre_sucursal, l.fec_compr AS fecha,
+            q = """SELECT l.sucursal_id, s.nombre_sucursal, l.fec_compr AS fecha,
                           l.desc_cta, l.debe, l.haber
                    FROM arqueo_caja_lineas l
                    JOIN Sucursales s ON s.sucursal_id = l.sucursal_id
-                   WHERE l.fec_compr >= %s AND l.fec_compr <= %s""",
-                (desde, hasta),
-            )
+                   WHERE l.fec_compr >= %s AND l.fec_compr <= %s"""
+            params: list = [desde, hasta]
+            if sucursal_id:
+                q += " AND l.sucursal_id = %s"
+                params.append(sucursal_id)
+            cur.execute(q, params)
             rows = cur.fetchall() or []
     finally:
         conn.close()
@@ -78,6 +82,68 @@ def _filas_sistema_mes(desde: date, hasta: date) -> List[dict]:
             }
         )
     return out
+
+
+def contar_boletas_mes(
+    anio: int, mes: int, sucursal_id: Optional[int] = None
+) -> Dict[str, Any]:
+    """
+    Boletas emitidas = N_COMP distintos en import sistema (arqueo_caja_lineas) del mes.
+  """
+    desde, hasta = _rango_mes(anio, mes)
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            base = """FROM arqueo_caja_lineas l
+                      JOIN Sucursales s ON s.sucursal_id = l.sucursal_id
+                      WHERE l.fec_compr >= %s AND l.fec_compr <= %s
+                        AND TRIM(l.n_comp) <> ''"""
+            params: list = [desde, hasta]
+            if sucursal_id:
+                cur.execute(
+                    f"""SELECT COUNT(DISTINCT l.n_comp) AS n {base} AND l.sucursal_id = %s""",
+                    params + [sucursal_id],
+                )
+                total = int((cur.fetchone() or {}).get("n") or 0)
+                cur.execute(
+                    f"""SELECT l.sucursal_id, s.nombre_sucursal,
+                               COUNT(DISTINCT l.n_comp) AS boletas
+                        {base} AND l.sucursal_id = %s
+                        GROUP BY l.sucursal_id, s.nombre_sucursal""",
+                    params + [sucursal_id],
+                )
+            else:
+                cur.execute(
+                    f"""SELECT COUNT(DISTINCT l.n_comp) AS n {base}""",
+                    params,
+                )
+                total = int((cur.fetchone() or {}).get("n") or 0)
+                cur.execute(
+                    f"""SELECT l.sucursal_id, s.nombre_sucursal,
+                               COUNT(DISTINCT l.n_comp) AS boletas
+                        {base}
+                        GROUP BY l.sucursal_id, s.nombre_sucursal
+                        ORDER BY s.nombre_sucursal""",
+                    params,
+                )
+            por_suc = []
+            for r in cur.fetchall() or []:
+                b = int(r.get("boletas") or 0)
+                por_suc.append(
+                    {
+                        "sucursal_id": r["sucursal_id"],
+                        "nombre": r["nombre_sucursal"],
+                        "boletas": b,
+                        "pct_del_total": _pct(Decimal(b), Decimal(total)) if total else 0.0,
+                    }
+                )
+    finally:
+        conn.close()
+    return {
+        "total_boletas": total,
+        "por_sucursal": por_suc,
+        "sucursal_id": sucursal_id,
+    }
 
 
 def _agregar_filas(
@@ -172,12 +238,13 @@ def reporte_tipos_pago_mes(
     mes: int,
     fuente: FuenteReporte = "terreno",
     incluir_detalle: bool = False,
+    sucursal_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     desde, hasta = _rango_mes(anio, mes)
     if fuente == "sistema":
-        filas = _filas_sistema_mes(desde, hasta)
+        filas = _filas_sistema_mes(desde, hasta, sucursal_id)
     else:
-        raw = _filas_terreno_mes(desde, hasta)
+        raw = _filas_terreno_mes(desde, hasta, sucursal_id)
         filas = [
             {
                 "id": r["id"],
@@ -192,9 +259,11 @@ def reporte_tipos_pago_mes(
             for r in raw
         ]
     agg = _agregar_filas(filas, incluir_detalle_filas=incluir_detalle and fuente == "terreno")
+    agg["boletas"] = contar_boletas_mes(anio, mes, sucursal_id)
     agg["desde"] = desde.isoformat()
     agg["hasta"] = hasta.isoformat()
     agg["anio"] = anio
     agg["mes"] = mes
     agg["fuente"] = fuente
+    agg["sucursal_id"] = sucursal_id
     return agg

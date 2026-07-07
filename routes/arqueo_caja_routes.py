@@ -1330,6 +1330,9 @@ def reporte_tipos_pago():
     fuente = (request.args.get("fuente") or request.form.get("fuente") or "terreno").strip().lower()
     if fuente not in ("terreno", "sistema"):
         fuente = "terreno"
+    sucursal_id = request.args.get("sucursal_id", type=int) or request.form.get(
+        "sucursal_id", type=int
+    )
 
     if request.method == "POST" and request.form.get("accion") == "corregir":
         reg_id = request.form.get("registro_id", type=int)
@@ -1337,6 +1340,7 @@ def reporte_tipos_pago():
         anio_ret = request.form.get("anio", type=int) or anio
         mes_ret = request.form.get("mes", type=int) or mes
         fuente_ret = (request.form.get("fuente") or fuente).strip().lower()
+        suc_ret = request.form.get("sucursal_id", type=int)
         if not reg_id or not nuevo:
             flash("Indicá registro y nuevo tipo de pago (canal).", "warning")
         else:
@@ -1351,10 +1355,24 @@ def reporte_tipos_pago():
                 anio=anio_ret,
                 mes=mes_ret,
                 fuente=fuente_ret,
+                sucursal_id=suc_ret or "",
             )
         )
 
-    reporte = reporte_tipos_pago_mes(anio, mes, fuente=fuente, incluir_detalle=(fuente == "terreno"))
+    reporte = reporte_tipos_pago_mes(
+        anio,
+        mes,
+        fuente=fuente,
+        incluir_detalle=(fuente == "terreno"),
+        sucursal_id=sucursal_id,
+    )
+    sucursales = _listar_sucursales()
+    nombre_suc_filtro = ""
+    if sucursal_id:
+        for s in sucursales:
+            if s["sucursal_id"] == sucursal_id:
+                nombre_suc_filtro = s["nombre_sucursal"]
+                break
     canales_opts = _canales_dropdown(0)
     meses_opts = [(i, MESES_ES[i - 1]) for i in range(1, 13)]
     anios_opts = list(range(hoy.year - 2, hoy.year + 2))
@@ -1365,6 +1383,9 @@ def reporte_tipos_pago():
         mes=mes,
         mes_nombre=MESES_ES[mes - 1],
         fuente=fuente,
+        sucursal_id=sucursal_id,
+        nombre_suc_filtro=nombre_suc_filtro,
+        sucursales=sucursales,
         meses_opts=meses_opts,
         anios_opts=anios_opts,
         canales_opts=canales_opts,
