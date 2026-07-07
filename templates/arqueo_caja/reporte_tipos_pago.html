@@ -69,7 +69,7 @@
     </div>
     <div class="col-md-6">
       <div class="card bg-dark border-secondary h-100 boletas-card-click" id="cardBoletas" role="button" tabindex="0"
-           aria-expanded="false" aria-controls="panelBoletasDia" title="Clic para ver boletas por día">
+           data-bs-toggle="modal" data-bs-target="#modalBoletasDia" title="Clic para ver boletas por día">
         <div class="card-body">
           <h5 class="text-white mb-1">Boletas emitidas{% if sucursal_id %} — {{ nombre_suc_filtro }}{% else %} — empresa{% endif %}</h5>
           <p class="display-6 text-info mb-0">{{ reporte.boletas.total_boletas|default(0) }}</p>
@@ -79,46 +79,54 @@
     </div>
   </div>
 
-  <div class="collapse mb-4" id="panelBoletasDia">
-    <div class="card bg-dark border-info">
-      <div class="card-header text-white border-info d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-calendar3 me-1"></i> Boletas por día — {{ mes_nombre }} {{ anio }}</span>
-        <button type="button" class="btn btn-sm btn-outline-light" id="btnCerrarBoletasDia" aria-label="Cerrar">✕</button>
-      </div>
-      <div class="card-body p-0">
-        {% if reporte.boletas.por_dia %}
-        <div class="table-responsive">
-          <table class="table table-dark table-sm table-striped mb-0">
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Día</th>
-                <th class="text-end">Boletas</th>
-                <th class="text-end">% del mes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for d in reporte.boletas.por_dia %}
-              <tr>
-                <td>{{ d.fecha }}</td>
-                <td>{{ d.dia }}</td>
-                <td class="text-end font-monospace fw-semibold">{{ d.boletas }}</td>
-                <td class="text-end text-muted">{{ "%.1f"|format(d.pct_del_total) }}%</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-            <tfoot class="table-secondary text-dark">
-              <tr>
-                <th colspan="2" class="text-end">Total mes</th>
-                <th class="text-end">{{ reporte.boletas.total_boletas }}</th>
-                <th></th>
-              </tr>
-            </tfoot>
-          </table>
+  <div class="modal fade" id="modalBoletasDia" tabindex="-1" aria-labelledby="modalBoletasDiaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+      <div class="modal-content bg-dark border-info text-white">
+        <div class="modal-header border-info">
+          <h5 class="modal-title" id="modalBoletasDiaLabel">
+            <i class="bi bi-calendar3 me-1"></i> Boletas por día — {{ mes_nombre }} {{ anio }}
+            {% if sucursal_id %}<small class="text-muted">({{ nombre_suc_filtro }})</small>{% endif %}
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
-        {% else %}
-        <p class="text-muted p-3 mb-0">Sin boletas en import sistema para este período{% if sucursal_id %} y sucursal{% endif %}.</p>
-        {% endif %}
+        <div class="modal-body p-0">
+          {% if reporte.boletas.por_dia %}
+          <div class="table-responsive">
+            <table class="table table-dark table-sm table-striped mb-0">
+              <thead class="sticky-top bg-black">
+                <tr>
+                  <th>Fecha</th>
+                  <th>Día</th>
+                  <th class="text-end">Boletas</th>
+                  <th class="text-end">% del mes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for d in reporte.boletas.por_dia %}
+                <tr>
+                  <td>{{ d.fecha }}</td>
+                  <td>{{ d.dia }}</td>
+                  <td class="text-end font-monospace fw-semibold">{{ d.boletas }}</td>
+                  <td class="text-end text-muted">{{ "%.1f"|format(d.pct_del_total) }}%</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot class="table-secondary text-dark">
+                <tr>
+                  <th colspan="2" class="text-end">Total mes</th>
+                  <th class="text-end">{{ reporte.boletas.total_boletas }}</th>
+                  <th></th>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          {% else %}
+          <p class="text-muted p-4 mb-0">Sin boletas en import sistema para este período{% if sucursal_id %} y sucursal{% endif %}.</p>
+          {% endif %}
+        </div>
+        <div class="modal-footer border-info">
+          <button type="button" class="btn btn-outline-light w-100" data-bs-dismiss="modal">Cerrar</button>
+        </div>
       </div>
     </div>
   </div>
@@ -278,40 +286,6 @@
 <style>
   .boletas-card-click { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
   .boletas-card-click:hover, .boletas-card-click:focus { border-color: #0dcaf0 !important; box-shadow: 0 0 0 2px rgba(13,202,240,.25); outline: none; }
-  .boletas-card-click[aria-expanded="true"] { border-color: #0dcaf0 !important; }
+  #modalBoletasDia .modal-body { max-height: min(70vh, 32rem); overflow-y: auto; }
 </style>
-<script>
-(function () {
-  var card = document.getElementById('cardBoletas');
-  var panel = document.getElementById('panelBoletasDia');
-  var btnCerrar = document.getElementById('btnCerrarBoletasDia');
-  if (!card || !panel || typeof bootstrap === 'undefined') return;
-  var collapse = bootstrap.Collapse.getOrCreateInstance(panel, { toggle: false });
-  function setExpanded(on) {
-    card.setAttribute('aria-expanded', on ? 'true' : 'false');
-  }
-  card.addEventListener('click', function () {
-    if (panel.classList.contains('show')) {
-      collapse.hide();
-    } else {
-      collapse.show();
-      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-  });
-  card.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      card.click();
-    }
-  });
-  panel.addEventListener('shown.bs.collapse', function () { setExpanded(true); });
-  panel.addEventListener('hidden.bs.collapse', function () { setExpanded(false); });
-  if (btnCerrar) {
-    btnCerrar.addEventListener('click', function (e) {
-      e.stopPropagation();
-      collapse.hide();
-    });
-  }
-})();
-</script>
 {% endblock %}
