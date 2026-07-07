@@ -5,12 +5,19 @@
 
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h2 class="text-white">Maestro de Clasificación de Cuentas</h2>
-    <button class="btn btn-primary" onclick="guardarCambios()">
-        💾 Guardar Clasificación
-    </button>
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h2 class="text-white m-0">Maestro de Clasificación de Cuentas</h2>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('contab.macros_gestion') }}" class="btn btn-outline-info btn-sm">⚙ Macros P&amp;L</a>
+        <button class="btn btn-primary btn-sm" onclick="guardarCambios()">💾 Guardar Clasificación</button>
+    </div>
 </div>
+
+{% if macros_config_activa %}
+<div class="alert alert-info py-2 small mb-3">
+    Configuración de macros <strong>activa</strong>. Usa tipo <strong>INGRESO/GASTO</strong> en cada grupo si la macro tiene "partir por tipo".
+</div>
+{% endif %}
 
 <div class="row h-100">
     <div class="col-md-4">
@@ -40,13 +47,10 @@
     <div class="col-md-8">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h5 class="text-white m-0">Grupos de Gestión</h5>
-            <button class="btn btn-sm btn-success" onclick="crearNuevoGrupo()">
-                + Nuevo Grupo
-            </button>
+            <button class="btn btn-sm btn-success" onclick="crearNuevoGrupo()">+ Nuevo Grupo</button>
         </div>
 
         <div id="contenedor-grupos" class="row" style="overflow-y: auto; max-height: 75vh;">
-            
             {% for g in grupos %}
             <div class="col-md-6 mb-3 grupo-wrapper">
                 <div class="card bg-dark text-white border-secondary h-100">
@@ -60,11 +64,14 @@
                         <div class="input-group input-group-sm">
                             <span class="input-group-text bg-secondary text-white border-secondary">Macro:</span>
                             <select class="form-select bg-dark text-white border-secondary input-macro-grupo">
-                                <option value="Ingresos Operacionales" {% if g.macro_categoria == 'Ingresos Operacionales' %}selected{% endif %}>Ingresos Operacionales</option>
-                                <option value="Costos de Explotación" {% if g.macro_categoria == 'Costos de Explotación' %}selected{% endif %}>Costos de Explotación</option>
-                                <option value="Gastos de Administración y Ventas" {% if g.macro_categoria == 'Gastos de Administración y Ventas' %}selected{% endif %}>Gastos de Adm. y Ventas</option>
-                                <option value="Ingresos No Operacionales" {% if g.macro_categoria == 'Ingresos No Operacionales' %}selected{% endif %}>Ingresos No Operacionales</option>
-                                <option value="Otros" {% if g.macro_categoria == 'Otros' %}selected{% endif %}>Otros / Sin Clasificar</option>
+                                {% for m in macros_ui.macros %}
+                                {% if m.activo %}
+                                <option value="{{ m.nombre }}" {% if g.macro_categoria == m.nombre %}selected{% endif %}>{{ m.nombre }}</option>
+                                {% endif %}
+                                {% endfor %}
+                                {% if g.macro_categoria and g.macro_categoria not in (macros_ui.macros | map(attribute='nombre') | list) %}
+                                <option value="{{ g.macro_categoria }}" selected>{{ g.macro_categoria }}</option>
+                                {% endif %}
                             </select>
                         </div>
 
@@ -90,17 +97,16 @@
                 </div>
             </div>
             {% endfor %}
-
         </div>
     </div>
 </div>
 
 <script>
-    // Referencias
+    const MACRO_OPTIONS = `{% for m in macros_ui.macros %}{% if m.activo %}<option value="{{ m.nombre }}">{{ m.nombre }}</option>{% endif %}{% endfor %}`;
+
     const listaPendientes = document.getElementById('lista-pendientes');
     const contenedorGrupos = document.getElementById('contenedor-grupos');
 
-    // Inicializar Sortable
     new Sortable(listaPendientes, { group: 'cuentas', animation: 150, sort: false });
 
     function initSortableGrupo(elementoLista) {
@@ -109,7 +115,6 @@
 
     document.querySelectorAll('.lista-grupo').forEach(el => initSortableGrupo(el));
 
-    // Crear Nuevo Grupo
     function crearNuevoGrupo() {
         const div = document.createElement('div');
         div.className = 'col-md-6 mb-3 grupo-wrapper';
@@ -123,47 +128,8 @@
                     </div>
                     <div class="input-group input-group-sm">
                         <span class="input-group-text bg-secondary text-white border-secondary">Macro:</span>
-                        <input type="text" class="form-control bg-dark text-white border-secondary input-macro-grupo" 
-                               list="macros-datalist" value="Costos de Explotación">
+                        <select class="form-select bg-dark text-white border-secondary input-macro-grupo">${MACRO_OPTIONS}</select>
                     </div>
-                    <select class="form-select form-select-sm bg-dark text-white border-secondary input-tipo-grupo">
-                        <option value="GASTO" selected>🔴 Gastos (Resta)</option>
-                        <option value="INGRESO">🟢 Ingresos (Suma)</option>
-                    </select>
-                </div>
-                <div class="card-body p-2">
-                    <div class="lista-grupo list-group gap-1" style="min-height: 100px; background-color: #222; border-radius: 5px;"></div>
-                </div>
-            </div>
-        `;
-        contenedorGrupos.appendChild(div);
-        initSortableGrupo(div.querySelector('.lista-grupo'));
-    }
-
-    // Crear Nuevo Grupo
-    function crearNuevoGrupo() {
-        const div = document.createElement('div');
-        div.className = 'col-md-6 mb-3 grupo-wrapper';
-        div.innerHTML = `
-            <div class="card bg-dark text-white border-secondary h-100">
-                <div class="card-header border-secondary d-flex flex-column gap-2">
-                    <div class="d-flex justify-content-between">
-                        <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary fw-bold input-nombre-grupo" 
-                               value="Nuevo Grupo" placeholder="Nombre (ej. Arriendos)">
-                        <button class="btn btn-sm btn-outline-danger ms-2" onclick="eliminarGrupo(this)">✕</button>
-                    </div>
-                    
-                    <div class="input-group input-group-sm">
-                        <span class="input-group-text bg-secondary text-white border-secondary">Macro:</span>
-                        <select class="form-select bg-dark text-white border-secondary input-macro-grupo">
-                            <option value="Ingresos Operacionales">Ingresos Operacionales</option>
-                            <option value="Costos de Explotación" selected>Costos de Explotación</option>
-                            <option value="Gastos de Administración y Ventas">Gastos de Adm. y Ventas</option>
-                            <option value="Ingresos No Operacionales">Ingresos No Operacionales</option>
-                            <option value="Otros">Otros / Sin Clasificar</option>
-                        </select>
-                    </div>
-
                     <select class="form-select form-select-sm bg-dark text-white border-secondary input-tipo-grupo">
                         <option value="GASTO" selected>🔴 Gastos (Resta)</option>
                         <option value="INGRESO">🟢 Ingresos (Suma)</option>
@@ -200,18 +166,16 @@
         const gruposData = [];
         document.querySelectorAll('.grupo-wrapper').forEach(wrapper => {
             const nombre = wrapper.querySelector('.input-nombre-grupo').value;
-            const macro = wrapper.querySelector('.input-macro-grupo').value; // Capturamos el nuevo campo
+            const macro = wrapper.querySelector('.input-macro-grupo').value;
             const tipo = wrapper.querySelector('.input-tipo-grupo').value;
             const cuentas = [];
-            
             wrapper.querySelectorAll('.lista-grupo .item-cuenta').forEach(item => {
                 cuentas.push(item.dataset.id);
             });
-
             if(nombre.trim() !== "") {
                 gruposData.push({
                     nombre: nombre,
-                    macro_categoria: macro.trim() || "Otros", // Guardamos el Macro
+                    macro_categoria: macro.trim() || "Otros",
                     tipo: tipo,
                     cuentas: cuentas
                 });
@@ -229,13 +193,12 @@
                 alert("✅ Clasificación actualizada.");
                 window.location.reload();
             } else {
-                alert("Error: " + data.error);
+                alert("Error: " + (data.error || ''));
             }
         } catch(e) {
             alert("Error de conexión");
         }
     }
-
 </script>
 
 {% endblock %}

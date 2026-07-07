@@ -292,6 +292,7 @@
                 {% if tiene_permiso(session.get('rol'), 'contab') %}
                 <li><hr class="dropdown-divider bg-secondary"></li>
                 <li><a class="dropdown-item text-white" href="{{ url_for('contab.clasificacion_cuentas') }}">Clasificación Cuentas</a></li>
+                <li><a class="dropdown-item text-white" href="{{ url_for('contab.macros_gestion') }}">Macros P&amp;L</a></li>
                 {% endif %}
             </ul>
         </div>

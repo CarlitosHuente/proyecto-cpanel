@@ -156,37 +156,114 @@ def armar_macros_data_cc(df_final, data_clasif: dict, columnas_cc: List[str]) ->
     return macros_data
 
 
-def armar_reporte_gestion(macros_data: dict, columnas_cc: List[str]) -> List[dict]:
+def _grupos_macro_para_linea(
+    macros_data: dict,
+    macro_nombre: str,
+    linea_id: str,
+    macros_meta: Dict[str, dict],
+    config_activa: bool,
+) -> List[dict]:
+    d = macros_data.get(macro_nombre)
+    if not d:
+        return []
+    grupos = d.get("grupos") or []
+    if not config_activa:
+        return grupos
+    meta = macros_meta.get(macro_nombre, {})
+    if not meta.get("partir_por_tipo"):
+        return grupos
+    if linea_id == "ingresos_op":
+        return [g for g in grupos if g.get("tipo") == "INGRESO"]
+    if linea_id == "costo_directo":
+        return [g for g in grupos if g.get("tipo") == "GASTO"]
+    return grupos
+
+
+def _macros_gasto_desde_brutos(macros_meta: Dict[str, dict]) -> List[str]:
+    out = []
+    for nombre, meta in macros_meta.items():
+        if not meta.get("activo", True):
+            continue
+        if meta.get("seccion_pl") == "ingresos_brutos" and meta.get("partir_por_tipo"):
+            out.append(nombre)
+    return out
+
+
+def _incorporar_grupos_en_fila(
+    f: dict,
+    grupos: List[dict],
+    columnas: List[str],
+    total_key: str,
+    vistos: Optional[set] = None,
+) -> None:
+    if vistos is None:
+        vistos = set()
+    for g in grupos:
+        clave = g.get("nombre") or ""
+        if clave in vistos:
+            continue
+        vistos.add(clave)
+        f["grupos"].append(g)
+        totales = g.get(total_key) or g.get("totales_cc") or g.get("totales_col") or {}
+        for col in columnas:
+            f[total_key][col] += float(totales.get(col, 0))
+
+
+def armar_reporte_gestion(
+    macros_data: dict,
+    columnas: List[str],
+    *,
+    estructura: Optional[List[dict]] = None,
+    macros_meta: Optional[Dict[str, dict]] = None,
+    config_activa: bool = False,
+    total_key: str = "totales_cc",
+) -> List[dict]:
+    estructura = estructura or ESTRUCTURA_GESTION
+    macros_meta = macros_meta or {}
     reporte = []
     cache: Dict[str, Dict[str, float]] = {}
-    for l in ESTRUCTURA_GESTION:
+    macros_gasto_brutos = _macros_gasto_desde_brutos(macros_meta) if config_activa else []
+
+    for l in estructura:
         f = {
             "id": l["id"],
             "titulo": l["titulo"],
             "tipo": l["tipo"],
             "color": l.get("color", "secondary"),
             "grupos": [],
-            "totales_cc": {c: 0.0 for c in columnas_cc},
+            total_key: {c: 0.0 for c in columnas},
         }
         if l["tipo"] == "macro":
             enc = False
+            vistos: set = set()
             for src in l["fuente"]:
                 if src not in macros_data:
                     continue
-                d = macros_data[src]
-                f["grupos"].extend(d["grupos"])
-                for cc in columnas_cc:
-                    f["totales_cc"][cc] += d["totales_cc"].get(cc, 0)
-                enc = True
-            cache[l["id"]] = dict(f["totales_cc"])
+                grupos = _grupos_macro_para_linea(
+                    macros_data, src, l["id"], macros_meta, config_activa
+                )
+                if grupos:
+                    enc = True
+                _incorporar_grupos_en_fila(f, grupos, columnas, total_key, vistos)
+            if l["id"] == "costo_directo" and config_activa:
+                for src in macros_gasto_brutos:
+                    if src in l["fuente"]:
+                        continue
+                    grupos = _grupos_macro_para_linea(
+                        macros_data, src, "costo_directo", macros_meta, config_activa
+                    )
+                    if grupos:
+                        enc = True
+                    _incorporar_grupos_en_fila(f, grupos, columnas, total_key, vistos)
+            cache[l["id"]] = dict(f[total_key])
             if enc or l["id"] == "otros":
                 reporte.append(f)
         elif l["tipo"] == "calculo":
             for op in l["operacion"]:
                 tot = cache.get(op, {})
-                for cc in columnas_cc:
-                    f["totales_cc"][cc] += tot.get(cc, 0)
-            cache[l["id"]] = dict(f["totales_cc"])
+                for col in columnas:
+                    f[total_key][col] += tot.get(col, 0)
+            cache[l["id"]] = dict(f[total_key])
             reporte.append(f)
     return reporte
 

@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}Macros de Gestión{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+        <h2 class="text-white m-0">Macros de Gestión</h2>
+        <p class="text-muted small mb-0">Define a qué línea del P&amp;L va cada macro. Los grupos de cuentas siguen en <a href="{{ url_for('contab.clasificacion_cuentas') }}" class="text-info">Clasificación de Cuentas</a>.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('contab.clasificacion_cuentas') }}" class="btn btn-outline-light btn-sm">← Clasificación</a>
+        <button type="button" class="btn btn-outline-warning btn-sm" onclick="aplicarPreset()">Preset: separar ventas y costos</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="guardarMacros()">💾 Guardar</button>
+    </div>
+</div>
+
+<div class="alert alert-secondary border-secondary text-white mb-3">
+    <div class="form-check form-switch mb-2">
+        <input class="form-check-input" type="checkbox" id="switchActivo" {% if cfg.activo %}checked{% endif %}>
+        <label class="form-check-label fw-bold" for="switchActivo">Usar configuración personalizada de macros en informes</label>
+    </div>
+    <small class="text-muted">
+        {% if not archivo_existe %}
+        <strong>Sin archivo en servidor:</strong> los informes siguen igual que siempre (estructura legacy).
+        Al guardar por primera vez se crea <code>macros_gestion.json</code> en la carpeta contable.
+        Déjalo <em>desactivado</em> hasta revisar la tabla, o usa el preset y actívalo cuando estés listo.
+        {% elif cfg.activo %}
+        Configuración <span class="text-success">activa</span> — informes y dashboard usan esta estructura.
+        {% else %}
+        Archivo guardado pero <span class="text-warning">inactivo</span> — los informes siguen con la estructura anterior.
+        {% endif %}
+    </small>
+</div>
+
+<div class="card bg-dark text-white border-secondary shadow">
+    <div class="card-header border-secondary bg-black d-flex justify-content-between align-items-center">
+        <span class="fw-bold">Catálogo de macros</span>
+        <button type="button" class="btn btn-sm btn-success" onclick="agregarMacro()">+ Nueva macro</button>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-dark table-sm table-hover mb-0 align-middle" id="tablaMacros">
+                <thead class="border-secondary">
+                    <tr class="small text-uppercase text-muted">
+                        <th class="ps-3">Orden</th>
+                        <th>Nombre macro</th>
+                        <th>Línea del P&amp;L</th>
+                        <th class="text-center">Partir ING/GASTO</th>
+                        <th class="text-center">Activa</th>
+                        <th class="pe-3"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in cfg.macros %}
+                    <tr class="fila-macro">
+                        <td class="ps-3" style="width:70px">
+                            <input type="number" class="form-control form-control-sm bg-secondary text-white border-0 input-orden" value="{{ m.orden }}">
+                        </td>
+                        <td>
+                            <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary input-nombre" value="{{ m.nombre }}">
+                        </td>
+                        <td>
+                            <select class="form-select form-select-sm bg-dark text-white border-secondary input-seccion">
+                                {% for s in secciones %}
+                                <option value="{{ s.id }}" {% if m.seccion_pl == s.id %}selected{% endif %}>{{ s.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td class="text-center">
+                            <input type="checkbox" class="form-check-input input-partir" {% if m.partir_por_tipo %}checked{% endif %}
+                                   title="En esta macro: grupos INGRESO → ventas brutas; grupos GASTO → costo directo">
+                        </td>
+                        <td class="text-center">
+                            <input type="checkbox" class="form-check-input input-activa" {% if m.activo %}checked{% endif %}>
+                        </td>
+                        <td class="pe-3 text-end">
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarFila(this)">✕</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="mt-3 p-3 rounded border border-secondary bg-black bg-opacity-25">
+    <h6 class="text-white">Cómo separar ventas brutas y costo directo</h6>
+    <ol class="small text-muted mb-0">
+        <li>En cada <strong>grupo</strong> de Clasificación, marca tipo <strong>INGRESO</strong> (ventas) o <strong>GASTO</strong> (comisiones, COGS).</li>
+        <li>Asigna el grupo a macro <strong>Ingresos Venta</strong> (o crea macros propias).</li>
+        <li>Activa <strong>Partir ING/GASTO</strong> en esa macro y línea <em>Ingresos / ventas brutas</em>.</li>
+        <li>Los grupos GASTO bajarán solos a <strong>Costo directo</strong> sin mover cuentas de grupo.</li>
+        <li>O usa el botón <strong>Preset</strong> y luego activa la configuración.</li>
+    </ol>
+</div>
+
+<template id="tplFilaMacro">
+    <tr class="fila-macro">
+        <td class="ps-3"><input type="number" class="form-control form-control-sm bg-secondary text-white border-0 input-orden" value="999"></td>
+        <td><input type="text" class="form-control form-control-sm bg-dark text-white border-secondary input-nombre" value="Nueva macro"></td>
+        <td>
+            <select class="form-select form-select-sm bg-dark text-white border-secondary input-seccion">
+                {% for s in secciones %}
+                <option value="{{ s.id }}">{{ s.label }}</option>
+                {% endfor %}
+            </select>
+        </td>
+        <td class="text-center"><input type="checkbox" class="form-check-input input-partir"></td>
+        <td class="text-center"><input type="checkbox" class="form-check-input input-activa" checked></td>
+        <td class="pe-3 text-end"><button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarFila(this)">✕</button></td>
+    </tr>
+</template>
+
+<script>
+    function leerFilas() {
+        const macros = [];
+        document.querySelectorAll('#tablaMacros .fila-macro').forEach(row => {
+            const nombre = row.querySelector('.input-nombre').value.trim();
+            if (!nombre) return;
+            macros.push({
+                nombre,
+                orden: parseInt(row.querySelector('.input-orden').value, 10) || 999,
+                seccion_pl: row.querySelector('.input-seccion').value,
+                partir_por_tipo: row.querySelector('.input-partir').checked,
+                activo: row.querySelector('.input-activa').checked,
+            });
+        });
+        return macros;
+    }
+
+    async function postMacros(body) {
+        const resp = await fetch("{{ url_for('contab.api_guardar_macros_gestion') }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        return resp.json();
+    }
+
+    async function guardarMacros() {
+        const data = await postMacros({
+            activo: document.getElementById('switchActivo').checked,
+            macros: leerFilas(),
+        });
+        if (data.ok) {
+            alert('✅ Macros guardadas.');
+            window.location.reload();
+        } else {
+            alert('Error al guardar');
+        }
+    }
+
+    async function aplicarPreset() {
+        if (!confirm('¿Aplicar preset "separar ventas y costos"? Activa la config y marca partir por tipo en macros de ingreso.')) return;
+        const data = await postMacros({ accion: 'preset_separar' });
+        if (data.ok) {
+            alert('✅ Preset aplicado. Revisa la tabla y los informes.');
+            window.location.reload();
+        }
+    }
+
+    function agregarMacro() {
+        const tpl = document.getElementById('tplFilaMacro');
+        document.querySelector('#tablaMacros tbody').appendChild(tpl.content.cloneNode(true));
+    }
+
+    function eliminarFila(btn) {
+        if (!confirm('¿Eliminar esta macro del catálogo? (No borra grupos de cuentas)')) return;
+        btn.closest('tr').remove();
+    }
+</script>
+{% endblock %}

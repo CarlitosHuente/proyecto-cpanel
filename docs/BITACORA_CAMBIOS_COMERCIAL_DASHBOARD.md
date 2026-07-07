@@ -281,6 +281,7 @@ Carpeta Buk: env `BUK_ENCUESTA_CARPETA` (default `Capacitacion`). Token RRHH con
 - **Vista Mensual (`/contab/informe_gerencial`):** refactor a helpers compartidos; **hover** en celdas con monto muestra **% s/ ventas** de esa columna (TOTAL usa suma empresa). Enlaces dashboard ↔ informe preservan periodo y switches.
 - **Presentación:** montos con filtro `|dinero`; % con **1 decimal**.
 - **Ventas brutas (2026-07-06):** KPIs, resumen % y tooltips del informe usan **suma 4xx** (misma base que el gráfico de tendencia), no el neto de “Ingresos de explotación”.
+- **Macros P&amp;L (2026-07-07):** `/contab/macros_gestion` + `macros_gestion.json` (opcional, `activo: false` por defecto). Sin archivo → informes **igual que antes**. Con `activo: true` + “partir por tipo” en macro de ingresos: grupos INGRESO → ventas brutas; grupos GASTO → costo directo.
 - **Ranking sucursales (2026-07-06):** bloque inferior con mayor aporte / mayor detractor, gráfico de barras horizontal y tabla comparativa de resultado operacional por centro de costo.
 
 | Archivo | Cambio |

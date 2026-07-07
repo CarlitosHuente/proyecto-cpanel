@@ -8,6 +8,7 @@ from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, send_from_directory, flash, current_app, send_file, jsonify
 from utils.auth import login_requerido, permiso_modulo
 from utils.gestion_estructura import (
+    ESTRUCTURA_GESTION,
     armar_macros_data_cc,
     armar_reporte_gestion,
     kpis_desde_reporte,
@@ -16,6 +17,14 @@ from utils.gestion_estructura import (
     switches_desde_request,
     ventas_brutas_por_cc,
     ventas_por_cc,
+)
+from utils.macros_gestion_config import (
+    MACROS_GESTION_FILENAME,
+    PRESET_SEPARAR_VENTAS_COSTOS,
+    SECCIONES_PL,
+    config_default,
+    preparar_macros_config,
+    resolver_estructura_reporte,
 )
 from utils.sheet_cache import obtener_datos
 
@@ -68,6 +77,48 @@ def cargar_prorrateos(): return cargar_json(PRORRATEOS_FILENAME, {"config_cuenta
 def guardar_prorrateos(data): guardar_json(PRORRATEOS_FILENAME, data)
 def cargar_clasificaciones(): return cargar_json(CLASIFICACIONES_FILENAME, {"grupos": []})
 def guardar_clasificaciones(data): guardar_json(CLASIFICACIONES_FILENAME, data)
+
+
+def _macros_archivo_existe():
+    return os.path.exists(_ruta_archivo(MACROS_GESTION_FILENAME))
+
+
+def cargar_macros_gestion(data_clasif=None):
+    """None si no hay archivo (modo legacy, sin tocar producción)."""
+    if not _macros_archivo_existe():
+        return None
+    raw = cargar_json(MACROS_GESTION_FILENAME, config_default())
+    return preparar_macros_config(raw, (data_clasif or {}).get("grupos", []))
+
+
+def macros_para_ui(data_clasif=None):
+    """Lista de macros para desplegables (incluye huérfanas de grupos)."""
+    raw = cargar_json(MACROS_GESTION_FILENAME, None) if _macros_archivo_existe() else None
+    return preparar_macros_config(raw, (data_clasif or {}).get("grupos", []))
+
+
+def guardar_macros_gestion(data):
+    guardar_json(MACROS_GESTION_FILENAME, data)
+
+
+def _resolver_reporte_gestion(data_clasif):
+    cfg = cargar_macros_gestion(data_clasif)
+    if cfg is None:
+        return None, ESTRUCTURA_GESTION, {}, False
+    estructura, meta, activa = resolver_estructura_reporte(cfg)
+    return cfg, estructura, meta, activa
+
+
+def _armar_reporte_contab(macros_data, columnas, data_clasif, total_key="totales_cc"):
+    _, estructura, meta, activa = _resolver_reporte_gestion(data_clasif)
+    return armar_reporte_gestion(
+        macros_data,
+        columnas,
+        estructura=estructura,
+        macros_meta=meta,
+        config_activa=activa,
+        total_key=total_key,
+    )
 def cargar_comentarios(): return cargar_json(COMENTARIOS_FILE_NAME, {})
 def guardar_comentarios(data): guardar_json(COMENTARIOS_FILE_NAME, data)
 
@@ -307,7 +358,14 @@ def clasificacion_cuentas():
             "tipo": g["tipo"], "cuentas": cuentas_info
         })
     pendientes = [c for c in cuentas_en_mayor if c["CUENTA"] not in cuentas_usadas]
-    return render_template("contab/clasificacion.html", grupos=grupos_enriquecidos, cuentas_pendientes=pendientes)
+    macros_ui = macros_para_ui(data_clasif)
+    return render_template(
+        "contab/clasificacion.html",
+        grupos=grupos_enriquecidos,
+        cuentas_pendientes=pendientes,
+        macros_ui=macros_ui,
+        macros_config_activa=bool(_macros_archivo_existe() and macros_ui.get("activo")),
+    )
 
 # ----------------- APIs DE GUARDADO -----------------
 
@@ -334,6 +392,44 @@ def api_guardar_clasificacion():
     if not data or "grupos" not in data: return {"ok": False}, 400
     guardar_clasificaciones(data)
     return {"ok": True}
+
+
+@contab_bp.route("/macros_gestion")
+@login_requerido
+@permiso_modulo("contab")
+def macros_gestion():
+    data_clasif = cargar_clasificaciones()
+    archivo_existe = _macros_archivo_existe()
+    cfg = cargar_macros_gestion(data_clasif) if archivo_existe else macros_para_ui(data_clasif)
+    return render_template(
+        "contab/macros_gestion.html",
+        cfg=cfg,
+        secciones=SECCIONES_PL,
+        archivo_existe=archivo_existe,
+    )
+
+
+@contab_bp.route("/api/guardar_macros_gestion", methods=["POST"])
+@login_requerido
+@permiso_modulo("contab")
+def api_guardar_macros_gestion():
+    data = request.get_json() or {}
+    accion = data.get("accion")
+    data_clasif = cargar_clasificaciones()
+
+    if accion == "preset_separar":
+        payload = {"activo": True, "macros": PRESET_SEPARAR_VENTAS_COSTOS}
+    elif accion == "inicializar":
+        payload = config_default()
+    else:
+        payload = {
+            "activo": bool(data.get("activo", False)),
+            "macros": data.get("macros") or [],
+        }
+
+    cfg = preparar_macros_config(payload, data_clasif.get("grupos", []))
+    guardar_macros_gestion(cfg)
+    return {"ok": True, "activo": cfg.get("activo"), "macros": len(cfg.get("macros", []))}
 
 @contab_bp.route("/api/prorrateos/serv_generales", methods=["POST"])
 @login_requerido
@@ -663,7 +759,7 @@ def informe_gerencial():
 
     todos_cc = sorted(list(set(obtener_datos("mayor")["CENTRO COSTO"].dropna().unique())))
     macros_data = armar_macros_data_cc(df_final, data_clasif, todos_cc)
-    reporte = armar_reporte_gestion(macros_data, todos_cc)
+    reporte = _armar_reporte_contab(macros_data, todos_cc, data_clasif)
     ventas_cc = ventas_brutas_por_cc(df_final, todos_cc)
 
     return render_template(
@@ -770,39 +866,7 @@ def comparativo_gestion():
         macros_data["Sin Clasificar"]["grupos"].append(sin_clasif)
         for c in cols: macros_data["Sin Clasificar"]["totales_col"][c] += sin_clasif["totales_col"][c]
 
-    ESTRUCTURA = [
-        {"id": "ingresos_op", "titulo": "INGRESOS DE EXPLOTACIÓN", "tipo": "macro", "fuente": ["Ingresos Operacionales", "Ingresos Venta"]},
-        {"id": "costo_directo", "titulo": "COSTO DIRECTO (COSTO DE VENTA)", "tipo": "macro", "fuente": ["Costo Venta"]},
-        {"id": "margen_op", "titulo": "MARGEN OPERACIONAL (BRUTO)", "tipo": "calculo", "color": "primary", "operacion": ["ingresos_op", "costo_directo"]},
-        {"id": "costos_fijos", "titulo": "GASTOS FIJOS LOCALES", "tipo": "macro", "fuente": ["Costos de Explotación"]},
-        {"id": "margen", "titulo": "MARGEN DE EXPLOTACIÓN", "tipo": "calculo", "color": "warning", "operacion": ["margen_op", "costos_fijos"]},
-        {"id": "gastos_adm", "titulo": "GASTOS DE ADMINISTRACIÓN Y VENTAS", "tipo": "macro", "fuente": ["Gastos de Administración y Ventas"]},
-        {"id": "res_op", "titulo": "RESULTADO OPERACIONAL", "tipo": "calculo", "color": "info", "operacion": ["margen", "gastos_adm"]},
-        {"id": "no_op", "titulo": "INGRESOS Y EGRESOS NO OPERACIONALES", "tipo": "macro", "fuente": ["Ingresos No Operacionales"]},
-        {"id": "res_final", "titulo": "RESULTADO ANTES DE IMPTO", "tipo": "calculo", "color": "success", "operacion": ["res_op", "no_op"]},
-        {"id": "otros", "titulo": "SIN CLASIFICAR / OTROS", "tipo": "macro", "fuente": ["Sin Clasificar", "Otros"]}
-    ]
-
-    reporte = []
-    cache = {}
-    for l in ESTRUCTURA:
-        f = {"titulo": l["titulo"], "tipo": l["tipo"], "color": l.get("color", "secondary"), "grupos": [], "totales_col": {c:0.0 for c in cols}}
-        if l["tipo"] == "macro":
-            enc = False
-            for src in l["fuente"]:
-                if src in macros_data:
-                    d = macros_data[src]
-                    f["grupos"].extend(d["grupos"])
-                    for c in cols: f["totales_col"][c] += d["totales_col"][c]
-                    enc = True
-            cache[l["id"]] = f["totales_col"]
-            if enc or l["id"] == "otros": reporte.append(f)
-        elif l["tipo"] == "calculo":
-            for op in l["operacion"]:
-                tot = cache.get(op, {})
-                for c in cols: f["totales_col"][c] += tot.get(c, 0)
-            cache[l["id"]] = f["totales_col"]
-            reporte.append(f)
+    reporte = _armar_reporte_contab(macros_data, cols, data_clasif, total_key="totales_col")
 
     todos_cc = sorted(list(set(obtener_datos("mayor")["CENTRO COSTO"].dropna().unique())))
     return render_template("contab/comparativo_gestion.html", reporte=reporte, columnas=cols, todos_cc=todos_cc, comp_cc=comp_cc, comp_modo=comp_modo, switch_sg=switch_sg, switch_fab=switch_fab, mes_anual=mes_base)
@@ -923,53 +987,7 @@ def acumulado_gestion():
         for c in columnas:
             macros_data["Sin Clasificar"]["totales_col"][c] += sin_clasif["totales_col"][c]
 
-    ESTRUCTURA = [
-        {"id": "ingresos_op", "titulo": "INGRESOS DE EXPLOTACIÓN", "tipo": "macro",
-         "fuente": ["Ingresos Operacionales", "Ingresos Venta"]},
-        {"id": "costo_directo", "titulo": "COSTO DIRECTO (COSTO DE VENTA)", "tipo": "macro",
-         "fuente": ["Costo Venta"]},
-        {"id": "margen_op", "titulo": "MARGEN OPERACIONAL (BRUTO)", "tipo": "calculo",
-         "color": "primary", "operacion": ["ingresos_op", "costo_directo"]},
-        {"id": "costos_fijos", "titulo": "GASTOS FIJOS LOCALES", "tipo": "macro",
-         "fuente": ["Costos de Explotación"]},
-        {"id": "margen", "titulo": "MARGEN DE EXPLOTACIÓN", "tipo": "calculo",
-         "color": "warning", "operacion": ["margen_op", "costos_fijos"]},
-        {"id": "gastos_adm", "titulo": "GASTOS DE ADMINISTRACIÓN Y VENTAS", "tipo": "macro",
-         "fuente": ["Gastos de Administración y Ventas"]},
-        {"id": "res_op", "titulo": "RESULTADO OPERACIONAL", "tipo": "calculo",
-         "color": "info", "operacion": ["margen", "gastos_adm"]},
-        {"id": "no_op", "titulo": "INGRESOS Y EGRESOS NO OPERACIONALES", "tipo": "macro",
-         "fuente": ["Ingresos No Operacionales"]},
-        {"id": "res_final", "titulo": "RESULTADO ANTES DE IMPTO", "tipo": "calculo",
-         "color": "success", "operacion": ["res_op", "no_op"]},
-        {"id": "otros", "titulo": "SIN CLASIFICAR / OTROS", "tipo": "macro",
-         "fuente": ["Sin Clasificar", "Otros"]}
-    ]
-
-    reporte = []
-    cache = {}
-    for l in ESTRUCTURA:
-        f = {"titulo": l["titulo"], "tipo": l["tipo"], "color": l.get("color", "secondary"),
-             "grupos": [], "totales_col": {c: 0.0 for c in columnas}}
-        if l["tipo"] == "macro":
-            enc = False
-            for src in l["fuente"]:
-                if src in macros_data:
-                    d = macros_data[src]
-                    f["grupos"].extend(d["grupos"])
-                    for c in columnas:
-                        f["totales_col"][c] += d["totales_col"][c]
-                    enc = True
-            cache[l["id"]] = f["totales_col"]
-            if enc or l["id"] == "otros":
-                reporte.append(f)
-        elif l["tipo"] == "calculo":
-            for op in l["operacion"]:
-                tot = cache.get(op, {})
-                for c in columnas:
-                    f["totales_col"][c] += tot.get(c, 0)
-            cache[l["id"]] = f["totales_col"]
-            reporte.append(f)
+    reporte = _armar_reporte_contab(macros_data, columnas, data_clasif, total_key="totales_col")
 
     _MESES_ES = {1: "Ene", 2: "Feb", 3: "Mar", 4: "Abr", 5: "May", 6: "Jun",
                  7: "Jul", 8: "Ago", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dic"}
@@ -1041,9 +1059,9 @@ def dashboard_gestion():
     df_mes = df_final[df_final["PERIODO_STR"] == ult_mes_str].copy()
     df_mes_ant = df_final[df_final["PERIODO_STR"] == ant_mes_str].copy()
     macros_mes = armar_macros_data_cc(df_mes, data_clasif, todos_cc)
-    reporte_mes = armar_reporte_gestion(macros_mes, todos_cc)
+    reporte_mes = _armar_reporte_contab(macros_mes, todos_cc, data_clasif)
     macros_ant = armar_macros_data_cc(df_mes_ant, data_clasif, todos_cc)
-    reporte_ant = armar_reporte_gestion(macros_ant, todos_cc)
+    reporte_ant = _armar_reporte_contab(macros_ant, todos_cc, data_clasif)
 
     ventas_cc_mes = ventas_brutas_por_cc(df_mes, todos_cc)
     ventas_cc_ant = ventas_brutas_por_cc(df_mes_ant, todos_cc)
