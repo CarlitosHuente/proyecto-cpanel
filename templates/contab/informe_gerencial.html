@@ -7,7 +7,7 @@
 {%- set ventas = ventas_por_cc.get(cc_key, 0) -%}
 {%- if ventas -%}
 {%- set pct = (valor / ventas * 100) -%}
- title="{{ '%.1f'|format(pct) }}% s/ ventas"
+ title="{{ '%.1f'|format(pct) }}% s/ ventas brutas"
 {%- endif -%}
 {%- endmacro %}
 

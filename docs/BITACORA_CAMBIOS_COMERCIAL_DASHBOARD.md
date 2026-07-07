@@ -280,6 +280,8 @@ Carpeta Buk: env `BUK_ENCUESTA_CARPETA` (default `Capacitacion`). Token RRHH con
 - **Dashboard (`/contab/dashboard_gestion`):** KPIs alineados — ventas = ingresos explotación; cards de **margen bruto %** y **resultado operacional %** s/ ventas; **resultado antes de impto** en $. Bloque **“Estructura del mes (% s/ ventas)”** debajo de gráficos; **clic en cualquier fila** abre Vista Mensual con mismo `periodo`, Dist. SG y Aj. Fábrica.
 - **Vista Mensual (`/contab/informe_gerencial`):** refactor a helpers compartidos; **hover** en celdas con monto muestra **% s/ ventas** de esa columna (TOTAL usa suma empresa). Enlaces dashboard ↔ informe preservan periodo y switches.
 - **Presentación:** montos con filtro `|dinero`; % con **1 decimal**.
+- **Ventas brutas (2026-07-06):** KPIs, resumen % y tooltips del informe usan **suma 4xx** (misma base que el gráfico de tendencia), no el neto de “Ingresos de explotación”.
+- **Ranking sucursales (2026-07-06):** bloque inferior con mayor aporte / mayor detractor, gráfico de barras horizontal y tabla comparativa de resultado operacional por centro de costo.
 
 | Archivo | Cambio |
 |---------|--------|

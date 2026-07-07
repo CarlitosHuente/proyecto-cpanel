@@ -11,8 +11,10 @@ from utils.gestion_estructura import (
     armar_macros_data_cc,
     armar_reporte_gestion,
     kpis_desde_reporte,
+    ranking_cc_resultado_op,
     resumen_pct_dashboard,
     switches_desde_request,
+    ventas_brutas_por_cc,
     ventas_por_cc,
 )
 from utils.sheet_cache import obtener_datos
@@ -662,7 +664,7 @@ def informe_gerencial():
     todos_cc = sorted(list(set(obtener_datos("mayor")["CENTRO COSTO"].dropna().unique())))
     macros_data = armar_macros_data_cc(df_final, data_clasif, todos_cc)
     reporte = armar_reporte_gestion(macros_data, todos_cc)
-    ventas_cc = ventas_por_cc(reporte, todos_cc)
+    ventas_cc = ventas_brutas_por_cc(df_final, todos_cc)
 
     return render_template(
         "contab/informe_gerencial.html",
@@ -1003,6 +1005,7 @@ def dashboard_gestion():
             dash_cc="Total",
             kpis={},
             resumen_pct=[],
+            cc_resumen={"filas": [], "total": 0, "mejor": None, "peor": None},
             charts={},
         )
 
@@ -1042,13 +1045,17 @@ def dashboard_gestion():
     macros_ant = armar_macros_data_cc(df_mes_ant, data_clasif, todos_cc)
     reporte_ant = armar_reporte_gestion(macros_ant, todos_cc)
 
-    kpis = kpis_desde_reporte(reporte_mes, dash_cc)
-    kpis_ant = kpis_desde_reporte(reporte_ant, dash_cc)
+    ventas_cc_mes = ventas_brutas_por_cc(df_mes, todos_cc)
+    ventas_cc_ant = ventas_brutas_por_cc(df_mes_ant, todos_cc)
+
+    kpis = kpis_desde_reporte(reporte_mes, dash_cc, ventas_cc_mes)
+    kpis_ant = kpis_desde_reporte(reporte_ant, dash_cc, ventas_cc_ant)
     v_act, v_ant = kpis["venta"], kpis_ant["venta"]
     r_act, r_ant = kpis["resultado"], kpis_ant["resultado"]
     kpis["var_venta"] = ((v_act - v_ant) / v_ant * 100) if v_ant > 0 else 0
     kpis["var_resultado"] = ((r_act - r_ant) / abs(r_ant) * 100) if abs(r_ant) > 0 else 0
-    resumen_pct = resumen_pct_dashboard(reporte_mes, dash_cc)
+    resumen_pct = resumen_pct_dashboard(reporte_mes, dash_cc, ventas_cc_mes)
+    cc_resumen = ranking_cc_resultado_op(reporte_mes, todos_cc, ventas_cc_mes)
 
     df_chart = df_final.copy()
     if dash_cc != "Total Empresa":
@@ -1089,6 +1096,7 @@ def dashboard_gestion():
         todos_cc=todos_cc,
         kpis=kpis,
         resumen_pct=resumen_pct,
+        cc_resumen=cc_resumen,
         charts=charts,
         ultimo_mes=ult_mes_str,
         anio_actual=anio_act,

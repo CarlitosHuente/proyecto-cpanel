@@ -212,7 +212,29 @@ def pct_sobre_ventas(monto: float, ventas: float) -> Optional[float]:
     )
 
 
-def ventas_por_cc(reporte: List[dict], columnas_cc: List[str]) -> Dict[str, float]:
+def ventas_brutas_por_cc(df, columnas_cc: List[str]) -> Dict[str, float]:
+    """Ventas brutas = suma cuentas 4xx (misma base que el gráfico de tendencia)."""
+    out: Dict[str, float] = {cc: 0.0 for cc in columnas_cc}
+    if df is None or getattr(df, "empty", True):
+        out["__TOTAL__"] = 0.0
+        return out
+    ing = df[df["CUENTA"].astype(str).str.startswith("4")]
+    for cc in columnas_cc:
+        out[cc] = float(ing[ing["CENTRO COSTO"] == cc]["SALDO_REAL"].sum())
+    out["__TOTAL__"] = float(ing["SALDO_REAL"].sum())
+    return out
+
+
+def ventas_brutas_alcance(ventas_cc: Dict[str, float], alcance_cc: str) -> float:
+    if alcance_cc and alcance_cc != "Total Empresa":
+        return float(ventas_cc.get(alcance_cc, 0))
+    return float(ventas_cc.get("__TOTAL__", 0))
+
+
+def ventas_por_cc(reporte: List[dict], columnas_cc: List[str], ventas_cc: Optional[Dict[str, float]] = None) -> Dict[str, float]:
+    """Base % s/ ventas: brutas (4xx) si se pasa ventas_cc; si no, ingresos_op (legacy)."""
+    if ventas_cc is not None:
+        return dict(ventas_cc)
     ing = next((s for s in reporte if s["id"] == "ingresos_op"), None)
     if not ing:
         return {cc: 0.0 for cc in columnas_cc}
@@ -223,11 +245,16 @@ def ventas_por_cc(reporte: List[dict], columnas_cc: List[str]) -> Dict[str, floa
     return out
 
 
-def resumen_pct_dashboard(reporte: List[dict], alcance_cc: str) -> List[dict]:
-    """Filas para el bloque resumen % del dashboard."""
-    ventas = total_alcance(
-        next(s["totales_cc"] for s in reporte if s["id"] == "ingresos_op"), alcance_cc
-    )
+def resumen_pct_dashboard(
+    reporte: List[dict], alcance_cc: str, ventas_cc: Optional[Dict[str, float]] = None
+) -> List[dict]:
+    """Filas para el bloque resumen % del dashboard (% s/ ventas brutas)."""
+    if ventas_cc is not None:
+        ventas = ventas_brutas_alcance(ventas_cc, alcance_cc)
+    else:
+        ventas = total_alcance(
+            next(s["totales_cc"] for s in reporte if s["id"] == "ingresos_op"), alcance_cc
+        )
     filas = []
     for sid in RESUMEN_PCT_IDS:
         sec = next((s for s in reporte if s["id"] == sid), None)
@@ -248,10 +275,15 @@ def resumen_pct_dashboard(reporte: List[dict], alcance_cc: str) -> List[dict]:
     return filas
 
 
-def kpis_desde_reporte(reporte: List[dict], alcance_cc: str) -> Dict[str, Any]:
-    """KPIs dashboard alineados a ESTRUCTURA_GESTION."""
+def kpis_desde_reporte(
+    reporte: List[dict], alcance_cc: str, ventas_cc: Optional[Dict[str, float]] = None
+) -> Dict[str, Any]:
+    """KPIs dashboard: ventas brutas (4xx) + márgenes s/ esa base."""
     t = {s["id"]: total_alcance(s["totales_cc"], alcance_cc) for s in reporte}
-    ventas = t.get("ingresos_op", 0)
+    if ventas_cc is not None:
+        ventas = ventas_brutas_alcance(ventas_cc, alcance_cc)
+    else:
+        ventas = t.get("ingresos_op", 0)
     res_final = t.get("res_final", 0)
     margen_bruto = t.get("margen_op", 0)
     res_op = t.get("res_op", 0)
@@ -264,4 +296,46 @@ def kpis_desde_reporte(reporte: List[dict], alcance_cc: str) -> Dict[str, Any]:
         "resultado_op_pct": pct_sobre_ventas(res_op, ventas) or 0.0,
         "resultado": res_final,
         "costo_total": abs(gastos_estructura),
+    }
+
+
+def ranking_cc_resultado_op(
+    reporte: List[dict], columnas_cc: List[str], ventas_cc: Dict[str, float]
+) -> Dict[str, Any]:
+    """Comparativo por centro de costo: resultado operacional del mes."""
+    sec = next((s for s in reporte if s["id"] == "res_op"), None)
+    vacio: Dict[str, Any] = {
+        "filas": [],
+        "total": 0.0,
+        "ventas_empresa": 0.0,
+        "res_op_pct_empresa": None,
+        "mejor": None,
+        "peor": None,
+    }
+    if not sec:
+        return vacio
+    total = float(sum(sec["totales_cc"].values()))
+    filas = []
+    for cc in columnas_cc:
+        monto = float(sec["totales_cc"].get(cc, 0))
+        v = float(ventas_cc.get(cc, 0))
+        filas.append(
+            {
+                "cc": cc,
+                "resultado_op": monto,
+                "ventas": v,
+                "resultado_op_pct": pct_sobre_ventas(monto, v),
+                "participacion_pct": pct_sobre_ventas(monto, total) if total else None,
+            }
+        )
+    filas.sort(key=lambda x: x["resultado_op"], reverse=True)
+    activas = [f for f in filas if abs(f["resultado_op"]) > 1 or abs(f["ventas"]) > 1]
+    ventas_empresa = float(ventas_cc.get("__TOTAL__", 0))
+    return {
+        "filas": filas,
+        "total": total,
+        "ventas_empresa": ventas_empresa,
+        "res_op_pct_empresa": pct_sobre_ventas(total, ventas_empresa),
+        "mejor": activas[0] if activas else None,
+        "peor": activas[-1] if activas else None,
     }

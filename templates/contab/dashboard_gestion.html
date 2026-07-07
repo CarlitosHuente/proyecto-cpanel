@@ -4,16 +4,33 @@
 {% block content %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+<style>
+    .dash-gestion-header h2 { font-size: clamp(1.25rem, 4vw, 2rem); }
+    .chart-wrap {
+        position: relative;
+        width: 100%;
+        height: clamp(200px, 32vh, 300px);
+    }
+    .chart-wrap--tall { height: clamp(220px, 38vh, 340px); }
+    .chart-wrap--wide { height: clamp(240px, 45vh, 380px); }
+    @media (min-width: 992px) {
+        .chart-wrap--wide { height: clamp(260px, 34vh, 320px); }
+    }
+    .cc-pill-scroll { -webkit-overflow-scrolling: touch; }
+    .cc-link-dash { font-size: 0.8rem; }
+    @media (min-width: 768px) { .cc-link-dash { font-size: 1rem; } }
+</style>
+
 {% set sw_qs = '' %}
 {% if switch_sg %}{% set sw_qs = sw_qs ~ '&distribuir_sg=on' %}{% endif %}
 {% if switch_fab %}{% set sw_qs = sw_qs ~ '&ajuste_fabrica=on' %}{% endif %}
 {% set informe_url = url_for('contab.informe_gerencial', periodo=ultimo_mes, form_enviado=1) ~ sw_qs %}
 
-<div class="mb-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="text-white m-0 display-6 fw-bold">Dashboard Gerencial</h2>
+<div class="mb-3 mb-md-4 dash-gestion-header">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-stretch align-items-lg-center gap-3 mb-3">
+        <h2 class="text-white m-0 fw-bold">Dashboard Gerencial</h2>
         
-        <form action="{{ url_for('contab.dashboard_gestion') }}" method="get" class="d-flex align-items-center gap-3 bg-dark p-2 rounded border border-secondary flex-wrap">
+        <form action="{{ url_for('contab.dashboard_gestion') }}" method="get" class="d-flex align-items-center gap-2 gap-md-3 bg-dark p-2 rounded border border-secondary flex-wrap">
             <input type="hidden" name="form_enviado" value="1">
             <input type="hidden" name="dash_cc" value="{{ dash_cc }}">
             
@@ -40,21 +57,21 @@
         </form>
     </div>
 
-    <div class="d-flex gap-2 overflow-auto py-3 border-bottom border-secondary" style="white-space: nowrap;">
+    <div class="d-flex gap-2 overflow-auto py-2 py-md-3 border-bottom border-secondary cc-pill-scroll" style="white-space: nowrap;">
         <a href="{{ url_for('contab.dashboard_gestion', dash_cc='Total Empresa', periodo=ultimo_mes, form_enviado=1) }}{{ sw_qs }}" 
-           class="btn {% if dash_cc == 'Total Empresa' %}btn-danger fw-bold{% else %}btn-outline-light{% endif %} rounded-pill px-4">
+           class="btn btn-sm cc-link-dash {% if dash_cc == 'Total Empresa' %}btn-danger fw-bold{% else %}btn-outline-light{% endif %} rounded-pill px-3 px-md-4">
            Total Empresa
         </a>
         {% for cc in todos_cc %}
             <a href="{{ url_for('contab.dashboard_gestion', dash_cc=cc, periodo=ultimo_mes, form_enviado=1) }}{{ sw_qs }}" 
-               class="btn btn-sm {% if dash_cc == cc %}btn-danger fw-bold{% else %}btn-outline-secondary text-white{% endif %} rounded-pill px-3">
+               class="btn btn-sm cc-link-dash {% if dash_cc == cc %}btn-danger fw-bold{% else %}btn-outline-secondary text-white{% endif %} rounded-pill px-2 px-md-3">
                {{ cc }}
             </a>
         {% endfor %}
     </div>
 </div>
 
-<ul class="nav nav-tabs mb-4 border-secondary">
+<ul class="nav nav-tabs mb-3 mb-md-4 border-secondary flex-nowrap overflow-auto">
     <li class="nav-item">
         <a class="nav-link active fw-bold" href="#" 
         style="background-color: #d80000; color: white; border-color: #d80000 #d80000 #000 #d80000;">
@@ -72,88 +89,90 @@
     </li>
 </ul>
 
-<div class="row g-3 mb-4">
-    <div class="col-md-3">
+<div class="row g-2 g-md-3 mb-3 mb-md-4">
+    <div class="col-6 col-lg-3">
         <div class="card bg-dark text-white border-secondary h-100 shadow">
-            <div class="card-body">
-                <h5 class="text-white text-uppercase small opacity-75 mb-2">Ventas (ingresos explotación)</h5>
-                <h2 class="fw-bold mb-1 text-white">{{ kpis.venta|dinero }}</h2>
-                <div class="d-flex justify-content-between align-items-center mt-2">
-                    <small class="{% if kpis.var_venta >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
-                        {% if kpis.var_venta >= 0 %}▲{% else %}▼{% endif %} 
-                        {{ "{:.1f}%".format(kpis.var_venta) }} vs año ant.
-                    </small>
-                </div>
+            <div class="card-body p-2 p-md-3">
+                <h5 class="text-white text-uppercase small opacity-75 mb-1 mb-md-2">Ventas brutas</h5>
+                <h2 class="fw-bold mb-0 mb-md-1 text-white fs-4 fs-md-2">{{ kpis.venta|dinero }}</h2>
+                <small class="{% if kpis.var_venta >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
+                    {% if kpis.var_venta >= 0 %}▲{% else %}▼{% endif %} 
+                    {{ "{:.1f}%".format(kpis.var_venta) }} vs año ant.
+                </small>
             </div>
         </div>
     </div>
     
-    <div class="col-md-3">
+    <div class="col-6 col-lg-3">
         <div class="card bg-dark text-white border-secondary h-100 shadow">
-            <div class="card-body">
-                <h5 class="text-white text-uppercase small opacity-75 mb-2">Margen bruto</h5>
-                <h2 class="fw-bold mb-1 text-primary">{{ "{:.1f}%".format(kpis.margen_bruto_pct) }}</h2>
-                <small class="text-white opacity-75">s/ ventas del mes</small>
+            <div class="card-body p-2 p-md-3">
+                <h5 class="text-white text-uppercase small opacity-75 mb-1 mb-md-2">Margen bruto</h5>
+                <h2 class="fw-bold mb-0 mb-md-1 text-primary fs-4 fs-md-2">{{ "{:.1f}%".format(kpis.margen_bruto_pct) }}</h2>
+                <small class="text-white opacity-75">s/ ventas brutas</small>
             </div>
         </div>
     </div>
 
-    <div class="col-md-3">
+    <div class="col-6 col-lg-3">
         <div class="card bg-dark text-white border-secondary h-100 shadow">
-            <div class="card-body">
-                <h5 class="text-white text-uppercase small opacity-75 mb-2">Resultado operacional</h5>
-                <h2 class="fw-bold mb-1 text-info">{{ "{:.1f}%".format(kpis.resultado_op_pct) }}</h2>
-                <small class="text-white opacity-75">s/ ventas del mes</small>
+            <div class="card-body p-2 p-md-3">
+                <h5 class="text-white text-uppercase small opacity-75 mb-1 mb-md-2">Resultado operacional</h5>
+                <h2 class="fw-bold mb-0 mb-md-1 text-info fs-4 fs-md-2">{{ "{:.1f}%".format(kpis.resultado_op_pct) }}</h2>
+                <small class="text-white opacity-75">s/ ventas brutas</small>
             </div>
         </div>
     </div>
 
-    <div class="col-md-3">
+    <div class="col-6 col-lg-3">
         <div class="card bg-dark text-white border-secondary h-100 shadow">
-            <div class="card-body">
-                <h5 class="text-white text-uppercase small opacity-75 mb-2">Resultado antes de impto</h5>
-                <h2 class="fw-bold mb-1 {% if kpis.resultado >= 0 %}text-success{% else %}text-danger{% endif %}">
+            <div class="card-body p-2 p-md-3">
+                <h5 class="text-white text-uppercase small opacity-75 mb-1 mb-md-2">Res. antes impto</h5>
+                <h2 class="fw-bold mb-0 mb-md-1 fs-5 fs-md-2 {% if kpis.resultado >= 0 %}text-success{% else %}text-danger{% endif %}">
                     {{ kpis.resultado|dinero }}
                 </h2>
                 <small class="text-white opacity-75">
-                    Var: <span class="{% if kpis.var_resultado >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold">{{ "{:.1f}%".format(kpis.var_resultado) }}</span> vs año ant.
+                    Var: <span class="{% if kpis.var_resultado >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold">{{ "{:.1f}%".format(kpis.var_resultado) }}</span>
                 </small>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row g-4 mb-4">
-    <div class="col-lg-8">
+<div class="row g-3 g-md-4 mb-3 mb-md-4">
+    <div class="col-12 col-xl-8">
         <div class="card bg-dark text-white border-secondary h-100 shadow">
-            <div class="card-header border-secondary bg-black d-flex justify-content-between align-items-center">
-                <h5 class="card-title m-0 text-white">Tendencia de Ventas</h5>
+            <div class="card-header border-secondary bg-black d-flex justify-content-between align-items-center flex-wrap gap-2 py-2">
+                <h5 class="card-title m-0 text-white small text-md-base">Tendencia de Ventas</h5>
                 <span class="badge bg-secondary border border-light text-white">
                     {{ anio_actual }} vs {{ anio_anterior }}
                 </span>
             </div>
-            <div class="card-body">
-                <canvas id="chartSeason" style="height: 350px;"></canvas>
+            <div class="card-body p-2 p-md-3">
+                <div class="chart-wrap chart-wrap--wide">
+                    <canvas id="chartSeason"></canvas>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="col-lg-4">
+    <div class="col-12 col-xl-4">
         <div class="card bg-dark text-white border-secondary h-100 shadow">
-            <div class="card-header border-secondary bg-black">
-                <h5 class="card-title m-0 text-white">Top 5 Gastos ({{ ultimo_mes }})</h5>
+            <div class="card-header border-secondary bg-black py-2">
+                <h5 class="card-title m-0 text-white small text-md-base">Top 5 Gastos ({{ ultimo_mes }})</h5>
             </div>
-            <div class="card-body position-relative d-flex justify-content-center align-items-center">
-                <canvas id="chartMix" style="height: 300px; width: 100%;"></canvas>
+            <div class="card-body p-2 p-md-3">
+                <div class="chart-wrap">
+                    <canvas id="chartMix"></canvas>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 {% if resumen_pct %}
-<div class="card bg-dark text-white border-secondary shadow">
-    <div class="card-header border-secondary bg-black d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <h5 class="card-title m-0 text-white">Estructura del mes (% s/ ventas)</h5>
+<div class="card bg-dark text-white border-secondary shadow mb-3 mb-md-4">
+    <div class="card-header border-secondary bg-black d-flex justify-content-between align-items-center flex-wrap gap-2 py-2">
+        <h5 class="card-title m-0 text-white small text-md-base">Estructura del mes (% s/ ventas brutas)</h5>
         <span class="badge bg-secondary text-white">{{ ultimo_mes }} · {{ dash_cc }}</span>
     </div>
     <div class="card-body p-0">
@@ -190,9 +209,101 @@
 </div>
 {% endif %}
 
+{% if cc_resumen and cc_resumen.filas %}
+<div class="card bg-dark text-white border-secondary shadow mb-4">
+    <div class="card-header border-secondary bg-black d-flex justify-content-between align-items-center flex-wrap gap-2 py-2">
+        <h5 class="card-title m-0 text-white small text-md-base">Resultado operacional por sucursal</h5>
+        <span class="badge bg-info text-dark">Total empresa · {{ ultimo_mes }}</span>
+    </div>
+    <div class="card-body p-2 p-md-3">
+        {% if cc_resumen.mejor or cc_resumen.peor %}
+        <div class="row g-2 mb-3">
+            {% if cc_resumen.mejor and cc_resumen.mejor.resultado_op > 0 %}
+            <div class="col-md-6">
+                <div class="p-2 p-md-3 rounded border border-success bg-black bg-opacity-50">
+                    <div class="small text-success text-uppercase fw-bold">Mayor aporte</div>
+                    <div class="fw-bold text-white">{{ cc_resumen.mejor.cc }}</div>
+                    <div class="text-success fs-5 fw-bold">{{ cc_resumen.mejor.resultado_op|dinero }}</div>
+                    {% if cc_resumen.mejor.participacion_pct is not none %}
+                    <small class="text-muted">{{ "{:.1f}%".format(cc_resumen.mejor.participacion_pct) }} del resultado op. total</small>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            {% if cc_resumen.peor and cc_resumen.peor.resultado_op < 0 %}
+            <div class="col-md-6">
+                <div class="p-2 p-md-3 rounded border border-danger bg-black bg-opacity-50">
+                    <div class="small text-danger text-uppercase fw-bold">Mayor detractor</div>
+                    <div class="fw-bold text-white">{{ cc_resumen.peor.cc }}</div>
+                    <div class="text-danger fs-5 fw-bold">{{ cc_resumen.peor.resultado_op|dinero }}</div>
+                    {% if cc_resumen.peor.participacion_pct is not none %}
+                    <small class="text-muted">{{ "{:.1f}%".format(cc_resumen.peor.participacion_pct) }} del resultado op. total</small>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="row g-3">
+            <div class="col-lg-7">
+                <div class="chart-wrap chart-wrap--tall">
+                    <canvas id="chartCcResOp"></canvas>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="table-responsive" style="max-height: 380px; overflow-y: auto;">
+                    <table class="table table-dark table-sm table-hover mb-0 align-middle">
+                        <thead class="sticky-top bg-black">
+                            <tr class="small text-muted text-uppercase">
+                                <th>Sucursal</th>
+                                <th class="text-end">Ventas</th>
+                                <th class="text-end">Res. op.</th>
+                                <th class="text-end">% ventas</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for fila in cc_resumen.filas %}
+                            {% if fila.resultado_op != 0 or fila.ventas != 0 %}
+                            <tr class="{% if dash_cc == fila.cc %}table-danger{% endif %}"
+                                role="button"
+                                onclick="window.location='{{ url_for('contab.dashboard_gestion', dash_cc=fila.cc, periodo=ultimo_mes, form_enviado=1) }}{{ sw_qs }}'"
+                                title="Ver dashboard de {{ fila.cc }}">
+                                <td class="text-nowrap {% if dash_cc == fila.cc %}fw-bold{% endif %}">{{ fila.cc }}</td>
+                                <td class="text-end">{{ fila.ventas|dinero }}</td>
+                                <td class="text-end fw-bold {% if fila.resultado_op >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                    {{ fila.resultado_op|dinero }}
+                                </td>
+                                <td class="text-end">
+                                    {% if fila.resultado_op_pct is not none %}{{ "{:.1f}%".format(fila.resultado_op_pct) }}{% else %}—{% endif %}
+                                </td>
+                            </tr>
+                            {% endif %}
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="border-top border-secondary">
+                            <tr class="fw-bold">
+                                <td>Total empresa</td>
+                                <td class="text-end">{{ cc_resumen.ventas_empresa|dinero }}</td>
+                                <td class="text-end {% if cc_resumen.total >= 0 %}text-info{% else %}text-danger{% endif %}">{{ cc_resumen.total|dinero }}</td>
+                                <td class="text-end">
+                                    {% if cc_resumen.res_op_pct_empresa is not none %}{{ "{:.1f}%".format(cc_resumen.res_op_pct_empresa) }}{% else %}—{% endif %}
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <small class="text-muted d-block mt-2">Comparativo empresa completa. Clic en una fila para filtrar el dashboard a esa sucursal.</small>
+    </div>
+</div>
+{% endif %}
+
 <script>
     Chart.defaults.color = '#ffffff';
     Chart.defaults.borderColor = '#444';
+    const isNarrow = window.matchMedia('(max-width: 767px)').matches;
 
     const ctxSeason = document.getElementById('chartSeason').getContext('2d');
     new Chart(ctxSeason, {
@@ -205,9 +316,9 @@
                     data: {{ charts.season_actual | tojson }},
                     borderColor: '#d80000',
                     backgroundColor: 'rgba(216, 0, 0, 0.2)',
-                    borderWidth: 4,
+                    borderWidth: isNarrow ? 2 : 3,
                     pointBackgroundColor: '#fff',
-                    pointRadius: 4,
+                    pointRadius: isNarrow ? 2 : 4,
                     tension: 0.3,
                     fill: true
                 },
@@ -215,7 +326,7 @@
                     label: 'Ventas {{ anio_anterior }}',
                     data: {{ charts.season_prev | tojson }},
                     borderColor: '#aaaaaa',
-                    borderWidth: 2,
+                    borderWidth: isNarrow ? 1 : 2,
                     borderDash: [5, 5],
                     pointRadius: 0,
                     tension: 0.3,
@@ -228,7 +339,10 @@
             maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: { position: 'top', labels: { color: 'white', font: { size: 14 } } },
+                legend: {
+                    position: isNarrow ? 'bottom' : 'top',
+                    labels: { color: 'white', font: { size: isNarrow ? 11 : 13 }, boxWidth: 12 }
+                },
                 tooltip: {
                     backgroundColor: 'rgba(0, 0, 0, 0.9)',
                     titleColor: 'white',
@@ -246,8 +360,19 @@
                 }
             },
             scales: {
-                y: { beginAtZero: true, grid: { color: '#333' }, ticks: { color: '#ccc' } },
-                x: { grid: { display: false }, ticks: { color: 'white' } }
+                y: {
+                    beginAtZero: true,
+                    grid: { color: '#333' },
+                    ticks: {
+                        color: '#ccc',
+                        maxTicksLimit: isNarrow ? 5 : 8,
+                        callback: function(v) { return HuenteFmt.peso(v); }
+                    }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: 'white', maxRotation: 0, autoSkip: true, maxTicksLimit: 12 }
+                }
             }
         }
     });
@@ -268,10 +393,67 @@
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { position: 'bottom', labels: { color: 'white', padding: 20 } }
+                legend: {
+                    position: 'bottom',
+                    labels: { color: 'white', padding: isNarrow ? 8 : 16, font: { size: isNarrow ? 10 : 12 } }
+                }
             }
         }
     });
+
+    {% if cc_resumen and cc_resumen.filas %}
+    const ccData = {{ cc_resumen.filas | tojson }}.filter(r => Math.abs(r.resultado_op) > 1 || Math.abs(r.ventas) > 1);
+    const ccLabels = ccData.map(r => r.cc);
+    const ccValues = ccData.map(r => r.resultado_op);
+    const ccColors = ccValues.map(v => v >= 0 ? 'rgba(25, 135, 84, 0.85)' : 'rgba(220, 53, 69, 0.85)');
+
+    new Chart(document.getElementById('chartCcResOp').getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: ccLabels,
+            datasets: [{
+                label: 'Resultado operacional',
+                data: ccValues,
+                backgroundColor: ccColors,
+                borderColor: ccColors.map(c => c.replace('0.85', '1')),
+                borderWidth: 1
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(ctx) {
+                            const row = ccData[ctx.dataIndex];
+                            let lines = [HuenteFmt.pesoConSigno(ctx.parsed.x)];
+                            if (row.resultado_op_pct != null) {
+                                lines.push(row.resultado_op_pct.toFixed(1) + '% s/ ventas');
+                            }
+                            return lines;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: '#333' },
+                    ticks: {
+                        color: '#ccc',
+                        callback: function(v) { return HuenteFmt.peso(v); }
+                    }
+                },
+                y: {
+                    grid: { display: false },
+                    ticks: { color: 'white', font: { size: isNarrow ? 9 : 11 } }
+                }
+            }
+        }
+    });
+    {% endif %}
 </script>
 
 {% endblock %}
