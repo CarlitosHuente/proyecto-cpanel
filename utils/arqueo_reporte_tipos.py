@@ -84,12 +84,15 @@ def _filas_sistema_mes(desde: date, hasta: date, sucursal_id: Optional[int] = No
     return out
 
 
+DIAS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+
+
 def contar_boletas_mes(
     anio: int, mes: int, sucursal_id: Optional[int] = None
 ) -> Dict[str, Any]:
     """
     Boletas emitidas = N_COMP distintos en import sistema (arqueo_caja_lineas) del mes.
-  """
+    """
     desde, hasta = _rango_mes(anio, mes)
     conn = get_db_connection()
     try:
@@ -99,16 +102,19 @@ def contar_boletas_mes(
                       WHERE l.fec_compr >= %s AND l.fec_compr <= %s
                         AND TRIM(l.n_comp) <> ''"""
             params: list = [desde, hasta]
+            suc_filter = ""
+            if sucursal_id:
+                suc_filter = " AND l.sucursal_id = %s"
             if sucursal_id:
                 cur.execute(
-                    f"""SELECT COUNT(DISTINCT l.n_comp) AS n {base} AND l.sucursal_id = %s""",
+                    f"""SELECT COUNT(DISTINCT l.n_comp) AS n {base}{suc_filter}""",
                     params + [sucursal_id],
                 )
                 total = int((cur.fetchone() or {}).get("n") or 0)
                 cur.execute(
                     f"""SELECT l.sucursal_id, s.nombre_sucursal,
                                COUNT(DISTINCT l.n_comp) AS boletas
-                        {base} AND l.sucursal_id = %s
+                        {base}{suc_filter}
                         GROUP BY l.sucursal_id, s.nombre_sucursal""",
                     params + [sucursal_id],
                 )
@@ -137,11 +143,37 @@ def contar_boletas_mes(
                         "pct_del_total": _pct(Decimal(b), Decimal(total)) if total else 0.0,
                     }
                 )
+            cur.execute(
+                f"""SELECT l.fec_compr AS fecha, COUNT(DISTINCT l.n_comp) AS boletas
+                    {base}{suc_filter}
+                    GROUP BY l.fec_compr
+                    ORDER BY l.fec_compr""",
+                params + ([sucursal_id] if sucursal_id else []),
+            )
+            por_dia = []
+            for r in cur.fetchall() or []:
+                b = int(r.get("boletas") or 0)
+                fe = r["fecha"]
+                if hasattr(fe, "isoformat"):
+                    fiso = fe.isoformat()
+                    dia_nom = DIAS_ES[fe.weekday()]
+                else:
+                    fiso = str(fe)[:10]
+                    dia_nom = ""
+                por_dia.append(
+                    {
+                        "fecha": fiso,
+                        "dia": dia_nom,
+                        "boletas": b,
+                        "pct_del_total": _pct(Decimal(b), Decimal(total)) if total else 0.0,
+                    }
+                )
     finally:
         conn.close()
     return {
         "total_boletas": total,
         "por_sucursal": por_suc,
+        "por_dia": por_dia,
         "sucursal_id": sucursal_id,
     }
 
