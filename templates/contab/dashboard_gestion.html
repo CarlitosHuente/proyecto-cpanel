@@ -4,6 +4,11 @@
 {% block content %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+{% set sw_qs = '' %}
+{% if switch_sg %}{% set sw_qs = sw_qs ~ '&distribuir_sg=on' %}{% endif %}
+{% if switch_fab %}{% set sw_qs = sw_qs ~ '&ajuste_fabrica=on' %}{% endif %}
+{% set informe_url = url_for('contab.informe_gerencial', periodo=ultimo_mes, form_enviado=1) ~ sw_qs %}
+
 <div class="mb-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2 class="text-white m-0 display-6 fw-bold">Dashboard Gerencial</h2>
@@ -36,12 +41,12 @@
     </div>
 
     <div class="d-flex gap-2 overflow-auto py-3 border-bottom border-secondary" style="white-space: nowrap;">
-        <a href="{{ url_for('contab.dashboard_gestion', dash_cc='Total Empresa', periodo=ultimo_mes) }}" 
+        <a href="{{ url_for('contab.dashboard_gestion', dash_cc='Total Empresa', periodo=ultimo_mes, form_enviado=1) }}{{ sw_qs }}" 
            class="btn {% if dash_cc == 'Total Empresa' %}btn-danger fw-bold{% else %}btn-outline-light{% endif %} rounded-pill px-4">
            Total Empresa
         </a>
         {% for cc in todos_cc %}
-            <a href="{{ url_for('contab.dashboard_gestion', dash_cc=cc, periodo=ultimo_mes) }}" 
+            <a href="{{ url_for('contab.dashboard_gestion', dash_cc=cc, periodo=ultimo_mes, form_enviado=1) }}{{ sw_qs }}" 
                class="btn btn-sm {% if dash_cc == cc %}btn-danger fw-bold{% else %}btn-outline-secondary text-white{% endif %} rounded-pill px-3">
                {{ cc }}
             </a>
@@ -57,7 +62,7 @@
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link" href="{{ url_for('contab.informe_gerencial') }}" style="color: #bbb; border: 1px solid transparent;">Vista Mensual</a>
+        <a class="nav-link" href="{{ informe_url }}" style="color: #bbb; border: 1px solid transparent;">Vista Mensual</a>
     </li>
     <li class="nav-item">
         <a class="nav-link" href="{{ url_for('contab.comparativo_gestion') }}" style="color: #bbb; border: 1px solid transparent;">Comparativo</a>
@@ -71,8 +76,8 @@
     <div class="col-md-3">
         <div class="card bg-dark text-white border-secondary h-100 shadow">
             <div class="card-body">
-                <h5 class="text-white text-uppercase small opacity-75 mb-2">Ventas Mes</h5>
-                <h2 class="fw-bold mb-1 text-white">{{ "{:,.0f}".format(kpis.venta).replace(",", ".") }}</h2>
+                <h5 class="text-white text-uppercase small opacity-75 mb-2">Ventas (ingresos explotación)</h5>
+                <h2 class="fw-bold mb-1 text-white">{{ kpis.venta|dinero }}</h2>
                 <div class="d-flex justify-content-between align-items-center mt-2">
                     <small class="{% if kpis.var_venta >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
                         {% if kpis.var_venta >= 0 %}▲{% else %}▼{% endif %} 
@@ -86,8 +91,9 @@
     <div class="col-md-3">
         <div class="card bg-dark text-white border-secondary h-100 shadow">
             <div class="card-body">
-                <h5 class="text-white text-uppercase small opacity-75 mb-2">Margen Operacional</h5>
-                <h2 class="fw-bold mb-1 text-warning">{{ "{:.1f}%".format(kpis.margen) }}</h2>
+                <h5 class="text-white text-uppercase small opacity-75 mb-2">Margen bruto</h5>
+                <h2 class="fw-bold mb-1 text-primary">{{ "{:.1f}%".format(kpis.margen_bruto_pct) }}</h2>
+                <small class="text-white opacity-75">s/ ventas del mes</small>
             </div>
         </div>
     </div>
@@ -95,29 +101,29 @@
     <div class="col-md-3">
         <div class="card bg-dark text-white border-secondary h-100 shadow">
             <div class="card-body">
-                <h5 class="text-white text-uppercase small opacity-75 mb-2">Resultado Final</h5>
+                <h5 class="text-white text-uppercase small opacity-75 mb-2">Resultado operacional</h5>
+                <h2 class="fw-bold mb-1 text-info">{{ "{:.1f}%".format(kpis.resultado_op_pct) }}</h2>
+                <small class="text-white opacity-75">s/ ventas del mes</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card bg-dark text-white border-secondary h-100 shadow">
+            <div class="card-body">
+                <h5 class="text-white text-uppercase small opacity-75 mb-2">Resultado antes de impto</h5>
                 <h2 class="fw-bold mb-1 {% if kpis.resultado >= 0 %}text-success{% else %}text-danger{% endif %}">
-                    {{ "{:,.0f}".format(kpis.resultado).replace(",", ".") }}
+                    {{ kpis.resultado|dinero }}
                 </h2>
                 <small class="text-white opacity-75">
-                    Var: <span class="{% if kpis.var_resultado >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold">{{ "{:.1f}%".format(kpis.var_resultado) }}</span>
+                    Var: <span class="{% if kpis.var_resultado >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold">{{ "{:.1f}%".format(kpis.var_resultado) }}</span> vs año ant.
                 </small>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-md-3">
-        <div class="card bg-dark text-white border-secondary h-100 shadow">
-            <div class="card-body">
-                <h5 class="text-white text-uppercase small opacity-75 mb-2">Total Gastos</h5>
-                <h3 class="fw-bold mb-0 text-danger">{{ "{:,.0f}".format(kpis.costo_total | abs).replace(",", ".") }}</h3>
-                <small class="text-white opacity-50">Acumulado mes</small>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row g-4">
+<div class="row g-4 mb-4">
     <div class="col-lg-8">
         <div class="card bg-dark text-white border-secondary h-100 shadow">
             <div class="card-header border-secondary bg-black d-flex justify-content-between align-items-center">
@@ -143,6 +149,46 @@
         </div>
     </div>
 </div>
+
+{% if resumen_pct %}
+<div class="card bg-dark text-white border-secondary shadow">
+    <div class="card-header border-secondary bg-black d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h5 class="card-title m-0 text-white">Estructura del mes (% s/ ventas)</h5>
+        <span class="badge bg-secondary text-white">{{ ultimo_mes }} · {{ dash_cc }}</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-dark table-hover table-sm mb-0 align-middle">
+                <thead class="border-secondary">
+                    <tr class="text-uppercase small text-muted">
+                        <th class="ps-3">Concepto</th>
+                        <th class="text-end pe-3" style="width: 120px;">% ventas</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for fila in resumen_pct %}
+                    <tr role="button" class="{% if fila.tipo == 'calculo' %}table-{{ fila.color }}{% endif %}"
+                        onclick="window.location='{{ informe_url }}'"
+                        title="Ver detalle en Vista Mensual">
+                        <td class="ps-3 {% if fila.tipo == 'calculo' %}fw-bold text-dark{% else %}text-light{% endif %}">
+                            {{ fila.titulo }}
+                        </td>
+                        <td class="text-end pe-3 fw-bold {% if fila.tipo == 'calculo' %}text-dark{% elif fila.es_ventas %}text-white{% else %}text-light{% endif %}">
+                            {% if fila.pct is not none %}
+                                {{ "{:.1f}%".format(fila.pct) }}
+                            {% else %}—{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="px-3 py-2 border-top border-secondary">
+            <small class="text-muted">Clic en cualquier fila para abrir el informe mensual con el mismo periodo y ajustes.</small>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <script>
     Chart.defaults.color = '#ffffff';
@@ -192,7 +238,7 @@
                             let label = context.dataset.label || '';
                             if (label) { label += ': '; }
                             if (context.parsed.y !== null) {
-                                label += new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(context.parsed.y);
+                                label += HuenteFmt.peso(context.parsed.y);
                             }
                             return label;
                         }

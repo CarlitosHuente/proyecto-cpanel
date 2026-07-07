@@ -270,6 +270,26 @@ Carpeta Buk: env `BUK_ENCUESTA_CARPETA` (default `Capacitacion`). Token RRHH con
 
 ---
 
+## H-quater. Dashboard Gerencial — KPIs unificados y resumen % (2026-07-06)
+
+**Problema:** el dashboard calculaba margen como `(ingresos 4xx + gastos 3xx) / ingresos`, distinto del Estado de Resultados (Vista Mensual). No había resumen estructural en % ni enlace coherente entre vistas.
+
+**Solución:**
+
+- **`utils/gestion_estructura.py`:** `ESTRUCTURA_GESTION` compartida (ingresos explotación → costo directo → margen bruto → … → resultado antes de impto). Helpers: `armar_macros_data_cc`, `armar_reporte_gestion`, `kpis_desde_reporte`, `resumen_pct_dashboard`, `ventas_por_cc`, `pct_sobre_ventas`.
+- **Dashboard (`/contab/dashboard_gestion`):** KPIs alineados — ventas = ingresos explotación; cards de **margen bruto %** y **resultado operacional %** s/ ventas; **resultado antes de impto** en $. Bloque **“Estructura del mes (% s/ ventas)”** debajo de gráficos; **clic en cualquier fila** abre Vista Mensual con mismo `periodo`, Dist. SG y Aj. Fábrica.
+- **Vista Mensual (`/contab/informe_gerencial`):** refactor a helpers compartidos; **hover** en celdas con monto muestra **% s/ ventas** de esa columna (TOTAL usa suma empresa). Enlaces dashboard ↔ informe preservan periodo y switches.
+- **Presentación:** montos con filtro `|dinero`; % con **1 decimal**.
+
+| Archivo | Cambio |
+|---------|--------|
+| `utils/gestion_estructura.py` | Estructura P&L y KPIs compartidos |
+| `routes/contab_routes.py` | `dashboard_gestion`, `informe_gerencial` usan helpers |
+| `templates/contab/dashboard_gestion.html` | KPIs, resumen %, enlaces |
+| `templates/contab/informe_gerencial.html` | Tooltips %, `|dinero`, enlaces |
+
+---
+
 ## H-ter. Histórico de Productos (nuevo 2026-05-11; reglas finales 2026-05-12)
 
 **Problema:** no existía forma de ver la evolución histórica de un producto específico (neto, cantidad, precio) comparando año actual vs anterior, ni identificar productos con mayor crecimiento o caída.
@@ -304,12 +324,15 @@ Carpeta Buk: env `BUK_ENCUESTA_CARPETA` (default `Capacitacion`). Token RRHH con
 | `utils/sheet_cache.py` | NETO, presentación familia/producto, SQL comercial, caché, export diagnóstico |
 | `utils/ventas_excel_import.py` | Import Excel/CSV, notas de crédito |
 | `routes/dashboard_routes.py` | API dashboard, ticket, históricos, export Excel, **latest-date/sucursales livianos** |
-| `routes/contab_routes.py` | Informe gerencial, comparativo, dashboard gestión, **acumulado gestión** |
+| `routes/contab_routes.py` | Informe gerencial, comparativo, dashboard gestión, acumulado gestión, **KPIs unificados** |
 | `routes/ventas_routes.py` | Ventas detalle/resumen, **histórico de productos** |
 | `routes/config_routes.py` | Comercial upload, revertir, **historial paginado** |
 | `templates/config/comercial_upload.html` | UI import + enlaces |
 | `templates/config/comercial_cargas_historial.html` | Lista completa de cargas |
-| `templates/contab/acumulado_gestion.html` | **Vista acumulado de gestión (nueva)** |
+| `utils/gestion_estructura.py` | **Estructura P&L gestión** compartida (dashboard + informe) |
+| `templates/contab/dashboard_gestion.html` | KPIs unificados, resumen %, enlaces a informe |
+| `templates/contab/informe_gerencial.html` | Tooltips % s/ventas, `|dinero` |
+| `templates/contab/acumulado_gestion.html` | Vista acumulado de gestión |
 | `templates/ventas_historico.html` | **Vista histórico de productos (nueva)** |
 | `static/js/ventas_historico.js` | Cards, gráficos Plotly, tabla; tooltips **`customdata` + `HuenteFmt`**; comparación mensual/KPI por semanas; cache-bust `?v=6` |
 | `templates/dashboard.html` | Overlays, modales ticket/neto, versión JS |

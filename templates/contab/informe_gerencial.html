@@ -3,6 +3,19 @@
 
 {% block content %}
 
+{% macro titulo_pct(valor, cc_key) -%}
+{%- set ventas = ventas_por_cc.get(cc_key, 0) -%}
+{%- if ventas -%}
+{%- set pct = (valor / ventas * 100) -%}
+ title="{{ '%.1f'|format(pct) }}% s/ ventas"
+{%- endif -%}
+{%- endmacro %}
+
+{% set sw_qs = '' %}
+{% if switch_sg %}{% set sw_qs = sw_qs ~ '&distribuir_sg=on' %}{% endif %}
+{% if switch_fab %}{% set sw_qs = sw_qs ~ '&ajuste_fabrica=on' %}{% endif %}
+{% set dashboard_url = url_for('contab.dashboard_gestion', periodo=periodo, form_enviado=1) ~ sw_qs %}
+
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h2 class="text-white m-0">Estado de Resultados de Gestión</h2>
     
@@ -35,7 +48,7 @@
 <ul class="nav nav-tabs mb-3 border-secondary">
     
     <li class="nav-item">
-        <a class="nav-link" href="{{ url_for('contab.dashboard_gestion') }}" style="color: #bbb; border: 1px solid transparent;">
+        <a class="nav-link" href="{{ dashboard_url }}" style="color: #bbb; border: 1px solid transparent;">
             Dashboard
         </a>
     </li>
@@ -80,12 +93,13 @@
                         </td>
                         {% set total_sec_empresa = seccion.totales_cc.values() | sum %}
                         {% for cc in columnas_cc %}
-                            <td class="text-end fw-bold text-light" style="background-color: #222;">
-                                {{ "{:,.0f}".format(seccion.totales_cc[cc]).replace(",", ".") }}
+                            {% set valor = seccion.totales_cc[cc] %}
+                            <td class="text-end fw-bold text-light celda-pct" style="background-color: #222;"{{ titulo_pct(valor, cc) }}>
+                                {{ valor|dinero }}
                             </td>
                         {% endfor %}
-                        <td class="text-end fw-bold text-light border-start border-secondary" style="background-color: #222;">
-                            {{ "{:,.0f}".format(total_sec_empresa).replace(",", ".") }}
+                        <td class="text-end fw-bold text-light border-start border-secondary celda-pct" style="background-color: #222;"{{ titulo_pct(total_sec_empresa, '__TOTAL__') }}>
+                            {{ total_sec_empresa|dinero }}
                         </td>
                     </tr>
 
@@ -100,14 +114,14 @@
                             </td>
                             {% for cc in columnas_cc %}
                                 {% set valor = fila.totales_cc.get(cc, 0) %}
-                                <td class="text-end text-light {% if valor == 0 %}text-muted{% endif %}">
+                                <td class="text-end text-light celda-pct {% if valor == 0 %}text-muted{% endif %}"{{ titulo_pct(valor, cc) if valor != 0 else '' }}>
                                     {% if valor != 0 %}
-                                        {{ "{:,.0f}".format(valor).replace(",", ".") }}
+                                        {{ valor|dinero }}
                                     {% else %}-{% endif %}
                                 </td>
                             {% endfor %}
-                            <td class="text-end fw-bold bg-dark border-start border-secondary">
-                                {{ "{:,.0f}".format(total_fila).replace(",", ".") }}
+                            <td class="text-end fw-bold bg-dark border-start border-secondary celda-pct"{{ titulo_pct(total_fila, '__TOTAL__') }}>
+                                {{ total_fila|dinero }}
                             </td>
                         </tr>
 
@@ -124,12 +138,12 @@
                                                 </td>
                                                 {% for cc in columnas_cc %}
                                                     {% set val_cta = cta.montos_cc.get(cc, 0) %}
-                                                    <td class="text-end text-white" style="min-width: 100px;">
-                                                        {% if val_cta != 0 %}{{ "{:,.0f}".format(val_cta).replace(",", ".") }}{% else %}<span class="text-muted small">.</span>{% endif %}
+                                                    <td class="text-end text-white celda-pct" style="min-width: 100px;"{{ titulo_pct(val_cta, cc) if val_cta != 0 else '' }}>
+                                                        {% if val_cta != 0 %}{{ val_cta|dinero }}{% else %}<span class="text-muted small">.</span>{% endif %}
                                                     </td>
                                                 {% endfor %}
-                                                <td class="text-end fw-bold text-white border-start border-secondary">
-                                                    {{ "{:,.0f}".format(total_cta).replace(",", ".") }}
+                                                <td class="text-end fw-bold text-white border-start border-secondary celda-pct"{{ titulo_pct(total_cta, '__TOTAL__') }}>
+                                                    {{ total_cta|dinero }}
                                                 </td>
                                             </tr>
                                         {% endfor %}
@@ -146,12 +160,13 @@
                         </td>
                         {% set total_res_empresa = seccion.totales_cc.values() | sum %}
                         {% for cc in columnas_cc %}
-                            <td class="text-end fw-bold bg-{{ seccion.color }} text-dark">
-                                {{ "{:,.0f}".format(seccion.totales_cc[cc]).replace(",", ".") }}
+                            {% set valor = seccion.totales_cc[cc] %}
+                            <td class="text-end fw-bold bg-{{ seccion.color }} text-dark celda-pct"{{ titulo_pct(valor, cc) }}>
+                                {{ valor|dinero }}
                             </td>
                         {% endfor %}
-                        <td class="text-end fw-bold bg-{{ seccion.color }} text-dark border-start border-dark">
-                            {{ "{:,.0f}".format(total_res_empresa).replace(",", ".") }}
+                        <td class="text-end fw-bold bg-{{ seccion.color }} text-dark border-start border-dark celda-pct"{{ titulo_pct(total_res_empresa, '__TOTAL__') }}>
+                            {{ total_res_empresa|dinero }}
                         </td>
                     </tr>
                     <tr><td colspan="{{ columnas_cc|length + 2 }}" class="bg-black border-0" style="height: 15px;"></td></tr>
@@ -162,6 +177,10 @@
         </tbody>
     </table>
 </div>
+
+<style>
+    .celda-pct { cursor: help; }
+</style>
 
 <script>
     // Al cargar la página, restauramos lo que estaba abierto

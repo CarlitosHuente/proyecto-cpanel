@@ -7,6 +7,14 @@ import tempfile
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, send_from_directory, flash, current_app, send_file, jsonify
 from utils.auth import login_requerido, permiso_modulo
+from utils.gestion_estructura import (
+    armar_macros_data_cc,
+    armar_reporte_gestion,
+    kpis_desde_reporte,
+    resumen_pct_dashboard,
+    switches_desde_request,
+    ventas_por_cc,
+)
 from utils.sheet_cache import obtener_datos
 
 contab_bp = Blueprint("contab", __name__, url_prefix="/contab")
@@ -645,88 +653,26 @@ def informe_gerencial():
     df = df[df["CUENTA"].str.startswith(('3', '4'))]
     df = df[df["PERIODO_STR"] == periodo].copy()
 
-# Revisa si el formulario mandó el campo oculto "form_enviado"
-    if request.args.get("form_enviado"):
-        # Si lo envió, respeta exactamente lo que el usuario haya dejado marcado o desmarcado
-        switch_sg = request.args.get("distribuir_sg") == "on"
-        switch_fab = request.args.get("ajuste_fabrica") == "on"
-    else:
-        # Si NO lo envió (es la primera vez que cargas la página), préndelos por defecto
-        switch_sg = True
-        switch_fab = True
-    
+    switch_sg, switch_fab = switches_desde_request(
+        bool(request.args.get("form_enviado")), request.args
+    )
+
     df_final = calcular_matriz_gestion(df, periodo, switch_sg, switch_fab, data_config)
-    
+
     todos_cc = sorted(list(set(obtener_datos("mayor")["CENTRO COSTO"].dropna().unique())))
-    matriz = {}
-    for _, row in df_final.iterrows():
-        cta = row["CUENTA"]
-        if cta not in matriz: matriz[cta] = {"nombre": row["NOMBRE"], "montos": {}}
-        matriz[cta]["montos"][row["CENTRO COSTO"]] = matriz[cta]["montos"].get(row["CENTRO COSTO"], 0) + row["SALDO_REAL"]
+    macros_data = armar_macros_data_cc(df_final, data_clasif, todos_cc)
+    reporte = armar_reporte_gestion(macros_data, todos_cc)
+    ventas_cc = ventas_por_cc(reporte, todos_cc)
 
-    macros_data = {}
-    for grp in data_clasif.get("grupos", []):
-        m = grp.get("macro_categoria", "Otros")
-        if m not in macros_data: macros_data[m] = {"grupos": [], "totales_cc": {c:0.0 for c in todos_cc}}
-        fg = {"nombre": grp["nombre"], "tipo": grp["tipo"], "totales_cc": {c:0.0 for c in todos_cc}, "detalle_cuentas": []}
-        for cta_id in grp["cuentas"]:
-            cid = str(cta_id)
-            if cid in matriz:
-                data_cta = matriz[cid]
-                for cc, val in data_cta["montos"].items():
-                    fg["totales_cc"][cc] += val
-                    macros_data[m]["totales_cc"][cc] += val
-                fg["detalle_cuentas"].append({"codigo": cid, "nombre": data_cta["nombre"], "montos_cc": data_cta["montos"]})
-        macros_data[m]["grupos"].append(fg)
-
-    sin_clasif = {"nombre": "Pendientes", "totales_cc": {c:0.0 for c in todos_cc}, "detalle_cuentas": []}
-    procesadas = set([str(c) for g in data_clasif.get("grupos", []) for c in g["cuentas"]])
-    hay_pend = False
-    for cta, data in matriz.items():
-        if cta not in procesadas and sum(abs(v) for v in data["montos"].values()) > 1:
-            hay_pend = True
-            for cc, val in data["montos"].items(): sin_clasif["totales_cc"][cc] += val
-            sin_clasif["detalle_cuentas"].append({"codigo": cta, "nombre": data["nombre"], "montos_cc": data["montos"]})
-    if hay_pend:
-        if "Sin Clasificar" not in macros_data: macros_data["Sin Clasificar"] = {"grupos": [], "totales_cc": {c:0.0 for c in todos_cc}}
-        macros_data["Sin Clasificar"]["grupos"].append(sin_clasif)
-        for cc in todos_cc: macros_data["Sin Clasificar"]["totales_cc"][cc] += sin_clasif["totales_cc"][cc]
-
-    ESTRUCTURA = [
-        {"id": "ingresos_op", "titulo": "INGRESOS DE EXPLOTACIÓN", "tipo": "macro", "fuente": ["Ingresos Operacionales", "Ingresos Venta"]},
-        {"id": "costo_directo", "titulo": "COSTO DIRECTO (COSTO DE VENTA)", "tipo": "macro", "fuente": ["Costo Venta"]},
-        {"id": "margen_op", "titulo": "MARGEN OPERACIONAL (BRUTO)", "tipo": "calculo", "color": "primary", "operacion": ["ingresos_op", "costo_directo"]},
-        {"id": "costos_fijos", "titulo": "GASTOS FIJOS LOCALES", "tipo": "macro", "fuente": ["Costos de Explotación"]},
-        {"id": "margen", "titulo": "MARGEN DE EXPLOTACIÓN", "tipo": "calculo", "color": "warning", "operacion": ["margen_op", "costos_fijos"]},
-        {"id": "gastos_adm", "titulo": "GASTOS DE ADMINISTRACIÓN Y VENTAS", "tipo": "macro", "fuente": ["Gastos de Administración y Ventas"]},
-        {"id": "res_op", "titulo": "RESULTADO OPERACIONAL", "tipo": "calculo", "color": "info", "operacion": ["margen", "gastos_adm"]},
-        {"id": "no_op", "titulo": "INGRESOS Y EGRESOS NO OPERACIONALES", "tipo": "macro", "fuente": ["Ingresos No Operacionales"]},
-        {"id": "res_final", "titulo": "RESULTADO ANTES DE IMPTO", "tipo": "calculo", "color": "success", "operacion": ["res_op", "no_op"]},
-        {"id": "otros", "titulo": "SIN CLASIFICAR / OTROS", "tipo": "macro", "fuente": ["Sin Clasificar", "Otros"]}
-    ]
-    
-    reporte = []
-    cache = {}
-    for l in ESTRUCTURA:
-        f = {"titulo": l["titulo"], "tipo": l["tipo"], "color": l.get("color", "secondary"), "grupos": [], "totales_cc": {c:0.0 for c in todos_cc}}
-        if l["tipo"] == "macro":
-            enc = False
-            for src in l["fuente"]:
-                if src in macros_data:
-                    d = macros_data[src]
-                    f["grupos"].extend(d["grupos"])
-                    for cc in todos_cc: f["totales_cc"][cc] += d["totales_cc"][cc]
-                    enc = True
-            cache[l["id"]] = f["totales_cc"]
-            if enc or l["id"] == "otros": reporte.append(f)
-        elif l["tipo"] == "calculo":
-            for op in l["operacion"]:
-                tot = cache.get(op, {})
-                for cc in todos_cc: f["totales_cc"][cc] += tot.get(cc, 0)
-            cache[l["id"]] = f["totales_cc"]
-            reporte.append(f)
-
-    return render_template("contab/informe_gerencial.html", periodo=periodo, reporte=reporte, columnas_cc=todos_cc, switch_sg=switch_sg, switch_fab=switch_fab)
+    return render_template(
+        "contab/informe_gerencial.html",
+        periodo=periodo,
+        reporte=reporte,
+        columnas_cc=todos_cc,
+        ventas_por_cc=ventas_cc,
+        switch_sg=switch_sg,
+        switch_fab=switch_fab,
+    )
 
 @contab_bp.route("/comparativo_gestion")
 @login_requerido
@@ -1051,7 +997,14 @@ def dashboard_gestion():
     grupos_config = data_clasif.get("grupos", [])
 
     df["FECHA"] = pd.to_datetime(df["FECHA"], errors="coerce")
-    if df.empty: return render_template("contab/dashboard_gestion.html", dash_cc="Total", kpis={}, charts={})
+    if df.empty:
+        return render_template(
+            "contab/dashboard_gestion.html",
+            dash_cc="Total",
+            kpis={},
+            resumen_pct=[],
+            charts={},
+        )
 
     per_solicitado = request.args.get("periodo")
     if per_solicitado:
@@ -1071,76 +1024,78 @@ def dashboard_gestion():
     df = df[df["FECHA"].dt.year >= anio_ant].copy()
 
     dash_cc = request.args.get("dash_cc", "Total Empresa")
-    
-    # Calculo centralizado (siempre ON para dashboard)
-    # Lógica de los switches por defecto ACTIVADOS
-    if request.args.get("form_enviado"):
-        switch_sg = request.args.get("distribuir_sg") == "on"
-        switch_fab = request.args.get("ajuste_fabrica") == "on"
-    else:
-        switch_sg = True
-        switch_fab = True
 
-    # Calculo centralizado dinámico
+    switch_sg, switch_fab = switches_desde_request(
+        bool(request.args.get("form_enviado")), request.args
+    )
+
     df_final = calcular_matriz_gestion(df, None, switch_sg, switch_fab, data_config)
-    
-    
-    if dash_cc != "Total Empresa":
-        df_final = df_final[df_final["CENTRO COSTO"] == dash_cc]
 
     ult_mes_str = max_f.strftime("%Y-%m")
     ant_mes_str = (max_f - pd.DateOffset(years=1)).strftime("%Y-%m")
+    todos_cc = sorted(list(set(obtener_datos("mayor")["CENTRO COSTO"].dropna().unique())))
 
-    def get_kpi(dframe, per):
-        d = dframe[dframe["PERIODO_STR"] == per]
-        i = d[d["CUENTA"].str.startswith("4")]["SALDO_REAL"].sum()
-        g = d[d["CUENTA"].str.startswith("3")]["SALDO_REAL"].sum()
-        res = i + g
-        m = (res/i*100) if i > 0 else 0
-        return i, g, res, m
+    df_mes = df_final[df_final["PERIODO_STR"] == ult_mes_str].copy()
+    df_mes_ant = df_final[df_final["PERIODO_STR"] == ant_mes_str].copy()
+    macros_mes = armar_macros_data_cc(df_mes, data_clasif, todos_cc)
+    reporte_mes = armar_reporte_gestion(macros_mes, todos_cc)
+    macros_ant = armar_macros_data_cc(df_mes_ant, data_clasif, todos_cc)
+    reporte_ant = armar_reporte_gestion(macros_ant, todos_cc)
 
-    v_act, g_act, r_act, m_act = get_kpi(df_final, ult_mes_str)
-    v_ant, _, r_ant, _ = get_kpi(df_final, ant_mes_str)
+    kpis = kpis_desde_reporte(reporte_mes, dash_cc)
+    kpis_ant = kpis_desde_reporte(reporte_ant, dash_cc)
+    v_act, v_ant = kpis["venta"], kpis_ant["venta"]
+    r_act, r_ant = kpis["resultado"], kpis_ant["resultado"]
+    kpis["var_venta"] = ((v_act - v_ant) / v_ant * 100) if v_ant > 0 else 0
+    kpis["var_resultado"] = ((r_act - r_ant) / abs(r_ant) * 100) if abs(r_ant) > 0 else 0
+    resumen_pct = resumen_pct_dashboard(reporte_mes, dash_cc)
 
-    kpis = {
-        "venta": v_act,
-        "var_venta": ((v_act - v_ant)/v_ant*100) if v_ant > 0 else 0,
-        "resultado": r_act,
-        "var_resultado": ((r_act - r_ant)/abs(r_ant)*100) if abs(r_ant) > 0 else 0,
-        "margen": m_act,
-        "costo_total": g_act
-    }
+    df_chart = df_final.copy()
+    if dash_cc != "Total Empresa":
+        df_chart = df_chart[df_chart["CENTRO COSTO"] == dash_cc]
 
-    df_final["MES_NUM"] = pd.to_datetime(df_final["PERIODO_STR"] + "-01").dt.month
-    df_final["YEAR"] = pd.to_datetime(df_final["PERIODO_STR"] + "-01").dt.year
-    
-    ing = df_final[df_final["CUENTA"].str.startswith("4")]
-    v_curr = ing[ing["YEAR"] == anio_act].groupby("MES_NUM")["SALDO_REAL"].sum().reindex(range(1,13), fill_value=0)
-    v_prev = ing[ing["YEAR"] == anio_ant].groupby("MES_NUM")["SALDO_REAL"].sum().reindex(range(1,13), fill_value=0)
+    df_chart["MES_NUM"] = pd.to_datetime(df_chart["PERIODO_STR"] + "-01").dt.month
+    df_chart["YEAR"] = pd.to_datetime(df_chart["PERIODO_STR"] + "-01").dt.year
+
+    ing = df_chart[df_chart["CUENTA"].str.startswith("4")]
+    v_curr = ing[ing["YEAR"] == anio_act].groupby("MES_NUM")["SALDO_REAL"].sum().reindex(range(1, 13), fill_value=0)
+    v_prev = ing[ing["YEAR"] == anio_ant].groupby("MES_NUM")["SALDO_REAL"].sum().reindex(range(1, 13), fill_value=0)
 
     mix = {}
-    gastos_mes = df_final[(df_final["PERIODO_STR"] == ult_mes_str) & (df_final["CUENTA"].str.startswith("3"))]
+    gastos_mes = df_chart[(df_chart["PERIODO_STR"] == ult_mes_str) & (df_chart["CUENTA"].str.startswith("3"))]
     mapa = {}
     for g in grupos_config:
         m = g.get("macro_categoria", "Otros")
-        for c in g["cuentas"]: mapa[str(c)] = m
-    
+        for c in g["cuentas"]:
+            mapa[str(c)] = m
+
     for _, r in gastos_mes.iterrows():
         m = mapa.get(r["CUENTA"], "Sin Clasificar")
         mix[m] = mix.get(m, 0) + abs(r["SALDO_REAL"])
-    
+
     mix_ord = sorted(mix.items(), key=lambda x: x[1], reverse=True)[:5]
-    
+
     charts = {
-        "season_labels": ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"],
+        "season_labels": ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"],
         "season_actual": v_curr.tolist(),
         "season_prev": v_prev.tolist(),
         "mix_labels": [x[0] for x in mix_ord],
-        "mix_data": [x[1] for x in mix_ord]
+        "mix_data": [x[1] for x in mix_ord],
     }
 
-    todos_cc = sorted(list(set(obtener_datos("mayor")["CENTRO COSTO"].dropna().unique())))
-    return render_template("contab/dashboard_gestion.html", dash_cc=dash_cc, todos_cc=todos_cc, kpis=kpis, charts=charts, ultimo_mes=ult_mes_str, anio_actual=anio_act, anio_anterior=anio_ant, switch_sg=switch_sg, switch_fab=switch_fab)
+    return render_template(
+        "contab/dashboard_gestion.html",
+        dash_cc=dash_cc,
+        todos_cc=todos_cc,
+        kpis=kpis,
+        resumen_pct=resumen_pct,
+        charts=charts,
+        ultimo_mes=ult_mes_str,
+        anio_actual=anio_act,
+        anio_anterior=anio_ant,
+        switch_sg=switch_sg,
+        switch_fab=switch_fab,
+    )
 @contab_bp.route("/comparativo")
 @login_requerido
 @permiso_modulo("contab")
