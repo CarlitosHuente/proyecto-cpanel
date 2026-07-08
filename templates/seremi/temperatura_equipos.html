@@ -6,7 +6,7 @@
 <p class="text-white">Consulta mensual por sucursal y descarga de reportes.</p>
 
 <form method="get" class="row g-3 text-white mb-4">
-  <div class="col-md-4">
+  <div class="col-md-3">
     <label for="sucursal" class="form-label">Sucursal</label>
     <select name="sucursal" id="sucursal" class="form-select">
       {% for s in sucursales %}
@@ -15,7 +15,7 @@
     </select>
   </div>
 
-  <div class="col-md-4">
+  <div class="col-md-3">
     <label for="mes" class="form-label">Mes</label>
     <select name="mes" id="mes" class="form-select">
       {% for num, nombre in meses %}
@@ -24,12 +24,21 @@
     </select>
   </div>
 
-  <div class="col-md-4 d-flex align-items-end">
+  <div class="col-md-3">
+    <label for="año" class="form-label">Año</label>
+    <select name="año" id="año" class="form-select">
+      {% for a in años %}
+        <option value="{{ a }}" {% if a == año_actual %}selected{% endif %}>{{ a }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="col-md-3 d-flex align-items-end">
     <button type="submit" class="btn btn-danger w-100">Aplicar Filtros</button>
   </div>
   <div class="text-end mb-4">
     <a class="btn btn-danger" target="_blank"
-      href="/seremi/temperatura_equipos/print?sucursal={{ sucursal_activa }}&mes={{ mes_actual }}">
+      href="/seremi/temperatura_equipos/print?sucursal={{ sucursal_activa }}&mes={{ mes_actual }}&año={{ año_actual }}">
       🖨 Ver como PDF (imprimir)
     </a>
   </div>
@@ -38,7 +47,7 @@
 
 
 <div class="text-end mb-4">
-  <a class="btn btn-danger" href="/seremi/temperatura_equipos/pdf?sucursal={{ sucursal_activa }}&mes={{ mes_actual }}">Descargar PDF</a>
+  <a class="btn btn-danger" href="/seremi/temperatura_equipos/pdf?sucursal={{ sucursal_activa }}&mes={{ mes_actual }}&año={{ año_actual }}">Descargar PDF</a>
 </div>
 
 

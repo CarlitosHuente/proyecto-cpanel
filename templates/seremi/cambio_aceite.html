@@ -3,10 +3,10 @@
 {% block content %}
 
 <h2 class="text-white">Registro de Cambio de Aceite</h2>
-<p class="text-white">Últimos 10 registros por sucursal.</p>
+<p class="text-white">Últimos 20 registros del mes seleccionado por sucursal.</p>
 
 <form method="get" class="row g-3 text-white mb-4">
-  <div class="col-md-6">
+  <div class="col-md-3">
     <label for="sucursal" class="form-label">Sucursal</label>
     <select name="sucursal" id="sucursal" class="form-select">
       {% for s in sucursales %}
@@ -15,13 +15,31 @@
     </select>
   </div>
 
-  <div class="col-md-6 d-flex align-items-end">
-    <button type="submit" class="btn btn-danger w-100">Aplicar Filtro</button>
+  <div class="col-md-3">
+    <label for="mes" class="form-label">Mes</label>
+    <select name="mes" id="mes" class="form-select">
+      {% for num, nombre in meses %}
+        <option value="{{ num }}" {% if num == mes_actual %}selected{% endif %}>{{ nombre }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="col-md-3">
+    <label for="año" class="form-label">Año</label>
+    <select name="año" id="año" class="form-select">
+      {% for a in años %}
+        <option value="{{ a }}" {% if a == año_actual %}selected{% endif %}>{{ a }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="col-md-3 d-flex align-items-end">
+    <button type="submit" class="btn btn-danger w-100">Aplicar Filtros</button>
   </div>
 </form>
 <div class="text-end mb-4">
     <a class="btn btn-danger" target="_blank"
-      href="{{ url_for('seremi.imprimir_cambio_aceite', sucursal=sucursal_activa) }}">
+      href="{{ url_for('seremi.imprimir_cambio_aceite', sucursal=sucursal_activa, mes=mes_actual, año=año_actual) }}">
       🖨️ Ver como PDF (imprimir)
     </a>
 </div>

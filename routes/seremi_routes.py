@@ -62,6 +62,74 @@ def obtener_filtro_sucursal_seremi():
         return nombre_sucursal_permitida, [nombre_sucursal_permitida]
 
 
+def _aplicar_fechas(df, clave_hoja):
+    """Normaliza columnas y deriva DIA/MES/AÑO desde FECHA."""
+    df = df.copy()
+    df.columns = df.columns.str.strip().str.upper()
+    if clave_hoja == "temperatura_equipos":
+        df["FECHA"] = pd.to_datetime(df["FECHA"], dayfirst=True, errors="coerce")
+    elif clave_hoja == "recepcion_mercaderia":
+        df["FECHA"] = pd.to_datetime(df["FECHA"], format="%d/%m/%Y %H:%M:%S", errors="coerce")
+    else:
+        df["FECHA"] = pd.to_datetime(df["FECHA"], format="%d-%m-%Y %H:%M:%S", errors="coerce")
+    df = df.dropna(subset=["FECHA"])
+    df["DIA"] = df["FECHA"].dt.day
+    df["MES"] = df["FECHA"].dt.month
+    df["AÑO"] = df["FECHA"].dt.year.astype(int)
+    return df
+
+
+def _filtrar_sucursal(df, sucursal_activa):
+    if sucursal_activa != "TODAS":
+        return df[df["SUCURSAL"] == sucursal_activa]
+    return df
+
+
+def _anios_validos(series):
+    return sorted(
+        {int(a) for a in series.dropna().unique() if int(a) >= 2010},
+        reverse=True,
+    )
+
+
+def _resolver_periodo(request, df, sucursal_activa):
+    """Resuelve mes/año del filtro y lista de años para el selector HTML."""
+    ahora = datetime.now()
+    mes = int(request.args.get("mes", ahora.month))
+    df_suc = _filtrar_sucursal(df, sucursal_activa)
+    años_todos = _anios_validos(df_suc["AÑO"]) if not df_suc.empty else []
+    años_mes = _anios_validos(df_suc[df_suc["MES"] == mes]["AÑO"]) if not df_suc.empty else []
+    if not años_todos:
+        años_todos = [ahora.year]
+
+    año_req = request.args.get("año") or request.args.get("anio")
+    if año_req:
+        año = int(año_req)
+    elif ahora.year in años_mes:
+        año = ahora.year
+    elif años_mes:
+        año = años_mes[0]
+    elif ahora.year in años_todos:
+        año = ahora.year
+    else:
+        año = años_todos[0]
+    return mes, año, años_todos
+
+
+def _filtrar_periodo(df, mes, año):
+    return df[(df["MES"] == mes) & (df["AÑO"] == año)]
+
+
+def _sucursales_selector(hoja, permisos_visuales):
+    if permisos_visuales == "TODAS":
+        sucursales = sorted(obtener_datos(hoja)["SUCURSAL"].dropna().unique().tolist())
+        sucursales.insert(0, "TODAS")
+        return sucursales
+    return permisos_visuales
+
+
+def _dias_del_mes(año, mes):
+    return calendar.monthrange(año, mes)[1]
 
 
 # --- RUTA 1: TEMPERATURA EQUIPOS (MODIFICADA) ---
@@ -69,76 +137,50 @@ def obtener_filtro_sucursal_seremi():
 @login_requerido
 @permiso_modulo("seremi")
 def temperatura_equipos():
-    # 1. SEGURIDAD: Determinar qué puede ver
     sucursal_activa, permisos_visuales = obtener_filtro_sucursal_seremi()
-    
     if sucursal_activa is None:
-        return render_template("403.html"), 403 # O un mensaje de error
+        return render_template("403.html"), 403
 
-    df = obtener_datos("temperatura_equipos")
+    df = _aplicar_fechas(obtener_datos("temperatura_equipos"), "temperatura_equipos")
+    mes, año, años = _resolver_periodo(request, df, sucursal_activa)
+    df = _filtrar_sucursal(df, sucursal_activa)
+    df = _filtrar_periodo(df, mes, año)
 
-    # Cargar info de equipos
     df_equipos = obtener_datos("equipos_info")
     df_equipos.columns = df_equipos.columns.str.strip().str.upper()
     mapa_nombre = dict(zip(df_equipos["ID_EQUIPO"], df_equipos["NOMBRE_EQUIPO"]))
 
-    # Normalizar datos de temperatura
-    df.columns = df.columns.str.strip().str.upper()
-    df["FECHA"] = pd.to_datetime(df["FECHA"], dayfirst=True, errors="coerce")
-    df = df.dropna(subset=["FECHA"])
-    df["DIA"] = df["FECHA"].dt.day
-    df["MES"] = df["FECHA"].dt.month
-    df["AÑO"] = df["FECHA"].dt.year
-
-    # Filtros de Mes
-    mes = int(request.args.get("mes", default=datetime.now().month))
-
-    # 2. APLICAR FILTRO DE SUCURSAL
-    if sucursal_activa != "TODAS":
-        # Aquí es donde "Esc. Militar" debe coincidir EXACTO
-        df = df[df["SUCURSAL"] == sucursal_activa]
-
-    df = df[df["MES"] == mes]
-
-    # Agrupación por equipo
     equipos = defaultdict(list)
+    ultimo_dia = _dias_del_mes(año, mes)
     for cod_equipo, grupo in df.groupby("EQUIPO"):
         nombre_equipo = mapa_nombre.get(cod_equipo, cod_equipo)
         nombre_mostrado = f"{nombre_equipo} ({cod_equipo})"
-
         grupo = grupo.sort_values("FECHA")
 
-        for dia in range(1, 32):
+        for dia in range(1, ultimo_dia + 1):
             registros_dia = grupo[grupo["DIA"] == dia]
-
             temps = [
                 f"{row['TEMPERATURA C°']}°C ({row['FECHA'].strftime('%H:%M')})"
                 for _, row in registros_dia.iterrows()
             ]
-
             while len(temps) < 3:
                 temps.append("")
-
             equipos[nombre_mostrado].append((dia, temps[:3]))
 
-    # 3. PREPARAR LISTA PARA EL SELECTOR HTML
-    if permisos_visuales == "TODAS":
-        # Si es jefe, cargamos todas las opciones disponibles en el Excel
-        sucursales = sorted(obtener_datos("temperatura_equipos")["SUCURSAL"].dropna().unique().tolist())
-        sucursales.insert(0, "TODAS")
-    else:
-        # Si es sucursal, la lista solo tiene su propia sucursal
-        sucursales = permisos_visuales
+    sucursales = _sucursales_selector("temperatura_equipos", permisos_visuales)
+    meses = [(i + 1, nombre.title()) for i, nombre in enumerate(NOMBRES_MESES)]
 
-    meses = [(i+1, nombre.title()) for i, nombre in enumerate(NOMBRES_MESES)]
-
-    return render_template("seremi/temperatura_equipos.html",
-                           equipos=equipos,
-                           sucursales=sucursales,     # Lista filtrada
-                           sucursal_activa=sucursal_activa, # Selección forzada o elegida
-                           meses=meses,
-                           mes_actual=mes,
-                           fecha_actualizacion=obtener_fecha_actualizacion("temperatura_equipos"))
+    return render_template(
+        "seremi/temperatura_equipos.html",
+        equipos=equipos,
+        sucursales=sucursales,
+        sucursal_activa=sucursal_activa,
+        meses=meses,
+        mes_actual=mes,
+        año_actual=año,
+        años=años,
+        fecha_actualizacion=obtener_fecha_actualizacion("temperatura_equipos"),
+    )
 
 
 
@@ -150,58 +192,62 @@ def temperatura_equipos():
 @permiso_modulo("seremi")
 def temperatura_productos():
     sucursal_activa, permisos_visuales = obtener_filtro_sucursal_seremi()
-    if sucursal_activa is None: return render_template("403.html"), 403
+    if sucursal_activa is None:
+        return render_template("403.html"), 403
 
-    df = obtener_datos("temperatura_productos")
-    df.columns = df.columns.str.strip().str.upper()
-    if 'TEMPERATURA C°' in df.columns:
-        df['TEMPERATURA C°'] = df['TEMPERATURA C°'].astype(str).str.replace(',', '.', regex=False)
-        df['TEMPERATURA C°'] = pd.to_numeric(df['TEMPERATURA C°'], errors='coerce')
-        df.dropna(subset=['TEMPERATURA C°'], inplace=True)
-    
-    df['FECHA'] = pd.to_datetime(df['FECHA'], format='%d-%m-%Y %H:%M:%S', errors='coerce')
-    df = df.dropna(subset=['FECHA'])
-    df['DIA'] = df['FECHA'].dt.day
-    df['MES'] = df['FECHA'].dt.month
-    df['HORA'] = df['FECHA'].dt.hour
-    df['RESPONSABLE'] = df['RESPONSABLE'].astype(str)
+    df = _aplicar_fechas(obtener_datos("temperatura_productos"), "temperatura_productos")
+    if "TEMPERATURA C°" in df.columns:
+        df["TEMPERATURA C°"] = df["TEMPERATURA C°"].astype(str).str.replace(",", ".", regex=False)
+        df["TEMPERATURA C°"] = pd.to_numeric(df["TEMPERATURA C°"], errors="coerce")
+        df.dropna(subset=["TEMPERATURA C°"], inplace=True)
 
-    mes_actual = int(request.args.get("mes", default=datetime.now().month))
+    mes, año, años = _resolver_periodo(request, df, sucursal_activa)
+    df = _filtrar_sucursal(df, sucursal_activa)
+    df = _filtrar_periodo(df, mes, año)
+    df["HORA"] = df["FECHA"].dt.hour
+    df["RESPONSABLE"] = df["RESPONSABLE"].astype(str)
 
-    if sucursal_activa != "TODAS":
-        df = df[df["SUCURSAL"] == sucursal_activa]
-    
-    df = df[df["MES"] == mes_actual]
-
+    ultimo_dia = _dias_del_mes(año, mes)
     sucursales_data = {}
     for sucursal_nombre, grupo_sucursal in df.groupby("SUCURSAL"):
         productos_data = {}
         for producto_nombre, grupo_producto in grupo_sucursal.groupby("PRODUCTO"):
             registros_mensuales = []
-            for dia in range(1, 32):
-                registros_dia = grupo_producto[grupo_producto['DIA'] == dia]
-                t_13_row = registros_dia.iloc[(registros_dia['HORA'] - 13).abs().argsort()[:1]]
-                t_17_row = registros_dia.iloc[(registros_dia['HORA'] - 17).abs().argsort()[:1]]
-                t_21_row = registros_dia.iloc[(registros_dia['HORA'] - 21).abs().argsort()[:1]]
-                
+            for dia in range(1, ultimo_dia + 1):
+                registros_dia = grupo_producto[grupo_producto["DIA"] == dia]
+                t_13_row = registros_dia.iloc[(registros_dia["HORA"] - 13).abs().argsort()[:1]]
+                t_17_row = registros_dia.iloc[(registros_dia["HORA"] - 17).abs().argsort()[:1]]
+                t_21_row = registros_dia.iloc[(registros_dia["HORA"] - 21).abs().argsort()[:1]]
+
                 temp_13 = f"{t_13_row['TEMPERATURA C°'].iloc[0]:.2f}°C" if not t_13_row.empty else ""
                 temp_17 = f"{t_17_row['TEMPERATURA C°'].iloc[0]:.2f}°C" if not t_17_row.empty else ""
                 temp_21 = f"{t_21_row['TEMPERATURA C°'].iloc[0]:.2f}°C" if not t_21_row.empty else ""
-                responsables = " / ".join(registros_dia['RESPONSABLE'].unique()) if not registros_dia.empty else ""
-                
-                registros_mensuales.append({"dia": f"{dia:02d}", "t_13": temp_13, "t_17": temp_17, "t_21": temp_21, "responsables": responsables})
+                responsables = " / ".join(registros_dia["RESPONSABLE"].unique()) if not registros_dia.empty else ""
+
+                registros_mensuales.append({
+                    "dia": f"{dia:02d}",
+                    "t_13": temp_13,
+                    "t_17": temp_17,
+                    "t_21": temp_21,
+                    "responsables": responsables,
+                })
             productos_data[producto_nombre] = registros_mensuales
         sucursales_data[sucursal_nombre] = productos_data
 
-    if permisos_visuales == "TODAS":
-        sucursales_list = sorted(obtener_datos("temperatura_productos")["SUCURSAL"].dropna().unique().tolist())
-        sucursales_list.insert(0, "TODAS")
-    else:
-        sucursales_list = permisos_visuales
-
+    sucursales_list = _sucursales_selector("temperatura_productos", permisos_visuales)
     meses_list = [(i + 1, nombre.title()) for i, nombre in enumerate(NOMBRES_MESES)]
 
-    return render_template("seremi/temperatura_productos.html", sucursales_data=sucursales_data, sucursales=sucursales_list, sucursal_activa=sucursal_activa, meses=meses_list, mes_actual=mes_actual, fecha_actualizacion=obtener_fecha_actualizacion("temperatura_productos"))
+    return render_template(
+        "seremi/temperatura_productos.html",
+        sucursales_data=sucursales_data,
+        sucursales=sucursales_list,
+        sucursal_activa=sucursal_activa,
+        meses=meses_list,
+        mes_actual=mes,
+        año_actual=año,
+        años=años,
+        fecha_actualizacion=obtener_fecha_actualizacion("temperatura_productos"),
+    )
 
 
 ############################
@@ -213,31 +259,34 @@ def temperatura_productos():
 @permiso_modulo("seremi")
 def cambio_aceite():
     sucursal_activa, permisos_visuales = obtener_filtro_sucursal_seremi()
-    if sucursal_activa is None: return render_template("403.html"), 403
+    if sucursal_activa is None:
+        return render_template("403.html"), 403
 
-    df = obtener_datos("cambio_aceite")
-    df.columns = df.columns.str.strip().str.upper()
-    df['FECHA'] = pd.to_datetime(df['FECHA'], format='%d-%m-%Y %H:%M:%S', errors='coerce')
-    df = df.dropna(subset=['FECHA'])
-
-    if sucursal_activa != "TODAS":
-        df_a_procesar = df[df["SUCURSAL"] == sucursal_activa]
-    else:
-        df_a_procesar = df
+    df = _aplicar_fechas(obtener_datos("cambio_aceite"), "cambio_aceite")
+    mes, año, años = _resolver_periodo(request, df, sucursal_activa)
+    df = _filtrar_sucursal(df, sucursal_activa)
+    df = _filtrar_periodo(df, mes, año)
 
     data_por_sucursal = {}
-    if not df_a_procesar.empty:
-        for sucursal, grupo in df_a_procesar.groupby("SUCURSAL"):
+    if not df.empty:
+        for sucursal, grupo in df.groupby("SUCURSAL"):
             grupo_ordenado = grupo.sort_values(by="FECHA", ascending=False).head(20)
             data_por_sucursal[sucursal] = grupo_ordenado.to_dict(orient="records")
 
-    if permisos_visuales == "TODAS":
-        sucursales = sorted(obtener_datos("cambio_aceite")["SUCURSAL"].dropna().unique().tolist())
-        sucursales.insert(0, "TODAS")
-    else:
-        sucursales = permisos_visuales
+    sucursales = _sucursales_selector("cambio_aceite", permisos_visuales)
+    meses = [(i + 1, nombre.title()) for i, nombre in enumerate(NOMBRES_MESES)]
 
-    return render_template("seremi/cambio_aceite.html", data_por_sucursal=data_por_sucursal, sucursales=sucursales, sucursal_activa=sucursal_activa, fecha_actualizacion=obtener_fecha_actualizacion("cambio_aceite"))
+    return render_template(
+        "seremi/cambio_aceite.html",
+        data_por_sucursal=data_por_sucursal,
+        sucursales=sucursales,
+        sucursal_activa=sucursal_activa,
+        meses=meses,
+        mes_actual=mes,
+        año_actual=año,
+        años=años,
+        fecha_actualizacion=obtener_fecha_actualizacion("cambio_aceite"),
+    )
 
 
 #############################
@@ -248,21 +297,13 @@ def cambio_aceite():
 @permiso_modulo("seremi")
 def recepcion_mercaderia():
     sucursal_activa, permisos_visuales = obtener_filtro_sucursal_seremi()
-    if sucursal_activa is None: return render_template("403.html"), 403
+    if sucursal_activa is None:
+        return render_template("403.html"), 403
 
-    df = obtener_datos("recepcion_mercaderia")
-    df.columns = df.columns.str.strip().str.upper()
-    df['FECHA'] = pd.to_datetime(df['FECHA'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
-    df = df.dropna(subset=['FECHA'])
-    df['MES'] = df['FECHA'].dt.month
-
-    mes_actual = int(request.args.get("mes", default=datetime.now().month))
-    df_filtrado_mes = df[df["MES"] == mes_actual]
-
-    if sucursal_activa != "TODAS":
-        df_a_procesar = df_filtrado_mes[df_filtrado_mes["SUCURSAL"] == sucursal_activa]
-    else:
-        df_a_procesar = df_filtrado_mes
+    df = _aplicar_fechas(obtener_datos("recepcion_mercaderia"), "recepcion_mercaderia")
+    mes, año, años = _resolver_periodo(request, df, sucursal_activa)
+    df = _filtrar_sucursal(df, sucursal_activa)
+    df_a_procesar = _filtrar_periodo(df, mes, año)
 
     data_final = {}
     if not df_a_procesar.empty:
@@ -273,15 +314,20 @@ def recepcion_mercaderia():
                 productos_data[producto] = grupo_ordenado.to_dict(orient="records")
             data_final[sucursal] = productos_data
 
-    if permisos_visuales == "TODAS":
-        sucursales = sorted(obtener_datos("recepcion_mercaderia")["SUCURSAL"].dropna().unique().tolist())
-        sucursales.insert(0, "TODAS")
-    else:
-        sucursales = permisos_visuales
-
+    sucursales = _sucursales_selector("recepcion_mercaderia", permisos_visuales)
     meses = [(i + 1, nombre.title()) for i, nombre in enumerate(NOMBRES_MESES)]
 
-    return render_template("seremi/recepcion_mercaderia.html", data_final=data_final, sucursales=sucursales, sucursal_activa=sucursal_activa, meses=meses, mes_actual=mes_actual, fecha_actualizacion=obtener_fecha_actualizacion("recepcion_mercaderia"))
+    return render_template(
+        "seremi/recepcion_mercaderia.html",
+        data_final=data_final,
+        sucursales=sucursales,
+        sucursal_activa=sucursal_activa,
+        meses=meses,
+        mes_actual=mes,
+        año_actual=año,
+        años=años,
+        fecha_actualizacion=obtener_fecha_actualizacion("recepcion_mercaderia"),
+    )
 #############################################
 
 
@@ -290,60 +336,64 @@ def recepcion_mercaderia():
 @permiso_modulo("seremi")
 def personal():
     sucursal_activa, permisos_visuales = obtener_filtro_sucursal_seremi()
-    if sucursal_activa is None: return render_template("403.html"), 403
+    if sucursal_activa is None:
+        return render_template("403.html"), 403
 
     df = obtener_datos("registro_personal")
     df.columns = df.columns.str.strip().str.upper()
     cols = pd.Series(df.columns)
-    for dup in cols[cols.duplicated()].unique(): 
-        cols[cols[cols == dup].index.values.tolist()] = [f'{dup}.{i}' if i != 0 else dup for i in range(sum(cols == dup))]
+    for dup in cols[cols.duplicated()].unique():
+        cols[cols[cols == dup].index.values.tolist()] = [
+            f"{dup}.{i}" if i != 0 else dup for i in range(sum(cols == dup))
+        ]
     df.columns = cols
 
-    df['FECHA'] = pd.to_datetime(df['FECHA'], format='%d-%m-%Y %H:%M:%S', errors='coerce')
-    df = df.dropna(subset=['FECHA'])
-    df['MES'] = df['FECHA'].dt.month
-    df['AÑO'] = df['FECHA'].dt.year
-
-    mes_actual = int(request.args.get("mes", default=datetime.now().month))
-    año_actual = df['AÑO'].max() if not df.empty else datetime.now().year
-    df_filtrado_mes = df[df["MES"] == mes_actual]
-
-    if sucursal_activa != "TODAS":
-        df_a_procesar = df_filtrado_mes[df_filtrado_mes["SUCURSAL"] == sucursal_activa]
-    else:
-        df_a_procesar = df_filtrado_mes
+    df = _aplicar_fechas(df, "registro_personal")
+    mes, año, años = _resolver_periodo(request, df, sucursal_activa)
+    df = _filtrar_sucursal(df, sucursal_activa)
+    df_a_procesar = _filtrar_periodo(df, mes, año)
 
     data_por_sucursal = {}
     for sucursal, grupo_sucursal in df_a_procesar.groupby("SUCURSAL"):
         registros_existentes = {}
-        for fecha, grupo_dia in grupo_sucursal.groupby(grupo_sucursal['FECHA'].dt.date):
+        for fecha, grupo_dia in grupo_sucursal.groupby(grupo_sucursal["FECHA"].dt.date):
             grupo_renombrado = grupo_dia.rename(columns={
-                "NOMBRE TRABAJADOR": "nombre_manipulador", "PELO LIMPIO": "pelo_limpio",
-                "AFEITADO": "afeitado", "¿UÑAS CORTAS?": "unas_cortas",
-                "AUSENCIA DE JOYAS": "joyas", "UNIFORME LIMPIO": "uniforme",
-                "COFIA BIEN PUESTA": "cofia", "MASCARILLA": "mascarilla",
-                "SALUD": "salud", "OBSERVACIONES": "acciones_correctivas"
+                "NOMBRE TRABAJADOR": "nombre_manipulador",
+                "PELO LIMPIO": "pelo_limpio",
+                "AFEITADO": "afeitado",
+                "¿UÑAS CORTAS?": "unas_cortas",
+                "AUSENCIA DE JOYAS": "joyas",
+                "UNIFORME LIMPIO": "uniforme",
+                "COFIA BIEN PUESTA": "cofia",
+                "MASCARILLA": "mascarilla",
+                "SALUD": "salud",
+                "OBSERVACIONES": "acciones_correctivas",
             })
             registros_existentes[fecha] = grupo_renombrado.to_dict(orient="records")
 
         registros_mes_completo = {}
-        num_dias_mes = calendar.monthrange(año_actual, mes_actual)[1]
+        num_dias_mes = _dias_del_mes(año, mes)
         for dia in range(1, num_dias_mes + 1):
-            fecha_actual = datetime(año_actual, mes_actual, dia).date()
+            fecha_actual = datetime(año, mes, dia).date()
             registros_mes_completo[fecha_actual] = registros_existentes.get(fecha_actual, [])
 
         if registros_mes_completo:
             data_por_sucursal[sucursal] = registros_mes_completo
 
-    if permisos_visuales == "TODAS":
-        sucursales = sorted(obtener_datos("registro_personal")["SUCURSAL"].dropna().unique().tolist())
-        sucursales.insert(0, "TODAS")
-    else:
-        sucursales = permisos_visuales
-    
+    sucursales = _sucursales_selector("registro_personal", permisos_visuales)
     meses = [(i + 1, nombre.title()) for i, nombre in enumerate(NOMBRES_MESES)]
 
-    return render_template("seremi/personal.html", data_por_sucursal=data_por_sucursal, sucursales=sucursales, sucursal_activa=sucursal_activa, meses=meses, mes_actual=mes_actual, fecha_actualizacion=obtener_fecha_actualizacion("registro_personal"))
+    return render_template(
+        "seremi/personal.html",
+        data_por_sucursal=data_por_sucursal,
+        sucursales=sucursales,
+        sucursal_activa=sucursal_activa,
+        meses=meses,
+        mes_actual=mes,
+        año_actual=año,
+        años=años,
+        fecha_actualizacion=obtener_fecha_actualizacion("registro_personal"),
+    )
 
 ############ IMPRIMIR PDF #################
 
@@ -351,37 +401,27 @@ def personal():
 @login_requerido
 @permiso_modulo("seremi")
 def imprimir_temperatura_equipos():
-    # 1. SEGURIDAD
     sucursal_activa, _ = obtener_filtro_sucursal_seremi()
-    if sucursal_activa is None: return "Acceso Denegado", 403
+    if sucursal_activa is None:
+        return "Acceso Denegado", 403
 
-    df = obtener_datos("temperatura_equipos")
+    df = _aplicar_fechas(obtener_datos("temperatura_equipos"), "temperatura_equipos")
+    mes, año, _ = _resolver_periodo(request, df, sucursal_activa)
+    df = _filtrar_sucursal(df, sucursal_activa)
+    df = _filtrar_periodo(df, mes, año)
+
     df_equipos = obtener_datos("equipos_info")
     df_equipos.columns = df_equipos.columns.str.strip().str.upper()
     mapa_nombre = dict(zip(df_equipos["ID_EQUIPO"], df_equipos["NOMBRE_EQUIPO"]))
 
-    df.columns = df.columns.str.strip().str.upper()
-    df["FECHA"] = pd.to_datetime(df["FECHA"], dayfirst=True, errors="coerce")
-    df = df.dropna(subset=["FECHA"])
-    df["DIA"] = df["FECHA"].dt.day
-    df["MES"] = df["FECHA"].dt.month
-    df["AÑO"] = df["FECHA"].dt.year
-
-    mes = int(request.args.get("mes", default=datetime.now().month))
-
-    # 2. FILTRADO OBLIGATORIO
-    if sucursal_activa != "TODAS":
-        df = df[df["SUCURSAL"] == sucursal_activa]
-        
-    df = df[df["MES"] == mes]
-
+    ultimo_dia = _dias_del_mes(año, mes)
     equipos_data = []
     for cod_equipo, grupo in df.groupby("EQUIPO"):
         nombre_equipo = mapa_nombre.get(cod_equipo, cod_equipo)
         nombre_mostrado = f"{nombre_equipo} ({cod_equipo})"
         registros = []
 
-        for dia in range(1, 32):
+        for dia in range(1, ultimo_dia + 1):
             registros_dia = grupo[grupo["DIA"] == dia]
             temps = []
             responsables = []
@@ -399,14 +439,15 @@ def imprimir_temperatura_equipos():
                 "ingreso": temps[0],
                 "intermedio": temps[1],
                 "salida": temps[2],
-                "responsables": " / ".join(responsables[:3])
+                "responsables": " / ".join(responsables[:3]),
             })
 
         equipos_data.append({
             "nombre": nombre_mostrado,
-            "sucursal": sucursal_activa if sucursal_activa != "TODAS" else "Varias", # Ajuste visual
+            "sucursal": sucursal_activa if sucursal_activa != "TODAS" else "Varias",
             "mes": mes,
-            "registros": registros
+            "año": año,
+            "registros": registros,
         })
 
     return render_template("seremi/print_temperatura.html", equipos=equipos_data)
@@ -416,58 +457,57 @@ def imprimir_temperatura_equipos():
 @login_requerido
 @permiso_modulo("seremi")
 def imprimir_temperatura_productos():
-    # 1. SEGURIDAD
     sucursal_activa, _ = obtener_filtro_sucursal_seremi()
-    if sucursal_activa is None: return "Acceso Denegado", 403
+    if sucursal_activa is None:
+        return "Acceso Denegado", 403
 
-    df = obtener_datos("temperatura_productos")
+    df = _aplicar_fechas(obtener_datos("temperatura_productos"), "temperatura_productos")
+    if "TEMPERATURA C°" in df.columns:
+        df["TEMPERATURA C°"] = df["TEMPERATURA C°"].astype(str).str.replace(",", ".", regex=False)
+        df["TEMPERATURA C°"] = pd.to_numeric(df["TEMPERATURA C°"], errors="coerce")
+        df.dropna(subset=["TEMPERATURA C°"], inplace=True)
 
-    df.columns = df.columns.str.strip().str.upper()
-    if 'TEMPERATURA C°' in df.columns:
-        df['TEMPERATURA C°'] = df['TEMPERATURA C°'].astype(str).str.replace(',', '.', regex=False)
-        df['TEMPERATURA C°'] = pd.to_numeric(df['TEMPERATURA C°'], errors='coerce')
-        df.dropna(subset=['TEMPERATURA C°'], inplace=True)
-    
-    df['FECHA'] = pd.to_datetime(df['FECHA'], format='%d-%m-%Y %H:%M:%S', errors='coerce')
-    df = df.dropna(subset=['FECHA'])
-    df['DIA'] = df['FECHA'].dt.day
-    df['MES'] = df['FECHA'].dt.month
-    df['HORA'] = df['FECHA'].dt.hour
-    df['RESPONSABLE'] = df['RESPONSABLE'].astype(str)
+    mes, año, _ = _resolver_periodo(request, df, sucursal_activa)
+    df = _filtrar_sucursal(df, sucursal_activa)
+    df = _filtrar_periodo(df, mes, año)
+    df["HORA"] = df["FECHA"].dt.hour
+    df["RESPONSABLE"] = df["RESPONSABLE"].astype(str)
 
-    mes_actual = int(request.args.get("mes", default=datetime.now().month))
-    nombre_mes = NOMBRES_MESES[mes_actual - 1].title()
-
-    # 2. FILTRADO OBLIGATORIO
-    if sucursal_activa != "TODAS":
-        df = df[df["SUCURSAL"] == sucursal_activa]
-    
-    df = df[df["MES"] == mes_actual]
+    nombre_mes = NOMBRES_MESES[mes - 1].title()
+    ultimo_dia = _dias_del_mes(año, mes)
 
     sucursales_data = {}
     for sucursal_nombre, grupo_sucursal in df.groupby("SUCURSAL"):
         productos_data = {}
         for producto_nombre, grupo_producto in grupo_sucursal.groupby("PRODUCTO"):
             registros_mensuales = []
-            for dia in range(1, 32):
-                registros_dia = grupo_producto[grupo_producto['DIA'] == dia]
-                
-                t_13_row = registros_dia.iloc[(registros_dia['HORA'] - 13).abs().argsort()[:1]]
-                t_17_row = registros_dia.iloc[(registros_dia['HORA'] - 17).abs().argsort()[:1]]
-                t_21_row = registros_dia.iloc[(registros_dia['HORA'] - 21).abs().argsort()[:1]]
-                
+            for dia in range(1, ultimo_dia + 1):
+                registros_dia = grupo_producto[grupo_producto["DIA"] == dia]
+
+                t_13_row = registros_dia.iloc[(registros_dia["HORA"] - 13).abs().argsort()[:1]]
+                t_17_row = registros_dia.iloc[(registros_dia["HORA"] - 17).abs().argsort()[:1]]
+                t_21_row = registros_dia.iloc[(registros_dia["HORA"] - 21).abs().argsort()[:1]]
+
                 temp_13 = f"{t_13_row['TEMPERATURA C°'].iloc[0]:.1f}°C" if not t_13_row.empty else ""
                 temp_17 = f"{t_17_row['TEMPERATURA C°'].iloc[0]:.1f}°C" if not t_17_row.empty else ""
                 temp_21 = f"{t_21_row['TEMPERATURA C°'].iloc[0]:.1f}°C" if not t_21_row.empty else ""
-                responsables = " / ".join(registros_dia['RESPONSABLE'].unique()) if not registros_dia.empty else ""
-                
+                responsables = " / ".join(registros_dia["RESPONSABLE"].unique()) if not registros_dia.empty else ""
+
                 registros_mensuales.append({
-                    "dia": f"{dia:02d}", "t_13": temp_13, "t_17": temp_17, "t_21": temp_21, "responsables": responsables
+                    "dia": f"{dia:02d}",
+                    "t_13": temp_13,
+                    "t_17": temp_17,
+                    "t_21": temp_21,
+                    "responsables": responsables,
                 })
             productos_data[producto_nombre] = registros_mensuales
         sucursales_data[sucursal_nombre] = productos_data
-    
-    return render_template("seremi/print_temperatura_productos.html", sucursales_data=sucursales_data, mes=f"{nombre_mes} {datetime.now().year}")
+
+    return render_template(
+        "seremi/print_temperatura_productos.html",
+        sucursales_data=sucursales_data,
+        mes=f"{nombre_mes} {año}",
+    )
 
 
 
@@ -477,95 +517,94 @@ def imprimir_temperatura_productos():
 @login_requerido
 @permiso_modulo("seremi")
 def imprimir_personal():
-    # 1. SEGURIDAD
     sucursal_activa, _ = obtener_filtro_sucursal_seremi()
-    if sucursal_activa is None: return "Acceso Denegado", 403
+    if sucursal_activa is None:
+        return "Acceso Denegado", 403
 
     df = obtener_datos("registro_personal")
     df.columns = df.columns.str.strip().str.upper()
-    df['FECHA'] = pd.to_datetime(df['FECHA'], format='%d-%m-%Y %H:%M:%S', errors='coerce')
-    df = df.dropna(subset=['FECHA'])
-    df['MES'] = df['FECHA'].dt.month
-    df['AÑO'] = df['FECHA'].dt.year
+    df = _aplicar_fechas(df, "registro_personal")
+    mes, año, _ = _resolver_periodo(request, df, sucursal_activa)
+    nombre_mes = NOMBRES_MESES[mes - 1].title()
 
-    mes_actual = int(request.args.get("mes", default=datetime.now().month))
-    nombre_mes = NOMBRES_MESES[mes_actual - 1].title()
-    año_actual = df['AÑO'].max() if not df.empty else datetime.now().year
-
-    df_filtrado_mes = df[df["MES"] == mes_actual]
-    
-    # 2. FILTRADO OBLIGATORIO
-    if sucursal_activa != "TODAS":
-        df_a_procesar = df_filtrado_mes[df_filtrado_mes["SUCURSAL"] == sucursal_activa]
-    else:
-        df_a_procesar = df_filtrado_mes
+    df = _filtrar_sucursal(df, sucursal_activa)
+    df_a_procesar = _filtrar_periodo(df, mes, año)
 
     acciones_map = {
-        '¿UÑAS CORTAS?': 'Corregir uñas.', 'AUSENCIA DE JOYAS': 'Retirar joyas.',
-        'UNIFORME LIMPIO': 'Corregir uniforme.', 'COFIA BIEN PUESTA': 'Ajustar cofia.',
-        'MASCARILLA': 'Corregir mascarilla.', 'AFEITADO': 'Afeitar.'
+        "¿UÑAS CORTAS?": "Corregir uñas.",
+        "AUSENCIA DE JOYAS": "Retirar joyas.",
+        "UNIFORME LIMPIO": "Corregir uniforme.",
+        "COFIA BIEN PUESTA": "Ajustar cofia.",
+        "MASCARILLA": "Corregir mascarilla.",
+        "AFEITADO": "Afeitar.",
     }
     registros_procesados = []
-    for index, row in df_a_procesar.iterrows():
+    for _, row in df_a_procesar.iterrows():
         acciones = []
         for columna, mensaje in acciones_map.items():
-            if 'NO CUMPLE' in str(row.get(columna, '')).upper():
+            if "NO CUMPLE" in str(row.get(columna, "")).upper():
                 acciones.append(mensaje)
-        observaciones = str(row.get('OBSERVACIONES', ''))
-        if observaciones and observaciones.lower() != 'nan':
+        observaciones = str(row.get("OBSERVACIONES", ""))
+        if observaciones and observaciones.lower() != "nan":
             acciones.append(observaciones)
-        row['ACCIONES_FINALES'] = ' '.join(acciones)
+        row = row.copy()
+        row["ACCIONES_FINALES"] = " ".join(acciones)
         registros_procesados.append(row)
     df_final = pd.DataFrame(registros_procesados)
 
     data_para_imprimir = {}
     if not df_final.empty:
         for sucursal, grupo_sucursal in df_final.groupby("SUCURSAL"):
-            registros_existentes = {fecha: grupo.to_dict(orient="records") 
-                                    for fecha, grupo in grupo_sucursal.groupby(grupo_sucursal['FECHA'].dt.date)}
-            
+            registros_existentes = {
+                fecha: grupo.to_dict(orient="records")
+                for fecha, grupo in grupo_sucursal.groupby(grupo_sucursal["FECHA"].dt.date)
+            }
+
             lista_mes_completo = []
-            num_dias_mes = calendar.monthrange(año_actual, mes_actual)[1]
+            num_dias_mes = _dias_del_mes(año, mes)
 
             for dia in range(1, num_dias_mes + 1):
-                fecha_actual = datetime(año_actual, mes_actual, dia).date()
+                fecha_actual = datetime(año, mes, dia).date()
                 if fecha_actual in registros_existentes:
                     for registro in registros_existentes[fecha_actual]:
-                        registro['FECHA_EVALUACION'] = fecha_actual
+                        registro["FECHA_EVALUACION"] = fecha_actual
                         lista_mes_completo.append(registro)
                 else:
-                    lista_mes_completo.append({'FECHA_EVALUACION': fecha_actual, 'is_empty': True})
-            
+                    lista_mes_completo.append({"FECHA_EVALUACION": fecha_actual, "is_empty": True})
+
             data_para_imprimir[sucursal] = lista_mes_completo
 
-    return render_template("seremi/print_personal.html", data_para_imprimir=data_para_imprimir, mes=f"{nombre_mes} {año_actual}")
+    return render_template(
+        "seremi/print_personal.html",
+        data_para_imprimir=data_para_imprimir,
+        mes=f"{nombre_mes} {año}",
+    )
 
 @seremi_bp.route("/cambio_aceite/print")
 @login_requerido
 @permiso_modulo("seremi")
 def imprimir_cambio_aceite():
-    # 1. SEGURIDAD
     sucursal_activa, _ = obtener_filtro_sucursal_seremi()
-    if sucursal_activa is None: return "Acceso Denegado", 403
+    if sucursal_activa is None:
+        return "Acceso Denegado", 403
 
-    df = obtener_datos("cambio_aceite")
-    df.columns = df.columns.str.strip().str.upper()
-    df['FECHA'] = pd.to_datetime(df['FECHA'], format='%d-%m-%Y %H:%M:%S', errors='coerce')
-    df = df.dropna(subset=['FECHA'])
-
-    # 2. FILTRADO OBLIGATORIO
-    if sucursal_activa != "TODAS":
-        df_a_procesar = df[df["SUCURSAL"] == sucursal_activa]
-    else:
-        df_a_procesar = df
+    df = _aplicar_fechas(obtener_datos("cambio_aceite"), "cambio_aceite")
+    mes, año, _ = _resolver_periodo(request, df, sucursal_activa)
+    df = _filtrar_sucursal(df, sucursal_activa)
+    df = _filtrar_periodo(df, mes, año)
 
     data_por_sucursal = {}
-    if not df_a_procesar.empty:
-        for sucursal, grupo in df_a_procesar.groupby("SUCURSAL"):
+    if not df.empty:
+        for sucursal, grupo in df.groupby("SUCURSAL"):
             grupo_ordenado = grupo.sort_values(by="FECHA", ascending=False).head(20)
             data_por_sucursal[sucursal] = grupo_ordenado.to_dict(orient="records")
 
-    return render_template("seremi/print_cambio_aceite.html", data_por_sucursal=data_por_sucursal)
+    nombre_mes = NOMBRES_MESES[mes - 1].title()
+    return render_template(
+        "seremi/print_cambio_aceite.html",
+        data_por_sucursal=data_por_sucursal,
+        mes=f"{nombre_mes} {año}",
+    )
 
 # Pega esta nueva función al final de seremi_routes.py
 
@@ -573,24 +612,14 @@ def imprimir_cambio_aceite():
 @login_requerido
 @permiso_modulo("seremi")
 def imprimir_recepcion_mercaderia():
-    # 1. SEGURIDAD
     sucursal_activa, _ = obtener_filtro_sucursal_seremi()
-    if sucursal_activa is None: return "Acceso Denegado", 403
+    if sucursal_activa is None:
+        return "Acceso Denegado", 403
 
-    df = obtener_datos("recepcion_mercaderia")
-    df.columns = df.columns.str.strip().str.upper()
-    df['FECHA'] = pd.to_datetime(df['FECHA'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
-    df = df.dropna(subset=['FECHA'])
-    df['MES'] = df['FECHA'].dt.month
-
-    mes_actual = int(request.args.get("mes", default=datetime.now().month))
-    df_filtrado_mes = df[df["MES"] == mes_actual]
-
-    # 2. FILTRADO OBLIGATORIO
-    if sucursal_activa != "TODAS":
-        df_a_procesar = df_filtrado_mes[df_filtrado_mes["SUCURSAL"] == sucursal_activa]
-    else:
-        df_a_procesar = df_filtrado_mes
+    df = _aplicar_fechas(obtener_datos("recepcion_mercaderia"), "recepcion_mercaderia")
+    mes, año, _ = _resolver_periodo(request, df, sucursal_activa)
+    df = _filtrar_sucursal(df, sucursal_activa)
+    df_a_procesar = _filtrar_periodo(df, mes, año)
 
     data_final = {}
     if not df_a_procesar.empty:
@@ -601,10 +630,11 @@ def imprimir_recepcion_mercaderia():
                 productos_data[producto] = grupo_ordenado.to_dict(orient="records")
             data_final[sucursal] = productos_data
 
-    nombre_mes = NOMBRES_MESES[mes_actual - 1].title()
-    año = df['FECHA'].dt.year.max() if not df.empty else datetime.now().year
+    nombre_mes = NOMBRES_MESES[mes - 1].title()
 
-    return render_template("seremi/print_recepcion_mercaderia.html",
-                           data_final=data_final,
-                           mes=f"{nombre_mes} {año}",
-                           sucursal_activa=sucursal_activa)
+    return render_template(
+        "seremi/print_recepcion_mercaderia.html",
+        data_final=data_final,
+        mes=f"{nombre_mes} {año}",
+        sucursal_activa=sucursal_activa,
+    )

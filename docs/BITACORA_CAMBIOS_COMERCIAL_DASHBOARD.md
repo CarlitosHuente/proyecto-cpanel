@@ -2,7 +2,23 @@
 
 **Objetivo:** registrar cambios recientes, reglas de negocio y **cómo trabajar en este repo** para que cualquier persona (o IA) que lea este archivo sepa **qué tocar**, **qué no romper** y **dónde seguir el hilo**.
 
-**Última actualización (contenido):** 2026-06-29 — Fábrica Papaya: rendimiento **pelador** alineado al Excel.
+**Última actualización (contenido):** 2026-07-07 — Seremi: filtro **año** en vistas mensuales (evita mezclar registros de distintos años).
+
+---
+
+## Seremi (`/seremi`)
+
+**Objetivo:** controles sanitarios (temperaturas equipos/productos, cambio aceite, recepción mercadería, personal) desde Google Sheets CSV (`utils/sheet_cache.py`). Vistas imprimibles en `templates/seremi/print_*.html`.
+
+### Filtros temporales (2026-07-07)
+
+- Vistas mensuales y sus prints usan **sucursal + mes + año** (`?año=` o `?anio=`).
+- Default año: año calendario actual si hay datos en ese mes; si no, el año más reciente con datos.
+- Años &lt; 2010 se ignoran (typos en fuente, ej. `0202`).
+- Grillas día 1…N usan `calendar.monthrange(año, mes)` (no siempre 31 filas).
+- **Cambio aceite:** filtro mes+año; muestra últimos 20 del período (antes: últimos 20 globales sin mes).
+
+**Archivos:** `routes/seremi_routes.py`, `templates/seremi/*.html`.
 
 ---
 
