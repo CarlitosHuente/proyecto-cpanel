@@ -19,6 +19,19 @@
     .cc-pill-scroll { -webkit-overflow-scrolling: touch; }
     .cc-link-dash { font-size: 0.8rem; }
     @media (min-width: 768px) { .cc-link-dash { font-size: 1rem; } }
+    .kpi-card-click {
+        cursor: pointer;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .kpi-card-click:hover,
+    .kpi-card-click:focus {
+        border-color: #d80000 !important;
+        box-shadow: 0 0 0 1px rgba(216, 0, 0, 0.45);
+        outline: none;
+    }
+    .kpi-serie-row-sel { background-color: rgba(216, 0, 0, 0.22) !important; }
+    .kpi-serie-row-prox { background-color: rgba(13, 202, 240, 0.12) !important; }
+    .chart-wrap--modal { height: clamp(180px, 28vh, 260px); }
 </style>
 
 {% set sw_qs = '' %}
@@ -91,7 +104,10 @@
 
 <div class="row g-2 g-md-3 mb-3 mb-md-4">
     <div class="col-6 col-lg-3">
-        <div class="card bg-dark text-white border-secondary h-100 shadow">
+        <div class="card bg-dark text-white border-secondary h-100 shadow kpi-card-click"
+             role="button" tabindex="0" data-kpi="venta"
+             title="Clic para ver serie mensual vs año anterior"
+             aria-label="Ventas brutas: ver serie mensual">
             <div class="card-body p-2 p-md-3">
                 <h5 class="text-white text-uppercase small opacity-75 mb-1 mb-md-2">Ventas brutas</h5>
                 <h2 class="fw-bold mb-0 mb-md-1 text-white fs-4 fs-md-2">{{ kpis.venta|dinero }}</h2>
@@ -99,32 +115,44 @@
                     {% if kpis.var_venta >= 0 %}▲{% else %}▼{% endif %} 
                     {{ "{:.1f}%".format(kpis.var_venta) }} vs año ant.
                 </small>
+                <div class="small text-muted mt-1 d-none d-md-block">Clic · serie mensual</div>
             </div>
         </div>
     </div>
     
     <div class="col-6 col-lg-3">
-        <div class="card bg-dark text-white border-secondary h-100 shadow">
+        <div class="card bg-dark text-white border-secondary h-100 shadow kpi-card-click"
+             role="button" tabindex="0" data-kpi="margen_bruto_pct"
+             title="Clic para ver serie mensual vs año anterior"
+             aria-label="Margen bruto: ver serie mensual">
             <div class="card-body p-2 p-md-3">
                 <h5 class="text-white text-uppercase small opacity-75 mb-1 mb-md-2">Margen bruto</h5>
                 <h2 class="fw-bold mb-0 mb-md-1 text-primary fs-4 fs-md-2">{{ "{:.1f}%".format(kpis.margen_bruto_pct) }}</h2>
                 <small class="text-white opacity-75">s/ ventas brutas</small>
+                <div class="small text-muted mt-1 d-none d-md-block">Clic · serie mensual</div>
             </div>
         </div>
     </div>
 
     <div class="col-6 col-lg-3">
-        <div class="card bg-dark text-white border-secondary h-100 shadow">
+        <div class="card bg-dark text-white border-secondary h-100 shadow kpi-card-click"
+             role="button" tabindex="0" data-kpi="resultado_op_pct"
+             title="Clic para ver serie mensual vs año anterior"
+             aria-label="Resultado operacional: ver serie mensual">
             <div class="card-body p-2 p-md-3">
                 <h5 class="text-white text-uppercase small opacity-75 mb-1 mb-md-2">Resultado operacional</h5>
                 <h2 class="fw-bold mb-0 mb-md-1 text-info fs-4 fs-md-2">{{ "{:.1f}%".format(kpis.resultado_op_pct) }}</h2>
                 <small class="text-white opacity-75">s/ ventas brutas</small>
+                <div class="small text-muted mt-1 d-none d-md-block">Clic · serie mensual</div>
             </div>
         </div>
     </div>
 
     <div class="col-6 col-lg-3">
-        <div class="card bg-dark text-white border-secondary h-100 shadow">
+        <div class="card bg-dark text-white border-secondary h-100 shadow kpi-card-click"
+             role="button" tabindex="0" data-kpi="resultado"
+             title="Clic para ver serie mensual vs año anterior"
+             aria-label="Resultado antes de impuesto: ver serie mensual">
             <div class="card-body p-2 p-md-3">
                 <h5 class="text-white text-uppercase small opacity-75 mb-1 mb-md-2">Res. antes impto</h5>
                 <h2 class="fw-bold mb-0 mb-md-1 fs-5 fs-md-2 {% if kpis.resultado >= 0 %}text-success{% else %}text-danger{% endif %}">
@@ -133,6 +161,7 @@
                 <small class="text-white opacity-75">
                     Var: <span class="{% if kpis.var_resultado >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold">{{ "{:.1f}%".format(kpis.var_resultado) }}</span>
                 </small>
+                <div class="small text-muted mt-1 d-none d-md-block">Clic · serie mensual</div>
             </div>
         </div>
     </div>
@@ -300,6 +329,44 @@
 </div>
 {% endif %}
 
+<div class="modal fade" id="modalKpiSerie" tabindex="-1" aria-hidden="true" aria-labelledby="modalKpiSerieTitle">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content bg-dark text-white border-secondary">
+            <div class="modal-header border-secondary" style="background-color: #111;">
+                <div>
+                    <h5 class="modal-title text-white" id="modalKpiSerieTitle">Serie mensual</h5>
+                    <small class="text-muted" id="modalKpiSerieSub"></small>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="chart-wrap chart-wrap--modal mb-3">
+                    <canvas id="chartKpiSerie"></canvas>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-dark table-sm table-hover align-middle mb-0">
+                        <thead class="border-secondary">
+                            <tr class="text-uppercase small text-muted">
+                                <th>Mes</th>
+                                <th class="text-end" id="thKpiAnt">Año ant.</th>
+                                <th class="text-end" id="thKpiAct">Año act.</th>
+                                <th class="text-end">Variación</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyKpiSerie"></tbody>
+                    </table>
+                </div>
+                <small class="text-muted d-block mt-2">
+                    Fila roja = periodo seleccionado. Fila celeste = mes siguiente (referencia año anterior; sin proyección).
+                </small>
+            </div>
+            <div class="modal-footer border-secondary" style="background-color: #111;">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     Chart.defaults.color = '#ffffff';
     Chart.defaults.borderColor = '#444';
@@ -454,6 +521,190 @@
         }
     });
     {% endif %}
+
+    (function () {
+        const serieKpis = {{ serie_kpis | tojson }};
+        const anioAct = {{ anio_actual | tojson }};
+        const anioAnt = {{ anio_anterior | tojson }};
+        const dashCc = {{ dash_cc | tojson }};
+        const kpiMeta = {
+            venta: {
+                title: 'Ventas brutas',
+                kind: 'money',
+                actKey: 'venta_act',
+                antKey: 'venta_ant',
+                varKey: 'var_venta',
+                varSuffix: '%',
+                varIsPp: false
+            },
+            margen_bruto_pct: {
+                title: 'Margen bruto',
+                kind: 'pct',
+                actKey: 'margen_bruto_pct_act',
+                antKey: 'margen_bruto_pct_ant',
+                varKey: 'var_margen_bruto_pp',
+                varSuffix: ' pp',
+                varIsPp: true
+            },
+            resultado_op_pct: {
+                title: 'Resultado operacional',
+                kind: 'pct',
+                actKey: 'resultado_op_pct_act',
+                antKey: 'resultado_op_pct_ant',
+                varKey: 'var_resultado_op_pp',
+                varSuffix: ' pp',
+                varIsPp: true
+            },
+            resultado: {
+                title: 'Res. antes impto',
+                kind: 'money',
+                actKey: 'resultado_act',
+                antKey: 'resultado_ant',
+                varKey: 'var_resultado',
+                varSuffix: '%',
+                varIsPp: false
+            }
+        };
+
+        let chartKpiSerie = null;
+        const modalEl = document.getElementById('modalKpiSerie');
+        if (!modalEl || !serieKpis || !serieKpis.filas || !serieKpis.filas.length) return;
+        const modal = new bootstrap.Modal(modalEl);
+
+        function fmtValor(kind, v) {
+            if (v === null || v === undefined) return '—';
+            if (kind === 'money') return HuenteFmt.pesoConSigno(v);
+            return Number(v).toFixed(1) + '%';
+        }
+
+        function fmtVar(meta, v) {
+            if (v === null || v === undefined) return '—';
+            const arrow = v >= 0 ? '▲' : '▼';
+            const cls = v >= 0 ? 'text-success' : 'text-danger';
+            return '<span class="' + cls + ' fw-bold">' + arrow + ' ' + Number(v).toFixed(1) + meta.varSuffix + '</span>';
+        }
+
+        function abrirKpi(kpiKey) {
+            const meta = kpiMeta[kpiKey];
+            if (!meta) return;
+            document.getElementById('modalKpiSerieTitle').textContent = meta.title + ' · serie mensual';
+            document.getElementById('modalKpiSerieSub').textContent =
+                dashCc + ' · ' + anioAct + ' vs ' + anioAnt;
+            document.getElementById('thKpiAnt').textContent = String(anioAnt);
+            document.getElementById('thKpiAct').textContent = String(anioAct);
+
+            const tbody = document.getElementById('tbodyKpiSerie');
+            tbody.innerHTML = '';
+            const labels = [];
+            const dataAct = [];
+            const dataAnt = [];
+
+            serieKpis.filas.forEach(function (fila) {
+                const tr = document.createElement('tr');
+                if (fila.es_seleccionado) tr.classList.add('kpi-serie-row-sel');
+                else if (fila.es_proximo) tr.classList.add('kpi-serie-row-prox');
+
+                let mesLabel = fila.label;
+                if (fila.es_proximo) mesLabel += ' · próximo';
+                else if (fila.es_seleccionado) mesLabel += ' · actual';
+
+                tr.innerHTML =
+                    '<td class="text-nowrap">' + mesLabel + '</td>' +
+                    '<td class="text-end">' + fmtValor(meta.kind, fila[meta.antKey]) + '</td>' +
+                    '<td class="text-end fw-bold">' + fmtValor(meta.kind, fila[meta.actKey]) + '</td>' +
+                    '<td class="text-end">' + fmtVar(meta, fila[meta.varKey]) + '</td>';
+                tbody.appendChild(tr);
+
+                labels.push(fila.label);
+                dataAct.push(fila[meta.actKey]);
+                dataAnt.push(fila[meta.antKey]);
+            });
+
+            const ctx = document.getElementById('chartKpiSerie').getContext('2d');
+            if (chartKpiSerie) chartKpiSerie.destroy();
+            chartKpiSerie = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: String(anioAct),
+                            data: dataAct,
+                            borderColor: '#d80000',
+                            backgroundColor: 'rgba(216, 0, 0, 0.15)',
+                            borderWidth: 2,
+                            pointRadius: 3,
+                            tension: 0.3,
+                            spanGaps: false,
+                            fill: true
+                        },
+                        {
+                            label: String(anioAnt),
+                            data: dataAnt,
+                            borderColor: '#aaaaaa',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            tension: 0.3,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { color: 'white', boxWidth: 12, font: { size: 12 } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) label += ': ';
+                                    if (context.parsed.y === null || context.parsed.y === undefined) {
+                                        return label + '—';
+                                    }
+                                    return label + fmtValor(meta.kind, context.parsed.y);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            grid: { color: '#333' },
+                            ticks: {
+                                color: '#ccc',
+                                callback: function (v) {
+                                    return meta.kind === 'money' ? HuenteFmt.peso(v) : Number(v).toFixed(1) + '%';
+                                }
+                            }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: 'white', maxRotation: 0, autoSkip: true, maxTicksLimit: 13 }
+                        }
+                    }
+                }
+            });
+
+            modal.show();
+        }
+
+        document.querySelectorAll('.kpi-card-click').forEach(function (el) {
+            el.addEventListener('click', function () {
+                abrirKpi(el.getAttribute('data-kpi'));
+            });
+            el.addEventListener('keydown', function (ev) {
+                if (ev.key === 'Enter' || ev.key === ' ') {
+                    ev.preventDefault();
+                    abrirKpi(el.getAttribute('data-kpi'));
+                }
+            });
+        });
+    })();
 </script>
 
 {% endblock %}

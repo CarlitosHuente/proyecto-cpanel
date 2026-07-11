@@ -299,12 +299,13 @@ Carpeta Buk: env `BUK_ENCUESTA_CARPETA` (default `Capacitacion`). Token RRHH con
 - **Ventas brutas (2026-07-06):** KPIs, resumen % y tooltips del informe usan **suma 4xx** (misma base que el gráfico de tendencia), no el neto de “Ingresos de explotación”.
 - **Macros P&amp;L (2026-07-07):** `/contab/macros_gestion` + `macros_gestion.json` (opcional, `activo: false` por defecto). Sin archivo → informes **igual que antes**. Con `activo: true` + “partir por tipo” en macro de ingresos: grupos INGRESO → ventas brutas; grupos GASTO → costo directo.
 - **Ranking sucursales (2026-07-06):** bloque inferior con mayor aporte / mayor detractor, gráfico de barras horizontal y tabla comparativa de resultado operacional por centro de costo.
+- **Drill-down cards KPI (2026-07-11):** clic en cualquiera de las 4 cards abre modal con serie **ene–dic** del año del periodo vs mismo mes del año anterior (y fila del **mes siguiente** como referencia, sin proyección). Respeta CC, Dist. SG y Aj. Fábrica. Montos con `HuenteFmt`; % y variación en pp con 1 decimal. Helper `serie_kpis_mensual` en `gestion_estructura.py`.
 
 | Archivo | Cambio |
 |---------|--------|
-| `utils/gestion_estructura.py` | Estructura P&L y KPIs compartidos |
-| `routes/contab_routes.py` | `dashboard_gestion`, `informe_gerencial` usan helpers |
-| `templates/contab/dashboard_gestion.html` | KPIs, resumen %, enlaces |
+| `utils/gestion_estructura.py` | Estructura P&L y KPIs compartidos; **`serie_kpis_mensual`** |
+| `routes/contab_routes.py` | `dashboard_gestion`, `informe_gerencial` usan helpers; pasa `serie_kpis` al dashboard |
+| `templates/contab/dashboard_gestion.html` | KPIs, resumen %, enlaces; **cards clickeables + modal serie YoY** |
 | `templates/contab/informe_gerencial.html` | Tooltips %, `|dinero`, enlaces |
 
 ---

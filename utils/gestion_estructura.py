@@ -2,7 +2,12 @@
 Estado de resultados de gestión: estructura P&L compartida (dashboard, informe, comparativo).
 """
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+MES_LABELS_CORTOS = [
+    "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+    "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
+]
 
 ESTRUCTURA_GESTION: List[dict] = [
     {
@@ -415,4 +420,157 @@ def ranking_cc_resultado_op(
         "res_op_pct_empresa": pct_sobre_ventas(total, ventas_empresa),
         "mejor": activas[0] if activas else None,
         "peor": activas[-1] if activas else None,
+    }
+
+
+def _periodo_mas_meses(periodo: str, meses: int) -> str:
+    y, m = map(int, periodo.split("-"))
+    m += meses
+    while m > 12:
+        m -= 12
+        y += 1
+    while m < 1:
+        m += 12
+        y -= 1
+    return f"{y:04d}-{m:02d}"
+
+
+def _kpis_vacios() -> Dict[str, Any]:
+    return {
+        "venta": 0.0,
+        "margen_bruto": 0.0,
+        "margen_bruto_pct": 0.0,
+        "resultado_op": 0.0,
+        "resultado_op_pct": 0.0,
+        "resultado": 0.0,
+        "costo_total": 0.0,
+    }
+
+
+def _var_pct_monto(act: float, ant: float, *, abs_den: bool = False) -> float:
+    if abs_den:
+        return ((act - ant) / abs(ant) * 100) if abs(ant) > 0 else 0.0
+    return ((act - ant) / ant * 100) if ant > 0 else 0.0
+
+
+def serie_kpis_mensual(
+    df_final,
+    data_clasif: dict,
+    columnas_cc: List[str],
+    alcance_cc: str,
+    periodo_seleccionado: str,
+    *,
+    armar_reporte: Optional[Callable[[Any, List[str]], List[dict]]] = None,
+) -> Dict[str, Any]:
+    """Serie ene–dic (YoY) + mes siguiente para drill-down de cards del dashboard.
+
+    ``armar_reporte(macros_data, columnas)`` debe devolver el P&L de gestión
+    (p. ej. el wrapper de contab que aplica macros_gestion.json).
+    """
+    if armar_reporte is None:
+        armar_reporte = lambda macros, cols: armar_reporte_gestion(macros, cols)
+
+    anio_act = int(periodo_seleccionado[:4])
+    anio_ant = anio_act - 1
+    periodo_proximo = _periodo_mas_meses(periodo_seleccionado, 1)
+
+    cache: Dict[str, Tuple[bool, Dict[str, Any]]] = {}
+
+    def kpis_periodo(periodo: str) -> Tuple[bool, Dict[str, Any]]:
+        if periodo in cache:
+            return cache[periodo]
+        if df_final is None or getattr(df_final, "empty", True):
+            vacio = (False, _kpis_vacios())
+            cache[periodo] = vacio
+            return vacio
+        df_p = df_final[df_final["PERIODO_STR"] == periodo]
+        if df_p.empty:
+            vacio = (False, _kpis_vacios())
+            cache[periodo] = vacio
+            return vacio
+        macros = armar_macros_data_cc(df_p, data_clasif, columnas_cc)
+        reporte = armar_reporte(macros, columnas_cc)
+        ventas_cc = ventas_brutas_por_cc(df_p, columnas_cc)
+        kpis = kpis_desde_reporte(reporte, alcance_cc, ventas_cc)
+        out = (True, kpis)
+        cache[periodo] = out
+        return out
+
+    periodos_filas: List[Tuple[int, str, str, str]] = []
+    for mes in range(1, 13):
+        per_act = f"{anio_act:04d}-{mes:02d}"
+        per_ant = f"{anio_ant:04d}-{mes:02d}"
+        periodos_filas.append((mes, MES_LABELS_CORTOS[mes - 1], per_act, per_ant))
+
+    anio_prox = int(periodo_proximo[:4])
+    if anio_prox > anio_act:
+        mes_prox = int(periodo_proximo[5:7])
+        periodos_filas.append(
+            (
+                mes_prox,
+                f"{MES_LABELS_CORTOS[mes_prox - 1]} {anio_prox}",
+                periodo_proximo,
+                _periodo_mas_meses(periodo_proximo, -12),
+            )
+        )
+
+    filas: List[dict] = []
+    for mes, label, per_act, per_ant in periodos_filas:
+        tiene_act, k_act = kpis_periodo(per_act)
+        _, k_ant = kpis_periodo(per_ant)
+        es_seleccionado = per_act == periodo_seleccionado
+        es_proximo = per_act == periodo_proximo
+
+        # Mes siguiente sin mayor: layout de referencia (año ant. sí, actual —).
+        if es_proximo and not tiene_act:
+            mostrar_act = False
+        else:
+            mostrar_act = tiene_act
+
+        venta_act = float(k_act["venta"]) if mostrar_act else None
+        venta_ant = float(k_ant["venta"])
+        mb_act = float(k_act["margen_bruto_pct"]) if mostrar_act else None
+        mb_ant = float(k_ant["margen_bruto_pct"])
+        ro_act = float(k_act["resultado_op_pct"]) if mostrar_act else None
+        ro_ant = float(k_ant["resultado_op_pct"])
+        res_act = float(k_act["resultado"]) if mostrar_act else None
+        res_ant = float(k_ant["resultado"])
+
+        filas.append(
+            {
+                "mes": mes,
+                "label": label,
+                "periodo_act": per_act,
+                "periodo_ant": per_ant,
+                "es_seleccionado": es_seleccionado,
+                "es_proximo": es_proximo,
+                "tiene_dato_act": mostrar_act,
+                "venta_act": venta_act,
+                "venta_ant": venta_ant,
+                "var_venta": (
+                    _var_pct_monto(venta_act, venta_ant) if venta_act is not None else None
+                ),
+                "margen_bruto_pct_act": mb_act,
+                "margen_bruto_pct_ant": mb_ant,
+                "var_margen_bruto_pp": (mb_act - mb_ant) if mb_act is not None else None,
+                "resultado_op_pct_act": ro_act,
+                "resultado_op_pct_ant": ro_ant,
+                "var_resultado_op_pp": (ro_act - ro_ant) if ro_act is not None else None,
+                "resultado_act": res_act,
+                "resultado_ant": res_ant,
+                "var_resultado": (
+                    _var_pct_monto(res_act, res_ant, abs_den=True)
+                    if res_act is not None
+                    else None
+                ),
+            }
+        )
+
+    return {
+        "anio_actual": anio_act,
+        "anio_anterior": anio_ant,
+        "periodo_seleccionado": periodo_seleccionado,
+        "periodo_proximo": periodo_proximo,
+        "labels": [f["label"] for f in filas],
+        "filas": filas,
     }

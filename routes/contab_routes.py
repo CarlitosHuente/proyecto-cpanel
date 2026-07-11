@@ -14,6 +14,7 @@ from utils.gestion_estructura import (
     kpis_desde_reporte,
     ranking_cc_resultado_op,
     resumen_pct_dashboard,
+    serie_kpis_mensual,
     switches_desde_request,
     ventas_brutas_por_cc,
     ventas_por_cc,
@@ -1020,11 +1021,31 @@ def dashboard_gestion():
     if df.empty:
         return render_template(
             "contab/dashboard_gestion.html",
-            dash_cc="Total",
-            kpis={},
+            dash_cc="Total Empresa",
+            todos_cc=[],
+            kpis={
+                "venta": 0,
+                "var_venta": 0,
+                "margen_bruto_pct": 0,
+                "resultado_op_pct": 0,
+                "resultado": 0,
+                "var_resultado": 0,
+            },
             resumen_pct=[],
             cc_resumen={"filas": [], "total": 0, "mejor": None, "peor": None},
-            charts={},
+            charts={
+                "season_labels": [],
+                "season_actual": [],
+                "season_prev": [],
+                "mix_labels": [],
+                "mix_data": [],
+            },
+            serie_kpis={"filas": [], "labels": [], "anio_actual": None, "anio_anterior": None},
+            ultimo_mes="",
+            anio_actual=None,
+            anio_anterior=None,
+            switch_sg=True,
+            switch_fab=True,
         )
 
     per_solicitado = request.args.get("periodo")
@@ -1108,6 +1129,15 @@ def dashboard_gestion():
         "mix_data": [x[1] for x in mix_ord],
     }
 
+    serie_kpis = serie_kpis_mensual(
+        df_final,
+        data_clasif,
+        todos_cc,
+        dash_cc,
+        ult_mes_str,
+        armar_reporte=lambda macros, cols: _armar_reporte_contab(macros, cols, data_clasif),
+    )
+
     return render_template(
         "contab/dashboard_gestion.html",
         dash_cc=dash_cc,
@@ -1116,6 +1146,7 @@ def dashboard_gestion():
         resumen_pct=resumen_pct,
         cc_resumen=cc_resumen,
         charts=charts,
+        serie_kpis=serie_kpis,
         ultimo_mes=ult_mes_str,
         anio_actual=anio_act,
         anio_anterior=anio_ant,
