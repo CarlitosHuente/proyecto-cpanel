@@ -523,7 +523,7 @@
     {% endif %}
 
     (function () {
-        const serieKpis = {{ serie_kpis | tojson }};
+        const serieKpis = {{ serie_kpis | default({}) | tojson }};
         const anioAct = {{ anio_actual | tojson }};
         const anioAnt = {{ anio_anterior | tojson }};
         const dashCc = {{ dash_cc | tojson }};
@@ -534,8 +534,7 @@
                 actKey: 'venta_act',
                 antKey: 'venta_ant',
                 varKey: 'var_venta',
-                varSuffix: '%',
-                varIsPp: false
+                varSuffix: '%'
             },
             margen_bruto_pct: {
                 title: 'Margen bruto',
@@ -543,8 +542,7 @@
                 actKey: 'margen_bruto_pct_act',
                 antKey: 'margen_bruto_pct_ant',
                 varKey: 'var_margen_bruto_pp',
-                varSuffix: ' pp',
-                varIsPp: true
+                varSuffix: ' pp'
             },
             resultado_op_pct: {
                 title: 'Resultado operacional',
@@ -552,8 +550,7 @@
                 actKey: 'resultado_op_pct_act',
                 antKey: 'resultado_op_pct_ant',
                 varKey: 'var_resultado_op_pp',
-                varSuffix: ' pp',
-                varIsPp: true
+                varSuffix: ' pp'
             },
             resultado: {
                 title: 'Res. antes impto',
@@ -561,15 +558,12 @@
                 actKey: 'resultado_act',
                 antKey: 'resultado_ant',
                 varKey: 'var_resultado',
-                varSuffix: '%',
-                varIsPp: false
+                varSuffix: '%'
             }
         };
 
         let chartKpiSerie = null;
-        const modalEl = document.getElementById('modalKpiSerie');
-        if (!modalEl || !serieKpis || !serieKpis.filas || !serieKpis.filas.length) return;
-        const modal = new bootstrap.Modal(modalEl);
+        let modalInstance = null;
 
         function fmtValor(kind, v) {
             if (v === null || v === undefined) return '—';
@@ -584,9 +578,23 @@
             return '<span class="' + cls + ' fw-bold">' + arrow + ' ' + Number(v).toFixed(1) + meta.varSuffix + '</span>';
         }
 
+        function getModal() {
+            const modalEl = document.getElementById('modalKpiSerie');
+            if (!modalEl || !window.bootstrap) return null;
+            if (!modalInstance) {
+                modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+            }
+            return modalInstance;
+        }
+
         function abrirKpi(kpiKey) {
             const meta = kpiMeta[kpiKey];
-            if (!meta) return;
+            const filas = (serieKpis && serieKpis.filas) ? serieKpis.filas : [];
+            if (!meta || !filas.length) return;
+
+            const modal = getModal();
+            if (!modal) return;
+
             document.getElementById('modalKpiSerieTitle').textContent = meta.title + ' · serie mensual';
             document.getElementById('modalKpiSerieSub').textContent =
                 dashCc + ' · ' + anioAct + ' vs ' + anioAnt;
@@ -599,7 +607,7 @@
             const dataAct = [];
             const dataAnt = [];
 
-            serieKpis.filas.forEach(function (fila) {
+            filas.forEach(function (fila) {
                 const tr = document.createElement('tr');
                 if (fila.es_seleccionado) tr.classList.add('kpi-serie-row-sel');
                 else if (fila.es_proximo) tr.classList.add('kpi-serie-row-prox');
@@ -693,17 +701,26 @@
             modal.show();
         }
 
-        document.querySelectorAll('.kpi-card-click').forEach(function (el) {
-            el.addEventListener('click', function () {
-                abrirKpi(el.getAttribute('data-kpi'));
-            });
-            el.addEventListener('keydown', function (ev) {
-                if (ev.key === 'Enter' || ev.key === ' ') {
-                    ev.preventDefault();
+        function bindKpiCards() {
+            document.querySelectorAll('.kpi-card-click').forEach(function (el) {
+                el.addEventListener('click', function () {
                     abrirKpi(el.getAttribute('data-kpi'));
-                }
+                });
+                el.addEventListener('keydown', function (ev) {
+                    if (ev.key === 'Enter' || ev.key === ' ') {
+                        ev.preventDefault();
+                        abrirKpi(el.getAttribute('data-kpi'));
+                    }
+                });
             });
-        });
+        }
+
+        // El script del content corre antes que bootstrap.bundle.js en base.html.
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', bindKpiCards);
+        } else {
+            bindKpiCards();
+        }
     })();
 </script>
 
