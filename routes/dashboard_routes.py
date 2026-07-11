@@ -12,6 +12,7 @@ from utils.filters import filtrar_dataframe
 from utils.auth import login_requerido, permiso_modulo # ← importar el decorador
 from utils.db import get_db_connection
 from services.ventas_horario_service import calcular_ventas_horario, listar_sucursales_horario
+from services.promos_vs_individual_service import calcular_promos_vs_individual
 import pandas as pd
 
 
@@ -632,3 +633,50 @@ def api_dashboard_ventas_horario():
 def api_sucursales_horario():
     empresa = request.args.get("empresa", "comercial")
     return jsonify(listar_sucursales_horario(empresa))
+
+
+@dashboard_bp.route("/dashboard/promos")
+@login_requerido
+@permiso_modulo("dashboard.promos")
+def dashboard_promos():
+    fecha_actualizacion = obtener_fecha_actualizacion("comercial")
+    return render_template(
+        "dashboard_promos.html",
+        usuario=session.get("usuario"),
+        fecha_actualizacion=fecha_actualizacion,
+    )
+
+
+@dashboard_bp.route("/api/dashboard-promos")
+@login_requerido
+@permiso_modulo("dashboard.promos")
+def api_dashboard_promos():
+    sucursal = request.args.get("sucursal") or None
+    semana = request.args.get("semana")
+    año = request.args.get("año")
+    desde = request.args.get("desde") or None
+    hasta = request.args.get("hasta") or None
+
+    if semana == "":
+        semana = None
+    if año == "":
+        año = None
+    if desde == "":
+        desde = None
+    if hasta == "":
+        hasta = None
+
+    if not sucursal:
+        return jsonify({"error": "Selecciona una sucursal"}), 400
+
+    if not ((desde and hasta) or (semana and año)):
+        return jsonify({"error": "Indica rango Desde/Hasta o Semana+Año"}), 400
+
+    data = calcular_promos_vs_individual(
+        sucursal=sucursal,
+        desde=desde,
+        hasta=hasta,
+        semana=semana,
+        año=año,
+    )
+    return jsonify(data)

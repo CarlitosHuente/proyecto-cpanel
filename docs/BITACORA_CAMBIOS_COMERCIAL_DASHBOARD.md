@@ -2,7 +2,7 @@
 
 **Objetivo:** registrar cambios recientes, reglas de negocio y **cómo trabajar en este repo** para que cualquier persona (o IA) que lea este archivo sepa **qué tocar**, **qué no romper** y **dónde seguir el hilo**.
 
-**Última actualización (contenido):** 2026-07-07 — Seremi: filtro **año** en vistas mensuales (evita mezclar registros de distintos años).
+**Última actualización (contenido):** 2026-07-11 — Dashboard: submódulo **Promoción vs Individual** (combos vs venta suelta).
 
 ---
 
@@ -598,6 +598,44 @@ Además de los campos actuales del día, incorporar **dos magnitudes explícitas
 **UI (2026-05-24):** vista por defecto **Comparar 7 días** — gráfico de líneas (una curva por día de semana, agregando todos los lunes/martes/etc. del período filtrado). Vista **Detalle un día** — chips `[Todos | Lun | …]` sobre barras neto+boletas; heatmap resalta fila del día elegido. Tabla resumen por día (clic → detalle).
 
 **Archivos:** `templates/dashboard_ventas_horario.html`, `static/js/dashboard_ventas_horario.js?v=3`, `utils/permisos_catalogo.py`, `routes/dashboard_routes.py`, `templates/base.html`.
+
+---
+
+## Q. Promoción vs Individual — dashboard (2026-07-11)
+
+**Objetivo:** responder cuánto se vende **en combo/promoción** vs **individual** (empanadas, néctar, bebidas, helados), sin alterar el NETO del dashboard principal.
+
+**Por qué submódulo aparte:** el pipeline KPI (`procesar_neto_comercial_mismo_que_dashboard`) **excluye** rubro `PROMOCIÓN` para no doble-contar dinero. Este módulo **sí lee** esas líneas.
+
+**Regla de unidades:**
+1. Packs = `CANTIDAD` de líneas con familia/rubro que contiene `PROMOCION`.
+2. Unidades en promo = packs × **receta** del nombre del combo (mapa en `services/promos_vs_individual_service.py` → `RECETAS_PROMO`).
+3. Unidades individual = total unidades del producto (líneas no-promo) − unidades en promo.
+4. Combos sin receta (ej. `PROMO CUMPLE`) aparecen en ranking pero no aportan unidades derivadas.
+
+**KPIs adicionales (2026-07-11):**
+| KPI | Fórmula |
+|-----|---------|
+| % boletas con promo | boletas con ≥1 línea PROMOCIÓN / total boletas |
+| Ticket con/sin promo | promedio neto/boleta; con promo: `promo_sub + max(prod_sub>0 − promo_sub, 0)` / 1.19 (evita doble 3x2) |
+| Precio efectivo categoría | neto combo atribuido proporc. a unidades de receta / unidades promo; individual = líneas en boletas **sin** promo |
+| Packs/día | packs / días distintos con venta |
+| Mix combo | packs combo / packs totales (`pct_mix`) |
+| Acompañamiento | packs de combos con néctar vs con bebida en la receta |
+
+**Simulador what-if (cliente):** panel en la misma vista. Usa `precios_base` del API (combos + categorías).  
+- Combo: `neto_nuevo = packs × (1+sens/100) × precio_bruto_nuevo / 1.19`.  
+- Categoría suelta: mismas unidades individuales del KPI × precio nuevo / 1.19.  
+- Sensibilidad volumen: slider −20%…+10%, default 0% (volumen constante). **Supuesto explícito, no histórico.**  
+- Sin costeo/margen ni elasticidad automática en esta entrega.
+
+**Filtros (igual que Ventas por Horario):** sucursal obligatoria (comercial) + Semana/Año **o** Desde/Hasta.
+
+**Rutas:** `/dashboard/promos`, API `/api/dashboard-promos`. Sucursales: reutiliza `/api/sucursales-horario?empresa=comercial`. Semana inicial: `/api/latest-date-info`.
+
+**Menú:** Dashboard ▾ → **Promoción vs Individual**. Permiso `dashboard.promos` (hereda de `dashboard`).
+
+**Archivos:** `services/promos_vs_individual_service.py`, `templates/dashboard_promos.html`, `static/js/dashboard_promos.js?v=2`, `routes/dashboard_routes.py`, `utils/permisos_catalogo.py`, `templates/base.html`.
 
 ---
 

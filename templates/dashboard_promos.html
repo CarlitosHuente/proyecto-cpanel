@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+{% block title %}Promoción vs Individual{% endblock %}
+
+{% block content %}
+<style>
+    .sticky-top-dark {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background-color: #000;
+        padding: 10px;
+        border-bottom: 1px solid #333;
+    }
+    .kpi-card {
+        background: #111;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 1rem;
+        height: 100%;
+    }
+    .kpi-valor { font-size: 1.35rem; font-weight: 700; color: #0dcaf0; }
+    .kpi-sub { font-size: 0.8rem; color: #aaa; }
+    .sim-resultado {
+        background: #1a1a1a;
+        border: 1px solid #444;
+        border-radius: 8px;
+        padding: 1rem;
+    }
+    .sim-delta-pos { color: #28a745; font-weight: 700; }
+    .sim-delta-neg { color: #dc3545; font-weight: 700; }
+</style>
+
+<div class="container-fluid sticky-top-dark">
+    <div class="row align-items-end g-2">
+        <div class="col-md-4">
+            <h2 class="text-danger mb-1">Promoción vs Individual</h2>
+            <p class="text-muted small mb-0">
+                Combos del POS vs venta suelta · Comercial
+                {% if fecha_actualizacion %}
+                · datos al {{ fecha_actualizacion }}
+                {% endif %}
+            </p>
+        </div>
+        <div class="col-md-8">
+            <label class="text-white small">Sucursal</label>
+            <div id="sucursales" class="btn-group flex-wrap" role="group"></div>
+        </div>
+    </div>
+    <div class="row mt-2 g-2">
+        <div class="col-md-2">
+            <label class="text-white small">Semana</label>
+            <input type="number" id="semana" min="1" max="53" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-2">
+            <label class="text-white small">Año</label>
+            <input type="number" id="año" min="2020" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-2">
+            <label class="text-white small">Desde</label>
+            <input type="date" id="desde" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-2">
+            <label class="text-white small">Hasta</label>
+            <input type="date" id="hasta" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button type="button" id="btn-consultar" class="btn btn-danger btn-sm w-100">Consultar</button>
+        </div>
+    </div>
+</div>
+
+<div id="loading-overlay" class="position-fixed top-0 start-0 w-100 h-100 d-none align-items-center justify-content-center" style="background:rgba(0,0,0,0.75); z-index:1050;">
+    <div class="text-center text-white">
+        <div class="spinner-border text-danger" role="status"></div>
+        <p class="mt-2">Calculando promoción vs individual…</p>
+    </div>
+</div>
+
+<div class="container-fluid mt-4 pb-5">
+    <div id="alert-filtros" class="alert alert-warning d-none"></div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-3">
+            <div class="kpi-card">
+                <div class="kpi-sub">Packs de promoción</div>
+                <div class="kpi-valor" id="kpi-packs">—</div>
+                <div class="kpi-sub mt-1" id="kpi-packs-dia"></div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="kpi-card">
+                <div class="kpi-sub">Neto cobrado en combos</div>
+                <div class="kpi-valor" id="kpi-neto-promo">—</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="kpi-card">
+                <div class="kpi-sub">% boletas con promo</div>
+                <div class="kpi-valor" id="kpi-pct-boletas">—</div>
+                <div class="kpi-sub mt-1" id="kpi-boletas-detalle"></div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="kpi-card">
+                <div class="kpi-sub">% empanadas en promo</div>
+                <div class="kpi-valor" id="kpi-pct-emp">—</div>
+                <div class="kpi-sub mt-1" id="kpi-meta"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="kpi-card">
+                <div class="kpi-sub">Ticket con promo</div>
+                <div class="kpi-valor" id="kpi-ticket-con">—</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="kpi-card">
+                <div class="kpi-sub">Ticket sin promo</div>
+                <div class="kpi-valor" id="kpi-ticket-sin">—</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="kpi-card">
+                <div class="kpi-sub">$/emp. en promo (efectivo)</div>
+                <div class="kpi-valor" id="kpi-pe-emp-promo">—</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="kpi-card">
+                <div class="kpi-sub">$/emp. individual (efectivo)</div>
+                <div class="kpi-valor" id="kpi-pe-emp-indiv">—</div>
+                <div class="kpi-sub mt-1" id="kpi-acompanamiento"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-lg-4">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-header border-secondary text-white">Unidades: promo vs individual</div>
+                <div class="card-body">
+                    <div id="chart-categorias" style="min-height:300px;"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-header border-secondary text-white">Packs por combo</div>
+                <div class="card-body">
+                    <div id="chart-combos" style="min-height:300px;"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card bg-dark border-secondary h-100">
+                <div class="card-header border-secondary text-white">Precio efectivo (neto / unidad)</div>
+                <div class="card-body">
+                    <div id="chart-precio-efectivo" style="min-height:300px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary mb-4">
+        <div class="card-header border-secondary text-white d-flex justify-content-between align-items-center"
+             data-bs-toggle="collapse" data-bs-target="#panel-simulador" role="button" aria-expanded="true">
+            <span>Simulador de impacto de precio</span>
+            <span class="small text-muted">what-if · clic para plegar</span>
+        </div>
+        <div id="panel-simulador" class="collapse show">
+            <div class="card-body">
+                <p class="text-muted small mb-3">
+                    Proyecta el neto del período filtrado si cambias el precio de un combo o de la venta suelta.
+                    La sensibilidad de volumen es un <strong>supuesto</strong> (no histórico).
+                </p>
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                        <label class="text-white small">Objetivo</label>
+                        <select id="sim-tipo" class="form-select form-select-sm">
+                            <option value="combo">Combo / promoción</option>
+                            <option value="categoria">Categoría individual</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="text-white small">Ítem</label>
+                        <select id="sim-item" class="form-select form-select-sm"></select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="text-white small">Precio actual (bruto)</label>
+                        <input type="text" id="sim-precio-actual" class="form-control form-control-sm" readonly>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="text-white small">Precio nuevo (bruto $)</label>
+                        <input type="number" id="sim-precio-nuevo" class="form-control form-control-sm" min="0" step="1">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="text-white small">Sensibilidad volumen: <span id="sim-sens-label">0%</span></label>
+                        <input type="range" id="sim-sens" class="form-range" min="-20" max="10" step="1" value="0">
+                    </div>
+                    <div class="col-md-2">
+                        <div class="kpi-sub">Volumen base</div>
+                        <div class="text-white" id="sim-volumen">—</div>
+                    </div>
+                </div>
+                <div class="row g-3 mt-3">
+                    <div class="col-md-3">
+                        <div class="sim-resultado">
+                            <div class="kpi-sub">Neto actual</div>
+                            <div class="kpi-valor" id="sim-neto-actual">—</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="sim-resultado">
+                            <div class="kpi-sub">Neto proyectado</div>
+                            <div class="kpi-valor" id="sim-neto-nuevo">—</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="sim-resultado">
+                            <div class="kpi-sub">Delta $</div>
+                            <div class="kpi-valor" id="sim-delta">—</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="sim-resultado">
+                            <div class="kpi-sub">Delta %</div>
+                            <div class="kpi-valor" id="sim-delta-pct">—</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary mb-4">
+        <div class="card-header border-secondary text-white">Detalle por categoría</div>
+        <div class="table-responsive">
+            <table class="table table-dark table-striped table-bordered mb-0 align-middle text-center">
+                <thead>
+                    <tr>
+                        <th>Categoría</th>
+                        <th>Total</th>
+                        <th>En promo</th>
+                        <th>Individual</th>
+                        <th>% promo</th>
+                        <th>$ ef. promo</th>
+                        <th>$ ef. indiv.</th>
+                        <th>Unid./día</th>
+                    </tr>
+                </thead>
+                <tbody id="tabla-categorias"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card bg-dark border-secondary mb-4">
+        <div class="card-header border-secondary text-white d-flex justify-content-between">
+            <span>Ranking de combos</span>
+            <span class="small text-muted" id="sin-receta-info"></span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-dark table-striped table-bordered mb-0 align-middle text-center">
+                <thead>
+                    <tr>
+                        <th>Combo</th>
+                        <th>Packs</th>
+                        <th>% mix</th>
+                        <th>Neto combo</th>
+                        <th>Precio bruto prom.</th>
+                        <th>Empanadas</th>
+                        <th>Néctar</th>
+                        <th>Bebidas</th>
+                        <th>Helados</th>
+                        <th>Receta</th>
+                    </tr>
+                </thead>
+                <tbody id="tabla-combos"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <p class="text-muted small">
+        Unidades en promoción = packs × receta del combo. Ticket evita doble conteo típico 3x2
+        (SUB_RENGL en promo y componentes). El neto del dashboard principal sigue excluyendo Promoción.
+    </p>
+</div>
+
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script src="{{ url_for('static', filename='js/dashboard_promos.js') }}?v=2"></script>
+{% endblock %}

@@ -196,6 +196,9 @@
                 {% if tiene_permiso(rol_actual, 'dashboard') or tiene_permiso(rol_actual, 'dashboard.horario') %}
                 <li><a class="dropdown-item text-white" href="{{ url_for('dashboard.ventas_horario') }}">Ventas por Horario</a></li>
                 {% endif %}
+                {% if tiene_permiso(rol_actual, 'dashboard') or tiene_permiso(rol_actual, 'dashboard.promos') %}
+                <li><a class="dropdown-item text-white" href="{{ url_for('dashboard.dashboard_promos') }}">Promoción vs Individual</a></li>
+                {% endif %}
             </ul>
         </div>
         {% endif %}

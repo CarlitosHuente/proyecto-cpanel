@@ -16,6 +16,7 @@ CATALOGO: List[dict] = [
         "hijos": [
             {"id": "dashboard.kpis", "label": "Dashboard KPIs", "desc": "Vista principal de KPIs y gráficos de ventas."},
             {"id": "dashboard.horario", "label": "Ventas por Horario", "desc": "Neto y boletas por hora del pedido (hora_pedid) por sucursal y período."},
+            {"id": "dashboard.promos", "label": "Promoción vs Individual", "desc": "Combos/promociones vs venta suelta (empanadas, néctar, bebidas, helados)."},
         ],
     },
     {
@@ -226,6 +227,7 @@ PERMISO_RUTA_LEGACY: Dict[str, str] = {
     "config.comercial": "config",
     "dashboard.kpis": "dashboard",
     "dashboard.horario": "dashboard",
+    "dashboard.promos": "dashboard",
 }
 
 
