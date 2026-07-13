@@ -464,6 +464,31 @@ Ver **sección K** (`|dinero` en plantillas y reglas de export).
 
 Rutas con `@permiso_modulo("arqueo_caja")` (detalle de roles según tu `utils/auth` / BD).
 
+### PDF desde correo (IMAP) — 2026-07-11
+
+**Objetivo (1.ª instancia):** bajar adjuntos PDF de `admin@datoshuente.com` (HostChile IMAP) y permitir **ver / descargar** desde Arqueo. Sin parse automático ni vínculo con DespachoWeb.
+
+| Pieza | Rol |
+|--------|-----|
+| `mail_pdf_inbox` | Metadata + dedupe (`message_id` + `sha256`) |
+| `uploads/correo_pdf/{id}.pdf` | Archivos en disco |
+| `utils/mail_imap_inbox.py` | Cliente IMAP stdlib |
+| `utils/correo_pdf_service.py` | Sync / listado / ignorar |
+| `scripts/sync_mail_pdf_inbox.py` | CLI de sync |
+| `GET /arqueo-caja/correo-pdf` | Bandeja UI |
+| `POST …/correo-pdf/sync` | Sync manual (sesión) |
+| `POST/GET …/correo-pdf/sync-token` | Sync cron (`X-Mail-Sync-Token` = `MAIL_SYNC_TOKEN`) |
+| `GET …/correo-pdf/<id>/ver` \| `…/descargar` | Inline / attachment |
+| `POST …/correo-pdf/<id>/ignorar` | Marca `ignored` |
+
+**.env:** `IMAP_HOST=mail.datoshuente.com`, `IMAP_PORT=993`, `IMAP_USER=admin@datoshuente.com`, `IMAP_PASSWORD`, `MAIL_SYNC_TOKEN`. DDL: `docs/QUERY_CAMBIOS_PRODUCCION.sql` bloque `[2026-07-11] [mail_pdf_inbox]`.
+
+**Cron cPanel (ej. cada 10 min):**
+```bash
+curl -fsS -X POST "https://TU-DOMINIO/arqueo-caja/correo-pdf/sync-token" \
+  -H "X-Mail-Sync-Token: $MAIL_SYNC_TOKEN"
+```
+
 ---
 
 ## M-bis. Módulo DespachoWeb (`/despacho-web`) — 2026-05-28

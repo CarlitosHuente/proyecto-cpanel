@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}PDF desde correo — Arqueo{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h2 class="text-white mb-2"><i class="bi bi-envelope-paper text-info me-2"></i> PDF desde correo</h2>
+  <p class="text-muted small">
+    <a href="{{ url_for('arqueo_caja.index') }}" class="text-secondary">← Arqueo de caja</a>
+    · Adjuntos PDF de la casilla IMAP (arqueos / resúmenes). Solo visualización en esta etapa.
+  </p>
+  {% include "arqueo_caja/_flashes.html" %}
+
+  {% if not imap_ok %}
+  <div class="alert alert-warning">
+    IMAP no configurado. En <code>.env</code> / cPanel agregá
+    <code>IMAP_HOST</code>, <code>IMAP_USER</code>, <code>IMAP_PASSWORD</code>
+    (ej. <code>mail.datoshuente.com</code> / <code>admin@datoshuente.com</code>).
+  </div>
+  {% endif %}
+
+  <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+    <form method="post" action="{{ url_for('arqueo_caja.correo_pdf_sync') }}" class="d-inline">
+      <button type="submit" class="btn btn-info" {% if not imap_ok %}disabled{% endif %}>
+        <i class="bi bi-arrow-repeat me-1"></i> Sincronizar ahora
+      </button>
+    </form>
+    {% if incluir_ignored %}
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('arqueo_caja.correo_pdf') }}">Ocultar ignorados</a>
+    {% else %}
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('arqueo_caja.correo_pdf', incluir_ignored=1) }}">Mostrar ignorados</a>
+    {% endif %}
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-dark table-striped table-hover align-middle">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>De</th>
+          <th>Asunto</th>
+          <th>Archivo</th>
+          <th>Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in filas %}
+        <tr>
+          <td class="text-nowrap small">
+            {% if f.received_at %}{{ f.received_at }}{% else %}{{ f.created_at }}{% endif %}
+          </td>
+          <td class="small" style="max-width:12rem; overflow:hidden; text-overflow:ellipsis;">{{ f.from_addr }}</td>
+          <td class="small" style="max-width:16rem; overflow:hidden; text-overflow:ellipsis;">{{ f.subject or '—' }}</td>
+          <td class="small">{{ f.filename }}</td>
+          <td>
+            {% if f.status == 'pending' %}
+            <span class="badge bg-success">pendiente</span>
+            {% elif f.status == 'ignored' %}
+            <span class="badge bg-secondary">ignorado</span>
+            {% else %}
+            <span class="badge bg-secondary">{{ f.status }}</span>
+            {% endif %}
+          </td>
+          <td class="text-nowrap">
+            <a class="btn btn-sm btn-outline-info" href="{{ url_for('arqueo_caja.correo_pdf_ver', row_id=f.id) }}" target="_blank" rel="noopener">Ver</a>
+            <a class="btn btn-sm btn-outline-light" href="{{ url_for('arqueo_caja.correo_pdf_descargar', row_id=f.id) }}">Descargar</a>
+            {% if f.status != 'ignored' %}
+            <form method="post" action="{{ url_for('arqueo_caja.correo_pdf_ignorar', row_id=f.id) }}" class="d-inline"
+                  onsubmit="return confirm('¿Ignorar este PDF en la bandeja?');">
+              <button type="submit" class="btn btn-sm btn-outline-secondary">Ignorar</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="text-muted text-center py-4">
+            No hay PDF en la bandeja. Enviá un correo con adjunto a la casilla y pulsá «Sincronizar ahora».
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -476,3 +476,31 @@ ADD CONSTRAINT fk_papaya_despacho_guia FOREIGN KEY (guia_id) REFERENCES papaya_d
 -- ALTER TABLE papaya_dia_despacho DROP FOREIGN KEY fk_papaya_despacho_guia, DROP COLUMN guia_id;
 -- DROP TABLE IF EXISTS papaya_despacho_guia;
 
+
+-- [2026-07-11] [IA] [mail_pdf_inbox — bandeja PDF IMAP Arqueo]
+-- Motivo: Casilla admin@datoshuente.com → listar/ver/descargar PDF (arqueos/resúmenes).
+--         Independiente de DespachoWeb. Primera instancia: solo visualización.
+-- Entorno probado: local
+-- SQL:
+
+CREATE TABLE IF NOT EXISTS mail_pdf_inbox (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    message_id VARCHAR(255) NOT NULL,
+    from_addr VARCHAR(255) NULL DEFAULT NULL,
+    subject VARCHAR(500) NULL DEFAULT NULL,
+    received_at DATETIME NULL DEFAULT NULL,
+    filename VARCHAR(255) NOT NULL,
+    sha256 CHAR(64) NOT NULL,
+    stored_path VARCHAR(255) NOT NULL DEFAULT '',
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT 'pending|ignored',
+    error VARCHAR(500) NULL DEFAULT NULL,
+    imap_uid VARCHAR(32) NULL DEFAULT NULL,
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_mail_pdf_msg_sha (message_id, sha256),
+    KEY idx_mail_pdf_status (status),
+    KEY idx_mail_pdf_received (received_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Rollback:
+-- DROP TABLE IF EXISTS mail_pdf_inbox;
+

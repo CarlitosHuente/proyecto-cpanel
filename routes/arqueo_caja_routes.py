@@ -1,4 +1,5 @@
 import io
+import secrets
 from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import List, Optional
@@ -7,10 +8,13 @@ import pandas as pd
 from flask import (
     Blueprint,
     Response,
+    abort,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
+    send_file,
     session,
     url_for,
 )
@@ -1390,3 +1394,121 @@ def reporte_tipos_pago():
         anios_opts=anios_opts,
         canales_opts=canales_opts,
     )
+
+
+# ---------------------------------------------------------------------------
+# PDF desde correo (IMAP) — bandeja de visualización (no DespachoWeb)
+# ---------------------------------------------------------------------------
+
+
+def _token_sync_ok() -> bool:
+    from utils.env_config import mail_sync_token
+
+    expected = mail_sync_token()
+    if not expected:
+        return False
+    got = (request.headers.get("X-Mail-Sync-Token") or request.args.get("token") or "").strip()
+    if not got:
+        return False
+    return secrets.compare_digest(got, expected)
+
+
+@arqueo_caja_bp.route("/correo-pdf")
+@login_requerido
+@permiso_modulo("arqueo_caja")
+def correo_pdf():
+    from utils.correo_pdf_service import imap_configurado, listar_pdfs
+
+    incluir = (request.args.get("incluir_ignored") or "").strip() in ("1", "true", "si", "sí")
+    filas = listar_pdfs(incluir_ignored=incluir)
+    return render_template(
+        "arqueo_caja/correo_pdf.html",
+        filas=filas,
+        imap_ok=imap_configurado(),
+        incluir_ignored=incluir,
+    )
+
+
+@arqueo_caja_bp.route("/correo-pdf/sync", methods=["POST"])
+@login_requerido
+@permiso_modulo("arqueo_caja")
+def correo_pdf_sync():
+    from utils.correo_pdf_service import sync_from_imap
+
+    result = sync_from_imap()
+    if result.get("ok"):
+        flash(
+            f"Sincronización OK: {result.get('nuevos', 0)} nuevo(s), "
+            f"{result.get('duplicados', 0)} duplicado(s).",
+            "success",
+        )
+    else:
+        flash(result.get("error") or "Error al sincronizar.", "danger")
+    return redirect(url_for("arqueo_caja.correo_pdf"))
+
+
+@arqueo_caja_bp.route("/correo-pdf/sync-token", methods=["POST", "GET"])
+def correo_pdf_sync_token():
+    """Endpoint para cron cPanel. Requiere MAIL_SYNC_TOKEN (header o ?token=)."""
+    if not _token_sync_ok():
+        return jsonify({"ok": False, "error": "Unauthorized"}), 403
+    from utils.correo_pdf_service import sync_from_imap
+
+    result = sync_from_imap()
+    status = 200 if result.get("ok") else 500
+    return jsonify(result), status
+
+
+@arqueo_caja_bp.route("/correo-pdf/<int:row_id>/ver")
+@login_requerido
+@permiso_modulo("arqueo_caja")
+def correo_pdf_ver(row_id: int):
+    from utils.correo_pdf_service import obtener_pdf, path_for_row
+
+    row = obtener_pdf(row_id)
+    if not row:
+        abort(404)
+    path = path_for_row(row_id)
+    if not path.is_file():
+        flash("El archivo PDF no está en disco.", "warning")
+        return redirect(url_for("arqueo_caja.correo_pdf"))
+    return send_file(
+        path,
+        mimetype="application/pdf",
+        as_attachment=False,
+        download_name=row.get("filename") or f"{row_id}.pdf",
+    )
+
+
+@arqueo_caja_bp.route("/correo-pdf/<int:row_id>/descargar")
+@login_requerido
+@permiso_modulo("arqueo_caja")
+def correo_pdf_descargar(row_id: int):
+    from utils.correo_pdf_service import obtener_pdf, path_for_row
+
+    row = obtener_pdf(row_id)
+    if not row:
+        abort(404)
+    path = path_for_row(row_id)
+    if not path.is_file():
+        flash("El archivo PDF no está en disco.", "warning")
+        return redirect(url_for("arqueo_caja.correo_pdf"))
+    return send_file(
+        path,
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=row.get("filename") or f"{row_id}.pdf",
+    )
+
+
+@arqueo_caja_bp.route("/correo-pdf/<int:row_id>/ignorar", methods=["POST"])
+@login_requerido
+@permiso_modulo("arqueo_caja")
+def correo_pdf_ignorar(row_id: int):
+    from utils.correo_pdf_service import ignorar_pdf
+
+    if ignorar_pdf(row_id):
+        flash("PDF marcado como ignorado.", "info")
+    else:
+        flash("No se encontró el registro.", "warning")
+    return redirect(url_for("arqueo_caja.correo_pdf"))

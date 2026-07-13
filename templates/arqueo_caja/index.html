@@ -24,6 +24,10 @@
     <a class="list-group-item list-group-item-action bg-dark text-white border-secondary" href="{{ url_for('arqueo_caja.tipos_pago_config') }}">
       <i class="bi bi-diagram-3 me-2"></i> Agrupar tipos de pago (Efectivo, Redelcom…)
     </a>
+    <a class="list-group-item list-group-item-action bg-dark text-white border-secondary" href="{{ url_for('arqueo_caja.correo_pdf') }}">
+      <i class="bi bi-envelope-paper me-2"></i> PDF desde correo
+      <span class="text-muted small d-block ms-4">Arqueos / resúmenes que llegan a la casilla IMAP</span>
+    </a>
   </div>
 </div>
 {% endblock %}

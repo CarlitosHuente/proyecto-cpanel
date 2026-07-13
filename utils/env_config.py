@@ -94,3 +94,39 @@ def buk_asistencia_settings() -> Dict[str, str]:
         "base_url": base,
         "token_configurado": bool(token),
     }
+
+
+def _env_bool(name: str, default: bool = True) -> bool:
+    raw = (os.environ.get(name) or "").strip().lower()
+    if not raw:
+        return default
+    return raw in ("1", "true", "yes", "on", "si", "sí")
+
+
+def imap_settings() -> Dict[str, Optional[str]]:
+    """Credenciales IMAP para bandeja PDF (Arqueo). No exponer password en respuestas."""
+    load_env()
+    host = (os.environ.get("IMAP_HOST") or "").strip()
+    port_raw = (os.environ.get("IMAP_PORT") or "993").strip()
+    try:
+        port = int(port_raw)
+    except ValueError:
+        port = 993
+    user = (os.environ.get("IMAP_USER") or "").strip()
+    password = os.environ.get("IMAP_PASSWORD") or ""
+    folder = (os.environ.get("IMAP_FOLDER") or "INBOX").strip() or "INBOX"
+    return {
+        "host": host,
+        "port": port,
+        "user": user,
+        "password": password,
+        "folder": folder,
+        "ssl": _env_bool("IMAP_SSL", True),
+        "configurado": bool(host and user and password),
+    }
+
+
+def mail_sync_token() -> str:
+    """Token secreto para endpoint de sync por cron."""
+    load_env()
+    return (os.environ.get("MAIL_SYNC_TOKEN") or "").strip()
