@@ -442,7 +442,8 @@ document.addEventListener("DOMContentLoaded", () => {
         .then(data => {
             document.getElementById("año").value = data.año;
             document.getElementById("semana").value = data.semana;
-            cargarSucursales(null);
+            // Carga inicial: único auto-fetch; después solo con «Aplicar filtros»
+            cargarSucursales(null, true);
         })
         .catch((err) => {
             console.error("Error latest-date inicial:", err);
@@ -462,12 +463,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    // 4. Configurar listeners para filtros
-    // Filtros de fecha limpian semana/año
+    // Filtros: cambiar valores NO dispara el reporte; solo «Aplicar filtros»
     document.getElementById("desde").addEventListener("input", limpiarFiltrosSemana);
     document.getElementById("hasta").addEventListener("input", limpiarFiltrosSemana);
-
-    // Filtros de semana/año limpian fecha
     document.getElementById("semana").addEventListener("input", limpiarFiltrosFecha);
     document.getElementById("año").addEventListener("input", limpiarFiltrosFecha);
 
@@ -479,7 +477,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (estadoPorEmpresa[nuevo]) {
             escribirEstadoFormulario(estadoPorEmpresa[nuevo]);
-            cargarSucursales(estadoPorEmpresa[nuevo].sucursal || null);
+            cargarSucursales(estadoPorEmpresa[nuevo].sucursal || null, false);
         } else {
             fetch(`/api/latest-date-info?empresa=${nuevo}`)
                 .then(res => res.json())
@@ -489,7 +487,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     document.getElementById("desde").value = "";
                     document.getElementById("hasta").value = "";
                     sucursalActiva = null;
-                    cargarSucursales(null);
+                    cargarSucursales(null, false);
                 })
                 .catch(err => {
                     console.error("Error latest-date empresa:", err);
@@ -497,11 +495,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
         }
     });
-    
-    // Listener para los filtros principales que actualizan todo
-     ["semana", "año", "desde", "hasta"].forEach(id => {
-        document.getElementById(id).addEventListener("change", actualizarDashboard);
-    });
+
+    const btnAplicar = document.getElementById("btn-aplicar-filtros");
+    if (btnAplicar) {
+        btnAplicar.addEventListener("click", () => actualizarDashboard());
+    }
 
     actualizarLinkExportOrigen();
 });
@@ -515,8 +513,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
 /**
  * @param {string|null|undefined} sucursalPreferida - nombre exacto de sucursal o null para TODAS
+ * @param {boolean} [autoActualizar=false] - si true, dispara el reporte (solo carga inicial)
  */
-function cargarSucursales(sucursalPreferida) {
+function cargarSucursales(sucursalPreferida, autoActualizar = false) {
     const empresa = document.getElementById("empresa").value;
     fetch(`/api/sucursales?empresa=${empresa}`)
         .then(res => res.json())
@@ -525,23 +524,23 @@ function cargarSucursales(sucursalPreferida) {
             cont.innerHTML = "";
 
             const btnTodas = document.createElement("button");
+            btnTodas.type = "button";
             btnTodas.className = "btn btn-outline-light m-1";
             btnTodas.innerText = "TODAS";
             btnTodas.onclick = () => {
-            sucursalActiva = null;
-            resaltarBoton(cont, btnTodas);
-            actualizarDashboard();
-        };
+                sucursalActiva = null;
+                resaltarBoton(cont, btnTodas);
+            };
             cont.appendChild(btnTodas);
 
             data.forEach((suc) => {
                 const btn = document.createElement("button");
+                btn.type = "button";
                 btn.className = "btn btn-outline-light m-1";
                 btn.innerText = suc;
                 btn.onclick = () => {
                     sucursalActiva = suc;
                     resaltarBoton(cont, btn);
-                    actualizarDashboard();
                 };
                 cont.appendChild(btn);
             });
@@ -555,13 +554,18 @@ function cargarSucursales(sucursalPreferida) {
                 if (btn) {
                     sucursalActiva = sucursalPreferida;
                     resaltarBoton(cont, btn);
-                    actualizarDashboard();
-                    return;
+                } else {
+                    sucursalActiva = null;
+                    resaltarBoton(cont, btnTodas);
                 }
+            } else {
+                sucursalActiva = null;
+                resaltarBoton(cont, btnTodas);
             }
-            sucursalActiva = null;
-            resaltarBoton(cont, btnTodas);
-            actualizarDashboard();
+
+            if (autoActualizar) {
+                actualizarDashboard();
+            }
         })
         .catch((err) => {
             console.error("Error cargando sucursales:", err);

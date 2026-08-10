@@ -2,7 +2,7 @@
 
 **Objetivo:** registrar cambios recientes, reglas de negocio y **cómo trabajar en este repo** para que cualquier persona (o IA) que lea este archivo sepa **qué tocar**, **qué no romper** y **dónde seguir el hilo**.
 
-**Última actualización (contenido):** 2026-07-11 — Dashboard: submódulo **Promoción vs Individual** (combos vs venta suelta).
+**Última actualización (contenido):** 2026-08-10 — Dashboard: filtros solo con botón **Aplicar** (sin auto-fetch al cambiar).
 
 ---
 
@@ -183,6 +183,13 @@ Carpeta Buk: env `BUK_ENCUESTA_CARPETA` (default `Capacitacion`). Token RRHH con
 
 **Sobre “pedir permiso” / botón RUN:** en desarrollo, la IA y el agente **ejecutan solos** pruebas, scripts, lint y consultas de verificación **sin pedir autorización paso a paso**. Solo se alinea el enfoque cuando el alcance de negocio no está claro. El usuario no debe pulsar RUN en cada comando intermedio.
 
+**Filtros de reportes (regla UX — 2026-08-10):**
+
+- **No** disparar la consulta / recarga del reporte al cambiar un filtro (`change` / `input` / click de sucursal).
+- Todo filtro de cabecera (empresa, sucursal, semana/año, desde/hasta, familia, etc.) se **confirma con un botón** («Aplicar filtros» / «Consultar»). Así el usuario elige el criterio y ve el overlay de carga cuando el sistema arma el reporte.
+- Excepción: **carga inicial** de la página (defaults + primer fetch) y limpiezas cruzadas entre campos mutuamente excluyentes (p. ej. al llenar Desde/Hasta se vacían Semana/Año), sin llamar al API de datos.
+- Referencia UI: Dashboard KPIs (`btn-aplicar-filtros`); Ventas por Horario y Promoción vs Individual ya usan `btn-consultar`.
+
 **Operativo (siempre, también en cambios pequeños):**
 
 4. **Antes de cambiar lógica comercial/dashboard/costeo:** leer esta bitácora + el SQL maestro en `docs/QUERY_CAMBIOS_PRODUCCION.sql` (cambios de esquema).
@@ -235,6 +242,7 @@ Carpeta Buk: env `BUK_ENCUESTA_CARPETA` (default `Capacitacion`). Token RRHH con
 
 ### Dashboard — KPIs y gráficos
 
+- **Filtros (cabecera):** empresa, sucursal, semana/año o desde/hasta. El reporte **no** se refresca al cambiar un control; solo con **Aplicar filtros** (`#btn-aplicar-filtros` → `actualizarDashboard` en `static/js/dashboard.js`). Overlay: «Aplicando filtros y cargando reporte…». La primera carga de página sí consulta sola (última semana disponible).
 - **Ticket promedio** (comercial y agrícola): `N_BOLETA` → suma `NETO` por comprobante → promedio entre comprobantes. Histórico semanal en modal (paralelo al neto).
 - **Tercera tarjeta:** siempre ticket (no carrusel de top productos en comercial).
 - **Detalle por familia:** barras horizontales con etiquetas de producto legibles.

@@ -44,9 +44,9 @@
             </select>
         </div>
 
-        <!-- Col 2: Semana / Año / Fechas -->
+        <!-- Col 2: Semana / Año / Fechas + Aplicar -->
         <div class="col-md-9">
-            <div class="row">
+            <div class="row align-items-end">
                 <div class="col">
                     <label style="color:white;">Semana:</label>
                     <input type="number" id="semana" min="1" max="53" class="form-control">
@@ -63,6 +63,12 @@
                     <label style="color:white;">Hasta:</label>
                     <input type="date" id="hasta" class="form-control">
                 </div>
+                <div class="col-auto">
+                    <label style="color:transparent;user-select:none;">.</label>
+                    <button type="button" id="btn-aplicar-filtros" class="btn btn-danger form-control">
+                        Aplicar filtros
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -74,7 +80,7 @@
 </div>
 <div id="charts-loading-overlay" style="position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1021; display: none; justify-content: center; align-items: center; flex-direction: column;">
     <div class="spinner" style="border: 8px solid #f3f3f3; border-top: 8px solid #d80000; border-radius: 50%; width: 60px; height: 60px; animation: spin 1.5s linear infinite;"></div>
-    <p style="color: white; margin-top: 20px;">Cargando datos...</p>
+    <p style="color: white; margin-top: 20px;">Aplicando filtros y cargando reporte...</p>
 </div>
 <div class="container-fluid mt-4">
 
@@ -229,5 +235,5 @@
 
 
 <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-<script src="{{ url_for('static', filename='js/dashboard.js') }}?v=2.8"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}?v=2.9"></script>
 {% endblock %}
