@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}Buk — Alertas{% endblock %}
+{% block content %}
+<style>
+    .alertas-grupo-btn { cursor: pointer; transition: background-color 0.15s; }
+    .alertas-grupo-btn:hover { background-color: rgba(255,255,255,0.05) !important; }
+    .alertas-grupo-btn .alertas-chevron { display: inline-block; transition: transform 0.15s; }
+    .alertas-grupo-btn[aria-expanded="true"] .alertas-chevron { transform: rotate(90deg); }
+</style>
+<div class="container-fluid mt-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <h2 class="text-white mb-1"><i class="bi bi-bell text-warning me-2"></i>Alertas Buk</h2>
+            <p class="text-muted mb-0">
+                Turnos, marcajes y excepciones del mes. Marque como revisada para ocultar del listado pendiente.
+            </p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{{ url_for('buk.calendario') }}" class="btn btn-outline-info btn-sm">Calendario</a>
+            <a href="{{ url_for('buk.asistencia') }}" class="btn btn-outline-secondary btn-sm">Asistencia hoy</a>
+        </div>
+    </div>
+
+    <form method="get" action="{{ url_for('buk.alertas') }}" class="card bg-dark border-secondary mb-3"
+        onsubmit="if(window.HuenteBukLoading)HuenteBukLoading.mostrar();">
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label text-white-50 small mb-1" for="mes">Mes</label>
+                    <input type="month" name="mes" id="mes" class="form-control form-control-sm bg-black text-white border-secondary"
+                        value="{{ mes_input }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label text-white-50 small mb-1" for="obra_id">Sucursal (opcional)</label>
+                    <select name="obra_id" id="obra_id" class="form-select form-select-sm bg-black text-white border-secondary">
+                        <option value="">— Todas / empresa —</option>
+                        {% for r in opciones.recintos %}
+                        <option value="{{ r.obra_id }}" {% if obra_id == r.obra_id %}selected{% endif %}>
+                            {{ r.nombre or r.obra_id }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-check mt-4">
+                        <input class="form-check-input" type="checkbox" name="incluir_revisadas" value="1" id="incluir_revisadas"
+                            {% if incluir_revisadas %}checked{% endif %}>
+                        <label class="form-check-label text-white-50 small" for="incluir_revisadas">Mostrar revisadas</label>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-warning btn-sm w-100">Consultar</button>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    {% if resultado %}
+    {% for w in resultado.warnings or [] %}
+    <div class="alert alert-warning py-2 small">{{ w }}</div>
+    {% endfor %}
+    {% if resultado.error and not resultado.ok %}
+    <div class="alert alert-danger py-2">{{ resultado.error }}</div>
+    {% endif %}
+
+    {% if resultado.ok %}
+    <div class="mb-3 text-white-50 small">
+        {{ resultado.mes_label }}
+        · Evaluado: <strong class="text-white">{{ resultado.periodo_desde }}</strong> → <strong class="text-white">{{ resultado.periodo_hasta }}</strong>
+        (corte ayer: {{ resultado.fecha_corte }})
+        · Vigentes: {{ resultado.total_vigentes }} · Con ≥1 turno en mes: {{ resultado.vigentes_con_turno_mes }}
+        {% if resultado.obra_id %} · Sucursal filtrada{% endif %}
+        · Umbral atraso/salida anticipada: <strong class="text-white">{{ resultado.umbral_minutos }} min</strong>
+        · Pendientes: <strong class="text-warning">{{ resultado.total_pendientes }}</strong>
+    </div>
+    <p class="small text-muted mb-3">
+        <strong>Sin turno mes:</strong> solo vigentes con 0 días asignados en todo el mes (cualquier sucursal).
+        Lun–Vie o sáb/dom parcial es válido; no se exige turno todos los días del calendario.
+        Días sin turno entre jornadas laborales = descanso (no alerta sin marca).
+    </p>
+
+    {% set secciones = [
+        ('sin_turno_mes', 'Sin turno en el mes (0 días, cualquier sucursal)', 'danger'),
+        ('sin_marca', 'Turno programado sin marcaje', 'danger'),
+        ('atraso_entrada', 'Entrada tarde (>1 h)', 'warning'),
+        ('salida_anticipada', 'Salida anticipada (>1 h)', 'info'),
+        ('marcaje_descanso', 'Marcaje en día descanso', 'secondary'),
+        ('jornada_abierta', 'Jornada abierta (sin salida)', 'warning'),
+    ] %}
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <p class="small text-muted mb-0">Tipos de alerta (clic para ver detalle).</p>
+        <div class="btn-group btn-group-sm">
+            <button type="button" class="btn btn-outline-secondary" id="btn-alertas-expandir">Expandir todo</button>
+            <button type="button" class="btn btn-outline-secondary" id="btn-alertas-colapsar">Colapsar todo</button>
+        </div>
+    </div>
+
+    {% for tipo, titulo, color in secciones %}
+    {% set items = resultado.grupos.get(tipo) or [] %}
+    {% set cid = 'alertas-' ~ tipo %}
+    <div class="card bg-dark border-secondary mb-2">
+        {% if items %}
+        <button type="button"
+            class="card-header border-secondary alertas-grupo-btn d-flex justify-content-between align-items-center w-100 bg-dark text-white border-0 py-2 px-3"
+            data-bs-toggle="collapse" data-bs-target="#{{ cid }}" aria-expanded="false" aria-controls="{{ cid }}">
+            <span>
+                <i class="bi bi-chevron-right alertas-chevron me-1 small"></i>{{ titulo }}
+            </span>
+            <span class="badge bg-{{ color }}">{{ items|length }}</span>
+        </button>
+        <div id="{{ cid }}" class="collapse">
+            <div class="table-responsive">
+                <table class="table table-dark table-sm table-hover mb-0 align-middle">
+                    <thead>
+                        <tr class="text-white-50 small">
+                            <th>Fecha</th>
+                            <th>Colaborador</th>
+                            <th>Sucursal</th>
+                            <th>Detalle</th>
+                            <th class="text-center" style="width:90px">Revisada</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for a in items %}
+                        <tr class="{% if a.revisada %}opacity-50{% endif %}" data-alerta-id="{{ a.id }}">
+                            <td>{{ a.fecha_txt or '—' }}</td>
+                            <td>{{ a.nombre }}<br><span class="text-white-50 small">{{ a.rut }}</span></td>
+                            <td class="small">{{ a.obra_nombre or '—' }}</td>
+                            <td class="small">{{ a.detalle }}</td>
+                            <td class="text-center">
+                                <input type="checkbox" class="form-check-input chk-revisada" {% if a.revisada %}checked{% endif %}
+                                    title="Marcar revisada">
+                            </td>
+                            <td>
+                                {% if a.obra_id and a.rut %}
+                                <a class="btn btn-outline-info btn-sm py-0" data-buk-loading
+                                    href="{{ url_for('buk.calendario', mes=mes_input, obra_id=a.obra_id, rut=a.rut) }}">Calendario</a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="card-header border-secondary d-flex justify-content-between align-items-center py-2 opacity-75">
+            <span class="text-white-50"><i class="bi bi-dash me-1 small"></i>{{ titulo }}</span>
+            <span class="badge bg-secondary">0</span>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% else %}
+    <div class="alert alert-secondary py-2">Seleccione mes y pulse Consultar.</div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const apiRevisar = {{ url_for('buk.api_alertas_revisar')|tojson }};
+
+    function toggleGrupos(mostrar) {
+        document.querySelectorAll('[id^="alertas-"][class*="collapse"]').forEach(function (el) {
+            if (typeof bootstrap === 'undefined' || !bootstrap.Collapse) return;
+            bootstrap.Collapse.getOrCreateInstance(el, { toggle: false })[mostrar ? 'show' : 'hide']();
+        });
+    }
+    var btnExp = document.getElementById('btn-alertas-expandir');
+    var btnCol = document.getElementById('btn-alertas-colapsar');
+    if (btnExp) btnExp.addEventListener('click', function () { toggleGrupos(true); });
+    if (btnCol) btnCol.addEventListener('click', function () { toggleGrupos(false); });
+
+    document.querySelectorAll('.chk-revisada').forEach(function (chk) {
+        chk.addEventListener('change', async function () {
+            const tr = chk.closest('tr');
+            const id = tr && tr.dataset.alertaId;
+            if (!id) return;
+            chk.disabled = true;
+            try {
+                const resp = await fetch(apiRevisar, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ alerta_id: id, revisada: chk.checked }),
+                });
+                const data = await resp.json();
+                if (!data.ok) {
+                    chk.checked = !chk.checked;
+                    alert(data.error || 'Error al guardar');
+                } else if (chk.checked) {
+                    tr.classList.add('opacity-50');
+                } else {
+                    tr.classList.remove('opacity-50');
+                }
+            } catch (e) {
+                chk.checked = !chk.checked;
+                alert('Error de red');
+            } finally {
+                chk.disabled = false;
+            }
+        });
+    });
+})();
+</script>
+{% endblock %}

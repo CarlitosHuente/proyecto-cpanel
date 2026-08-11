@@ -2,7 +2,7 @@
 
 **Objetivo:** registrar cambios recientes, reglas de negocio y **cómo trabajar en este repo** para que cualquier persona (o IA) que lea este archivo sepa **qué tocar**, **qué no romper** y **dónde seguir el hilo**.
 
-**Última actualización (contenido):** 2026-08-10 — Dashboard: filtros solo con botón **Aplicar** (sin auto-fetch al cambiar).
+**Última actualización (contenido):** 2026-08-10 — Buk: calendario mensual, alertas por tipo (colapsadas), overlay de carga, vigentes + corte ayer.
 
 ---
 
@@ -93,10 +93,17 @@ DDL: `docs/QUERY_FABRICA_PAPAYA_PRODUCCION.sql` + migraciones en `docs/QUERY_CAM
 |--------|-----|
 | `utils/env_config.py` | Config central `.env`: `DB_*`, `BUK_*`, `BUK_ASISTENCIA_*`. |
 | `utils/buk_api.py` | Buk RRHH: `GET /employees/active`, `/areas`, `/recintos`. |
-| `utils/buk_asistencia_api.py` | Buk Asistencia: `GET /v2/asistencia-empresa`, `/informacionRecinto`. |
+| `utils/buk_asistencia_api.py` | Buk Asistencia: `v2/asistencia-empresa`, `informacionRecinto`, `getAsignacionTurnos`, `obtenerRegistroAsistencia`. |
 | `utils/buk_presencia.py` | Cruce nómina vigente + marcaje del día (por RUT). |
-| `routes/buk_routes.py` | `/buk`, `/buk/asistencia`, `/buk/presencia`, APIs JSON. |
+| `utils/buk_calendario.py` | Calendario mensual: turnos + marcajes crudos, horas netas, KPIs, badge Descanso/Sin turno. |
+| `utils/buk_alertas.py` | Motor alertas: sin turno mes, sin marca, atrasos >60 min, jornada abierta; solo vigentes RRHH; corte ayer. |
+| `utils/buk_alertas_revisadas.py` | Persistencia checkbox «revisada» (`data/buk_alertas_revisadas.json`, gitignored). |
+| `utils/buk_colacion_config.py` | Minutos colación por recinto (`data/buk_colacion_recintos.json`). |
+| `routes/buk_routes.py` | `/buk`, `/buk/asistencia`, `/buk/ausencias`, `/buk/calendario`, `/buk/alertas`, APIs JSON. |
 | `templates/buk/presencia.html` | Reporte: estado presencia, sucursal marcaje, hora entrada/salida (hora CL). |
+| `templates/buk/calendario.html` | Grilla mensual por trabajador/recinto + resumen KPIs + modal colación + enlace alertas. |
+| `templates/buk/alertas.html` | Panel alertas agrupadas por tipo (colapsable) + marcar revisada. |
+| `static/js/buk_loading.js` | Overlay al consultar o navegar menú Buk (`data-buk-loading`). |
 
 **Variables `.env`:**
 
@@ -129,6 +136,28 @@ DDL: `docs/QUERY_FABRICA_PAPAYA_PRODUCCION.sql` + migraciones en `docs/QUERY_CAM
 | `/buk/ausencias` | Selector mes → ausencias por colaborador (lista de días sin entrada). |
 
 **Ausencias:** día calendario del mes (hasta hoy si es el mes en curso) sin `entrada` en `v2/asistencia-empresa`. Cruce por RUT normalizado.
+
+### Calendario mensual (turnos + marcajes)
+
+| Pieza | Rol |
+|--------|-----|
+| `/buk/calendario` | Filtros mes + sucursal (`obraId`) + colaborador → grilla con entrada/salida, alertas turno sin marca, horas netas. |
+| `POST /buk/api/colacion-recinto` | Colación por sucursal: `default_minutos` + grupos Lun–Dom; prioridad Buk `colacionTurno`. |
+| Menú Buk | Dropdown en sidebar: nómina, asistencia, ausencias, calendario, encuestas. |
+
+**Horas netas:** `(última salida − primera entrada) − colación`. Prioridad colación: turno Buk → grupo día semana (config JSON) → default sucursal (60 min). Marcajes desde `obtenerRegistroAsistencia`; turnos desde `getAsignacionTurnos`.
+
+**Deltas vs turno:** `Entrada +N min tarde` / `Entrada −N min anticipada` / `Salida +N min tarde` / `Salida −N min anticipada` (+ = tarde, − = anticipada). Resumen mensual incluye totales entrada tarde/anticipada y salida tarde/anticipada.
+
+### Alertas Buk (campanita)
+
+| Pieza | Rol |
+|--------|-----|
+| `/buk/alertas` | Panel mes (+ sucursal opcional): sin turno mes (empresa), sin marca, atraso/salida >60 min, marcaje en descanso, jornada abierta. **Grupos colapsados por tipo** (clic para expandir; Expandir/Colapsar todo). |
+| `data/buk_alertas_revisadas.json` | Checkbox «revisada» global por alerta. |
+| `static/js/buk_loading.js` | Overlay al Consultar y al navegar menú Buk (`data-buk-loading`); mensajes rotativos conectando Buk. |
+
+**Sin turno mes:** vigentes con **0** asignaciones en el mes (cualquier sucursal); ≥1 día (Lun–Vie, sáb/dom o licencia) excluye la alerta. Evaluación diaria con **corte ayer** (hoy − 1).
 
 Carpeta Buk: env `BUK_ENCUESTA_CARPETA` (default `Capacitacion`). Token RRHH con permiso **documentos** (modificación). Firma la completa el colaborador en portal Buk.
 

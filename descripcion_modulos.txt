@@ -66,3 +66,12 @@ cada "Módulo" a un Rol dentro de la Pizarra de Permisos.
 
 14. [ reporte ] (Consolidación Gerencial)
    - Exportación: Acceso a módulos de exportación plana, donde se pueden cruzar grandes volúmenes de datos consolidados para ser descargados y manejados fuera del sistema.
+
+15. [ buk ] (RRHH y Control de Asistencia — Buk)
+   - Nómina vigente: Listado de colaboradores activos desde Buk RRHH (solo lectura).
+   - Asistencia hoy: Marcajes del día cruzados con nómina (entrada/salida, recinto, estado).
+   - Ausencias mes: Días sin marcaje de entrada por colaborador en el mes seleccionado.
+   - Calendario mensual: Turnos programados + marcajes por trabajador y sucursal (recinto); horas netas, colación configurable, deltas entrada/salida vs turno; badge Descanso/Sin turno.
+   - Alertas: Panel por mes — sin turno en el mes, turno sin marca, atraso/salida anticipada (>1 h), marcaje en descanso, jornada abierta; grupos colapsables por tipo; marcar como revisada.
+   - Encuestas: Generación PDF capacitación y subida a carpeta Buk (con firma colaborador).
+   - Requisitos: Tokens `BUK_AUTH_TOKEN` (RRHH) y `BUK_ASISTENCIA_TOKEN` (marcajes/turnos; distinto al RRHH). Datos en vivo; no persiste nómina en MySQL Huente (salvo JSON local de colación/alertas revisadas).

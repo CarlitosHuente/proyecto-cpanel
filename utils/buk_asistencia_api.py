@@ -321,3 +321,187 @@ def dias_marcados_por_rut(registros: List[dict]) -> Dict[str, Set[date]]:
             continue
         out.setdefault(rut, set()).add(dia)
     return out
+
+
+def _paginar_turnos(desde: date, hasta: date) -> Tuple[bool, List[dict], Optional[str]]:
+    """GET /getAsignacionTurnos — token en query; respuesta puede ser lista directa."""
+    token = _token()
+    filas: List[dict] = []
+    page = 1
+    page_size = 500
+    while True:
+        params = {
+            "token": token,
+            "desde": _fecha_param(desde),
+            "hasta": _fecha_param(hasta),
+            "page": page,
+            "page_size": page_size,
+        }
+        ok, payload, err = _request("getAsignacionTurnos", params, token_in_header=False)
+        if not ok:
+            return False, filas, err
+        if isinstance(payload, list):
+            chunk = payload
+        elif isinstance(payload, dict):
+            chunk = payload.get("data") or []
+        else:
+            chunk = []
+        if not chunk:
+            break
+        filas.extend(chunk)
+        if len(chunk) < page_size:
+            break
+        page += 1
+    return True, filas, None
+
+
+def normalizar_recinto(raw: dict) -> dict:
+    if not isinstance(raw, dict):
+        return {}
+    obra_id = raw.get("obraId") or raw.get("obra_id") or raw.get("id")
+    return {
+        "obra_id": str(obra_id) if obra_id is not None else "",
+        "nombre": (raw.get("nombre") or raw.get("nombreRecinto") or "").strip(),
+        "comuna": (raw.get("comuna") or "").strip(),
+    }
+
+
+def listar_recintos() -> dict:
+    cfg = configuracion_resumen()
+    try:
+        _token()
+    except BukAsistenciaConfigError as exc:
+        return {"ok": False, "recintos": [], "error": str(exc), "config": cfg}
+
+    ok, raw_rows, err = _paginar_todo("informacionRecinto", {})
+    if not ok:
+        return {"ok": False, "recintos": [], "error": err, "config": cfg}
+
+    recintos = [normalizar_recinto(r) for r in raw_rows if isinstance(r, dict)]
+    recintos = [r for r in recintos if r.get("obra_id")]
+    recintos.sort(key=lambda x: (x.get("nombre") or "").lower())
+    return {"ok": True, "recintos": recintos, "error": None, "config": cfg}
+
+
+def normalizar_turno(raw: dict) -> dict:
+    if not isinstance(raw, dict):
+        return {}
+    dia_raw = (raw.get("diaTurno") or raw.get("dia_turno") or "").strip()
+    dia: Optional[date] = None
+    if dia_raw:
+        try:
+            dia = datetime.strptime(dia_raw, "%d-%m-%Y").date()
+        except ValueError:
+            pass
+    id_rec = raw.get("idRecinto") or raw.get("id_recinto")
+    return {
+        "rut_norm": normalizar_rut(raw.get("dni") or raw.get("DNI")),
+        "fecha": dia,
+        "horario_turno": (raw.get("horarioTurno") or raw.get("horario_turno") or "").strip(),
+        "colacion_turno": (raw.get("colacionTurno") or raw.get("colacion_turno") or "").strip(),
+        "nombre_recinto": (raw.get("nombreRecinto") or raw.get("nombre_recinto") or "").strip(),
+        "codigo_recinto": (raw.get("codigoRecinto") or raw.get("codigo_recinto") or "").strip(),
+        "id_recinto": int(id_rec) if id_rec is not None else None,
+        "licencia": bool(raw.get("licencia")),
+        "permiso": bool(raw.get("permiso")),
+        "vacaciones": bool(raw.get("vacaciones")),
+        "nombre_trabajador": (raw.get("nombreTrabajador") or raw.get("nombre_trabajador") or "").strip(),
+    }
+
+
+def listar_turnos_rango(fecha_inicio: date, fecha_fin: date) -> dict:
+    cfg = configuracion_resumen()
+    if fecha_fin < fecha_inicio:
+        return {"ok": False, "turnos": [], "error": "Rango inválido.", "config": cfg}
+    try:
+        _token()
+    except BukAsistenciaConfigError as exc:
+        return {"ok": False, "turnos": [], "error": str(exc), "config": cfg}
+
+    all_turnos: List[dict] = []
+    cursor = fecha_inicio
+    while cursor <= fecha_fin:
+        tramo_fin = min(fecha_fin, cursor + timedelta(days=MAX_RANGO_DIAS - 1))
+        ok, chunk, err = _paginar_turnos(cursor, tramo_fin)
+        if not ok:
+            return {"ok": False, "turnos": [], "error": err, "config": cfg}
+        all_turnos.extend(chunk)
+        cursor = tramo_fin + timedelta(days=1)
+
+    turnos = [normalizar_turno(t) for t in all_turnos if isinstance(t, dict)]
+    return {
+        "ok": True,
+        "turnos": turnos,
+        "error": None,
+        "config": cfg,
+        "desde": _fecha_param(fecha_inicio),
+        "hasta": _fecha_param(fecha_fin),
+    }
+
+
+def normalizar_registro_marcaje(raw: dict) -> dict:
+    if not isinstance(raw, dict):
+        return {}
+    dni = raw.get("DNI") or raw.get("dni") or ""
+    try:
+        ano = int(raw.get("ano"))
+        mes = int(raw.get("mes"))
+        dia = int(raw.get("dia"))
+        hora = int(raw.get("hora", 0))
+        minutos = int(raw.get("minutos", 0))
+        segundos = int(raw.get("segundos", 0))
+    except (TypeError, ValueError):
+        return {}
+    marca_dt = datetime(ano, mes, dia, hora, minutos, segundos, tzinfo=TZ_CHILE)
+    return {
+        "rut_norm": normalizar_rut(dni),
+        "fecha": date(ano, mes, dia),
+        "sentido": (raw.get("sentido") or "").strip().lower(),
+        "marca_dt": marca_dt,
+        "obra_id": raw.get("obra_id") or raw.get("obraId"),
+    }
+
+
+def listar_registros_recinto(
+    obra_id: str,
+    fecha_inicio: date,
+    fecha_fin: date,
+    *,
+    dni: Optional[str] = None,
+) -> dict:
+    cfg = configuracion_resumen()
+    if fecha_fin < fecha_inicio:
+        return {"ok": False, "registros": [], "error": "Rango inválido.", "config": cfg}
+    try:
+        _token()
+    except BukAsistenciaConfigError as exc:
+        return {"ok": False, "registros": [], "error": str(exc), "config": cfg}
+
+    raw_rows: List[dict] = []
+    cursor = fecha_inicio
+    dni_param = normalizar_rut(dni) if dni else None
+    while cursor <= fecha_fin:
+        tramo_fin = min(fecha_fin, cursor + timedelta(days=MAX_RANGO_DIAS - 1))
+        params = {
+            "obra_id": obra_id,
+            "from": _fecha_param(cursor),
+            "to": _fecha_param(tramo_fin),
+        }
+        if dni_param:
+            params["dni_colaborador"] = dni_param
+        ok, chunk, err = _paginar_todo("obtenerRegistroAsistencia", params)
+        if not ok:
+            return {"ok": False, "registros": [], "error": err, "config": cfg}
+        raw_rows.extend(chunk)
+        cursor = tramo_fin + timedelta(days=1)
+
+    registros = [normalizar_registro_marcaje(r) for r in raw_rows if isinstance(r, dict)]
+    registros = [r for r in registros if r]
+    return {
+        "ok": True,
+        "registros": registros,
+        "error": None,
+        "config": cfg,
+        "desde": _fecha_param(fecha_inicio),
+        "hasta": _fecha_param(fecha_fin),
+    }

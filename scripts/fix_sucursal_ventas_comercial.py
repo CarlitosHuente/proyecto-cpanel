@@ -16,9 +16,9 @@ import sys
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, ROOT)
 
-from dotenv import load_dotenv
+from utils.env_config import load_env
 
-load_dotenv(os.path.join(ROOT, ".env"))
+load_env()
 
 from utils.db import get_db_connection
 from utils.ventas_excel_import import inferir_sucursal_comercial

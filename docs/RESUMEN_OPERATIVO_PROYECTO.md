@@ -52,7 +52,7 @@ En terminos practicos, centraliza:
 - `config`: usuarios, roles, permisos, categorias, productos, anuncios, carga agricola.
 - `despacho_web`: carga PDF facturas tienda web (unitario y masivo), validacion split-screen, ordenes MySQL para AppSheet, resumen ventas por producto, impresion comprobante de pedido.
 - `fabrica` / `utilidades`: funcionalidades complementarias.
-- `buk`: consulta en vivo de colaboradores vigentes desde [Buk](https://huentelauquen.buk.cl/) (solo lectura, sin BD).
+- `buk`: consulta en vivo desde [Buk](https://huentelauquen.buk.cl/) — nómina vigente, asistencia del día, ausencias mes, **calendario mensual** (turnos + marcajes + horas netas), **alertas** (sin turno, sin marca, atrasos), encuestas PDF (solo lectura / subida docs; sin BD Huente).
 
 ---
 
@@ -68,7 +68,7 @@ En terminos practicos, centraliza:
 - MySQL (local y/o hosting).
 - Google Drive API (subidas y lectura de archivos).
 - Google Sheets publicados como CSV.
-- Buk API RRHH + **Buk Asistencia** (marcajes): `utils/buk_api.py`, `utils/buk_asistencia_api.py`, vista `/buk/presencia`.
+- Buk API RRHH + **Buk Asistencia** (marcajes, turnos, recintos): `utils/buk_api.py`, `utils/buk_asistencia_api.py`, `utils/buk_calendario.py`, `utils/buk_alertas.py`. Vistas `/buk`, `/buk/asistencia`, `/buk/ausencias`, `/buk/calendario`, `/buk/alertas`.
 - GitHub (versionado y ramas).
 
 ---

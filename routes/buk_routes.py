@@ -1,11 +1,20 @@
 from datetime import datetime
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, jsonify, render_template, request, session
 
 from utils.auth import login_requerido, permiso_modulo
 from utils.buk_api import listar_trabajadores_vigentes, probar_conexion
 from utils.buk_asistencia_api import probar_conexion as probar_conexion_asistencia
+from utils.buk_alertas import contador_alertas_mes, reporte_alertas_mes
+from utils.buk_alertas_revisadas import marcar as marcar_alerta_revisada
 from utils.buk_ausencias import reporte_ausencias_mes
+from utils.buk_calendario import opciones_calendario, reporte_calendario_mes
+from utils.buk_colacion_config import (
+    config_recinto,
+    guardar_config_recinto,
+    guardar_recinto,
+    leer_todas,
+)
 from utils.buk_presencia import listar_presencia_dia
 from utils.buk_documentos import buscar_empleado_vigente_por_rut, subir_pdf_con_firma_empleado, carpeta_encuestas
 from utils.buk_encuesta_pdf import CAMPOS_ENCUESTA, generar_pdf_encuesta
@@ -195,3 +204,152 @@ def encuestas():
 def api_buscar_rut():
     rut = (request.args.get("rut") or "").strip()
     return jsonify(buscar_empleado_vigente_por_rut(rut))
+
+
+@buk_bp.route("/calendario")
+@login_requerido
+@permiso_modulo("buk")
+def calendario():
+    anio, mes = _mes_anio_desde_request()
+    obra_id = (request.args.get("obra_id") or "").strip()
+    rut = (request.args.get("rut") or "").strip()
+    mes_input = f"{anio}-{mes:02d}"
+    opciones = opciones_calendario()
+    resultado = None
+    alertas_contador = 0
+    if obra_id and rut:
+        resultado = reporte_calendario_mes(anio, mes, obra_id, rut)
+    cnt = contador_alertas_mes(anio, mes, obra_id or None)
+    if cnt.get("ok"):
+        alertas_contador = cnt.get("total") or 0
+    return render_template(
+        "buk/calendario.html",
+        mes_input=mes_input,
+        obra_id=obra_id,
+        rut=rut,
+        opciones=opciones,
+        resultado=resultado,
+        alertas_contador=alertas_contador,
+    )
+
+
+@buk_bp.route("/api/calendario-mes")
+@login_requerido
+@permiso_modulo("buk")
+def api_calendario_mes():
+    anio, mes = _mes_anio_desde_request()
+    obra_id = (request.args.get("obra_id") or "").strip()
+    rut = (request.args.get("rut") or "").strip()
+    if not obra_id or not rut:
+        return jsonify({"ok": False, "error": "Parámetros obra_id y rut requeridos."}), 400
+    resultado = reporte_calendario_mes(anio, mes, obra_id, rut)
+    status = 200 if resultado.get("ok") else 502
+    return jsonify(resultado), status
+
+
+@buk_bp.route("/api/colacion-recinto", methods=["GET", "POST"])
+@login_requerido
+@permiso_modulo("buk")
+def api_colacion_recinto():
+    if request.method == "GET":
+        obra_id = (request.args.get("obra_id") or "").strip()
+        if obra_id:
+            return jsonify({"ok": True, "config": config_recinto(obra_id)})
+        return jsonify({"ok": True, "colaciones": leer_todas()})
+
+    data = request.get_json(silent=True) or {}
+    obra_id = (data.get("obra_id") or request.form.get("obra_id") or "").strip()
+    nombre = (data.get("nombre") or request.form.get("nombre") or "").strip()
+    if not obra_id:
+        return jsonify({"ok": False, "error": "obra_id requerido."}), 400
+
+    grupos = data.get("grupos")
+    default_raw = data.get("default_minutos")
+    if default_raw is None and data.get("minutos") is not None:
+        default_raw = data.get("minutos")
+    if default_raw is None and request.form.get("minutos") is not None:
+        default_raw = request.form.get("minutos")
+
+    if grupos is not None or default_raw is not None:
+        default_minutos = None
+        if default_raw is not None:
+            try:
+                default_minutos = int(default_raw)
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "error": "default_minutos inválido."}), 400
+        ok, msg = guardar_config_recinto(
+            obra_id,
+            nombre=nombre,
+            default_minutos=default_minutos,
+            grupos=grupos if grupos is not None else None,
+        )
+    else:
+        try:
+            minutos = int(data.get("minutos") or request.form.get("minutos"))
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "Minutos inválidos."}), 400
+        ok, msg = guardar_recinto(obra_id, minutos, nombre)
+
+    if not ok:
+        return jsonify({"ok": False, "error": msg}), 400
+    cfg = config_recinto(obra_id)
+    return jsonify({"ok": True, **cfg})
+
+
+@buk_bp.route("/alertas")
+@login_requerido
+@permiso_modulo("buk")
+def alertas():
+    anio, mes = _mes_anio_desde_request()
+    obra_id = (request.args.get("obra_id") or "").strip() or None
+    mes_input = f"{anio}-{mes:02d}"
+    incluir = request.args.get("incluir_revisadas", "0") == "1"
+    opciones = opciones_calendario()
+    resultado = reporte_alertas_mes(anio, mes, obra_id, incluir_revisadas=incluir)
+    return render_template(
+        "buk/alertas.html",
+        mes_input=mes_input,
+        obra_id=obra_id or "",
+        incluir_revisadas=incluir,
+        opciones=opciones,
+        resultado=resultado,
+    )
+
+
+@buk_bp.route("/api/alertas-mes")
+@login_requerido
+@permiso_modulo("buk")
+def api_alertas_mes():
+    anio, mes = _mes_anio_desde_request()
+    obra_id = (request.args.get("obra_id") or "").strip() or None
+    incluir = request.args.get("incluir_revisadas", "0") == "1"
+    resultado = reporte_alertas_mes(anio, mes, obra_id, incluir_revisadas=incluir)
+    status = 200 if resultado.get("ok") else 502
+    return jsonify(resultado), status
+
+
+@buk_bp.route("/api/alertas-contador")
+@login_requerido
+@permiso_modulo("buk")
+def api_alertas_contador():
+    anio, mes = _mes_anio_desde_request()
+    obra_id = (request.args.get("obra_id") or "").strip() or None
+    return jsonify(contador_alertas_mes(anio, mes, obra_id))
+
+
+@buk_bp.route("/api/alertas-revisar", methods=["POST"])
+@login_requerido
+@permiso_modulo("buk")
+def api_alertas_revisar():
+    data = request.get_json(silent=True) or {}
+    alerta_id = (data.get("alerta_id") or "").strip()
+    if not alerta_id:
+        return jsonify({"ok": False, "error": "alerta_id requerido."}), 400
+    revisada = data.get("revisada", True)
+    if isinstance(revisada, str):
+        revisada = revisada.lower() in ("1", "true", "yes")
+    usuario = session.get("usuario") or session.get("nombre") or ""
+    ok = marcar_alerta_revisada(alerta_id, usuario, revisada=bool(revisada))
+    if not ok:
+        return jsonify({"ok": False, "error": "No se pudo guardar."}), 500
+    return jsonify({"ok": True, "alerta_id": alerta_id, "revisada": bool(revisada)})

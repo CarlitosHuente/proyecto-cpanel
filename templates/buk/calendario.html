@@ -1,0 +1,435 @@
+{% extends "base.html" %}
+{% block title %}Buk — Calendario mensual{% endblock %}
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <h2 class="text-white mb-1"><i class="bi bi-calendar3 text-info me-2"></i>Calendario mensual</h2>
+            <p class="text-muted mb-0">
+                Marcajes por día (primera entrada / última salida), turnos programados y horas netas.
+                Colación: turno Buk → config por día de semana → default sucursal.
+            </p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap align-items-center">
+            <a href="{{ url_for('buk.alertas', mes=mes_input, obra_id=obra_id) if obra_id else url_for('buk.alertas', mes=mes_input) }}"
+               class="btn btn-outline-warning btn-sm position-relative" data-buk-loading>
+                <i class="bi bi-bell me-1"></i> Alertas
+                {% if alertas_contador %}<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{{ alertas_contador }}</span>{% endif %}
+            </a>
+            <a href="{{ url_for('buk.asistencia') }}" class="btn btn-outline-secondary btn-sm">Asistencia hoy</a>
+            <a href="{{ url_for('buk.ausencias') }}" class="btn btn-outline-secondary btn-sm">Ausencias mes</a>
+            <button type="button" class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modalColacion">
+                <i class="bi bi-cup-hot me-1"></i> Colación por sucursal
+            </button>
+        </div>
+    </div>
+
+    {% if not opciones.recintos_ok %}
+    <div class="alert alert-warning py-2 small">
+        No se pudieron cargar recintos: {{ opciones.recintos_error or 'verifique BUK_ASISTENCIA_TOKEN' }}
+    </div>
+    {% endif %}
+
+    <form method="get" action="{{ url_for('buk.calendario') }}" class="card bg-dark border-secondary mb-3"
+        onsubmit="if(window.HuenteBukLoading)HuenteBukLoading.mostrar();">
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label text-white-50 small mb-1" for="mes">Mes</label>
+                    <input type="month" name="mes" id="mes" class="form-control form-control-sm bg-black text-white border-secondary"
+                        value="{{ mes_input }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label text-white-50 small mb-1" for="obra_id">Sucursal / recinto</label>
+                    <select name="obra_id" id="obra_id" class="form-select form-select-sm bg-black text-white border-secondary" required>
+                        <option value="">— Seleccione —</option>
+                        {% for r in opciones.recintos %}
+                        <option value="{{ r.obra_id }}" {% if obra_id == r.obra_id %}selected{% endif %}>
+                            {{ r.nombre or r.obra_id }}{% if r.comuna %} ({{ r.comuna }}){% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label text-white-50 small mb-1" for="rut">Colaborador</label>
+                    <select name="rut" id="rut" class="form-select form-select-sm bg-black text-white border-secondary" required>
+                        <option value="">— Seleccione —</option>
+                        {% for e in opciones.empleados %}
+                        <option value="{{ e.rut }}" {% if rut == e.rut %}selected{% endif %}>
+                            {{ e.full_name or e.rut }} — {{ e.rut }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-info btn-sm w-100">Consultar</button>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    {% if resultado %}
+    {% for w in resultado.warnings or [] %}
+    <div class="alert alert-warning py-2 small">{{ w }}</div>
+    {% endfor %}
+    {% if resultado.error and not resultado.ok %}
+    <div class="alert alert-danger py-2">{{ resultado.error }}</div>
+    {% endif %}
+
+    {% if resultado.ok %}
+    <div class="mb-2 text-white-50 small">
+        {% if resultado.empleado %}
+        <strong class="text-white">{{ resultado.empleado.full_name }}</strong> · {{ resultado.rut }}
+        {% else %}
+        {{ resultado.rut }}
+        {% endif %}
+        · {{ resultado.mes_label }}
+        · Colación: <strong class="text-warning">Buk turno / config por día</strong>
+        {% if resultado.colacion_resumen %}<span class="ms-1">({{ resultado.colacion_resumen }})</span>{% endif %}
+        · Periodo {{ resultado.periodo_desde }} → {{ resultado.periodo_hasta }}
+    </div>
+
+    <div class="card bg-dark border-secondary mb-2">
+        <div class="table-responsive">
+            <table class="table table-dark table-bordered mb-0 calendario-buk text-center align-middle">
+                <thead>
+                    <tr class="text-white-50 small">
+                        <th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th><th>Sáb</th><th>Dom</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for semana in resultado.semanas %}
+                    <tr>
+                        {% for celda in semana %}
+                        <td class="p-1 {% if celda.fuera_mes %}text-muted bg-black{% elif celda.alerta_turno %}border border-danger{% endif %}"
+                            style="min-width:118px; vertical-align:top;">
+                            <div class="fw-bold {% if celda.fuera_mes %}opacity-50{% else %}text-white{% endif %}">{{ celda.dia_num }}</div>
+                            {% if not celda.fuera_mes %}
+                            {% if celda.turno_horario %}
+                            <div class="small text-info">{{ celda.turno_horario }}</div>
+                            {% endif %}
+                            {% if celda.licencia %}<span class="badge bg-secondary">Licencia</span>{% endif %}
+                            {% if celda.permiso %}<span class="badge bg-secondary">Permiso</span>{% endif %}
+                            {% if celda.vacaciones %}<span class="badge bg-secondary">Vacaciones</span>{% endif %}
+                            {% if celda.descanso %}<span class="badge bg-dark border border-secondary text-white-50">Descanso</span>{% endif %}
+                            {% if celda.sin_turno and not celda.entrada %}<span class="small text-muted">Sin turno</span>{% endif %}
+                            {% if celda.sin_marca and celda.alerta_turno %}
+                            <div class="small text-danger fw-bold">Sin marca</div>
+                            {% elif celda.entrada %}
+                            <div class="small"><span class="text-success">↓</span> {{ celda.entrada }}</div>
+                            {% if celda.salida %}<div class="small"><span class="text-warning">↑</span> {{ celda.salida }}</div>{% endif %}
+                            {% if celda.horas_neto_txt %}<div class="small text-white-50">{{ celda.horas_neto_txt }}</div>{% endif %}
+                            {% if celda.colacion_minutos is defined and celda.entrada %}
+                            <div class="small text-muted" style="font-size:0.7rem;">col. {{ celda.colacion_minutos }} min{% if celda.colacion_fuente == 'buk' %} (Buk){% elif celda.colacion_fuente == 'config' %} (cfg){% endif %}</div>
+                            {% endif %}
+                            {% if celda.entrada_tarde_txt %}<div class="small text-danger">{{ celda.entrada_tarde_txt }}</div>{% endif %}
+                            {% if celda.entrada_anticipada_txt %}<div class="small text-success">{{ celda.entrada_anticipada_txt }}</div>{% endif %}
+                            {% if celda.salida_tarde_txt %}<div class="small text-warning">{{ celda.salida_tarde_txt }}</div>{% endif %}
+                            {% if celda.salida_anticipada_txt %}<div class="small text-info">{{ celda.salida_anticipada_txt }}</div>{% endif %}
+                            {% elif not celda.turno_horario %}
+                            <div class="small text-muted">—</div>
+                            {% endif %}
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <p class="small text-white-50 mb-3">
+        <strong>Leyenda:</strong> + = tarde · − = anticipada.
+        Entrada roja/verde · Salida amarilla/celeste.
+    </p>
+
+    {% set r = resultado.resumen %}
+    <div class="row g-3 mb-4">
+        <div class="col-md-4 col-lg-2">
+            <div class="card bg-dark border-secondary text-center h-100">
+                <div class="card-body py-2">
+                    <div class="h4 text-success mb-0">{{ r.dias_trabajados }}</div>
+                    <div class="text-muted small">Días trabajados</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-lg-2">
+            <div class="card bg-dark border-secondary text-center h-100">
+                <div class="card-body py-2">
+                    <div class="h4 text-danger mb-0">{{ r.dias_ausencia }}</div>
+                    <div class="text-muted small">Días ausencia (turno sin marca)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-lg-2">
+            <div class="card bg-dark border-secondary text-center h-100">
+                <div class="card-body py-2">
+                    <div class="h4 text-white mb-0">{{ r.dias_programados }}</div>
+                    <div class="text-muted small">Días programados</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-lg-2">
+            <div class="card bg-dark border-secondary text-center h-100">
+                <div class="card-body py-2">
+                    <div class="h5 text-danger mb-0">{{ r.tiempo_atrasado_txt }}</div>
+                    <div class="text-muted small">Entrada tarde (total)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-lg-2">
+            <div class="card bg-dark border-secondary text-center h-100">
+                <div class="card-body py-2">
+                    <div class="h5 text-success mb-0">{{ r.entrada_anticipada_txt }}</div>
+                    <div class="text-muted small">Entrada anticipada (total)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-lg-2">
+            <div class="card bg-dark border-secondary text-center h-100">
+                <div class="card-body py-2">
+                    <div class="h5 text-warning mb-0">{{ r.salida_despues_txt }}</div>
+                    <div class="text-muted small">Salida tarde (total)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-lg-2">
+            <div class="card bg-dark border-secondary text-center h-100">
+                <div class="card-body py-2">
+                    <div class="h5 text-info mb-0">{{ r.salida_anticipada_txt }}</div>
+                    <div class="text-muted small">Salida anticipada (total)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-lg-3">
+            <div class="card bg-dark border-secondary text-center h-100">
+                <div class="card-body py-2">
+                    <div class="h5 text-white mb-0">{{ r.horas_netas_total_txt }}</div>
+                    <div class="text-muted small">Horas netas totales</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-lg-3">
+            <div class="card bg-dark border-secondary text-center h-100">
+                <div class="card-body py-2">
+                    <div class="h5 text-white mb-0">{{ r.promedio_dia_txt }}</div>
+                    <div class="text-muted small">Promedio neto / día trabajado</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-lg-2">
+            <div class="card bg-dark border-secondary text-center h-100">
+                <div class="card-body py-2">
+                    <div class="h5 text-secondary mb-0">{{ r.licencia }}</div>
+                    <div class="text-muted small">Licencia</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-lg-2">
+            <div class="card bg-dark border-secondary text-center h-100">
+                <div class="card-body py-2">
+                    <div class="h5 text-secondary mb-0">{{ r.permiso }}</div>
+                    <div class="text-muted small">Permiso</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-lg-2">
+            <div class="card bg-dark border-secondary text-center h-100">
+                <div class="card-body py-2">
+                    <div class="h5 text-secondary mb-0">{{ r.vacaciones }}</div>
+                    <div class="text-muted small">Vacaciones</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% elif obra_id and rut %}
+    <div class="alert alert-info py-2">Consultando… si no aparece el calendario, revise token Asistencia.</div>
+    {% else %}
+    <div class="alert alert-secondary py-2">Seleccione mes, sucursal y colaborador para ver el calendario.</div>
+    {% endif %}
+</div>
+
+<div class="modal fade" id="modalColacion" tabindex="-1" aria-labelledby="modalColacionLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content bg-dark text-white border-secondary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title" id="modalColacionLabel">Colación por sucursal y día de semana</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-white-50 mb-3">
+                    Minutos descontados del bruto para horas netas. Prioridad: turno Buk (<code>colacionTurno</code>) →
+                    grupos por día (Lun–Dom) → default sucursal.
+                </p>
+                <div id="colacionAlert" class="alert d-none py-2 small"></div>
+                <div class="accordion" id="accordionColacion">
+                    {% for r in opciones.recintos %}
+                    {% set cfg = opciones.configs_recinto.get(r.obra_id|string, {}) %}
+                    {% set grupos = cfg.grupos or [] %}
+                    <div class="accordion-item bg-dark border-secondary colacion-recinto-panel"
+                        data-obra-id="{{ r.obra_id }}" data-nombre="{{ r.nombre|e }}">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed bg-dark text-white border-secondary" type="button"
+                                data-bs-toggle="collapse" data-bs-target="#colacion-{{ r.obra_id }}">
+                                {{ r.nombre or r.obra_id }}
+                                <span class="small text-white-50 ms-2 colacion-resumen">{{ cfg.resumen or '' }}</span>
+                            </button>
+                        </h2>
+                        <div id="colacion-{{ r.obra_id }}" class="accordion-collapse collapse" data-bs-parent="#accordionColacion">
+                            <div class="accordion-body">
+                                <div class="row g-2 align-items-end mb-3">
+                                    <div class="col-auto">
+                                        <label class="form-label text-white-50 small mb-1">Default (días sin grupo)</label>
+                                        <input type="number" class="form-control form-control-sm bg-black text-white border-secondary colacion-default"
+                                            min="0" max="240" value="{{ cfg.default_minutos or 60 }}">
+                                    </div>
+                                </div>
+                                <div class="colacion-grupos mb-2">
+                                    {% for g in grupos %}
+                                    <div class="colacion-grupo border border-secondary rounded p-2 mb-2">
+                                        <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                                            {% for idx in range(7) %}
+                                            <label class="form-check form-check-inline small mb-0">
+                                                <input type="checkbox" class="form-check-input colacion-dia"
+                                                    value="{{ idx }}" {% if idx in (g.dias or []) %}checked{% endif %}>
+                                                {{ opciones.dias_semana[idx] }}
+                                            </label>
+                                            {% endfor %}
+                                        </div>
+                                        <div class="d-flex gap-2 align-items-center">
+                                            <input type="number" class="form-control form-control-sm bg-black text-white border-secondary colacion-grupo-min"
+                                                min="0" max="240" value="{{ g.minutos or 60 }}" style="width:100px">
+                                            <span class="small text-white-50">min</span>
+                                            <button type="button" class="btn btn-outline-danger btn-sm ms-auto btn-quitar-grupo">Quitar</button>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                <div class="d-flex gap-2 flex-wrap">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm btn-agregar-grupo">+ Agregar grupo</button>
+                                    <button type="button" class="btn btn-outline-info btn-sm btn-guardar-recinto">Guardar sucursal</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<template id="tplColacionGrupo">
+    <div class="colacion-grupo border border-secondary rounded p-2 mb-2">
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-2 colacion-dias-row"></div>
+        <div class="d-flex gap-2 align-items-center">
+            <input type="number" class="form-control form-control-sm bg-black text-white border-secondary colacion-grupo-min"
+                min="0" max="240" value="60" style="width:100px">
+            <span class="small text-white-50">min</span>
+            <button type="button" class="btn btn-outline-danger btn-sm ms-auto btn-quitar-grupo">Quitar</button>
+        </div>
+    </div>
+</template>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const apiUrl = {{ url_for('buk.api_colacion_recinto')|tojson }};
+    const diasSemana = {{ opciones.dias_semana|tojson }};
+    const alertEl = document.getElementById('colacionAlert');
+    const tplGrupo = document.getElementById('tplColacionGrupo');
+
+    function showAlert(msg, ok) {
+        if (!alertEl) return;
+        alertEl.textContent = msg;
+        alertEl.className = 'alert py-2 small alert-' + (ok ? 'success' : 'danger');
+        alertEl.classList.remove('d-none');
+    }
+
+    function buildDiasRow(container) {
+        container.innerHTML = '';
+        diasSemana.forEach(function (label, idx) {
+            const lbl = document.createElement('label');
+            lbl.className = 'form-check form-check-inline small mb-0';
+            lbl.innerHTML = '<input type="checkbox" class="form-check-input colacion-dia" value="' + idx + '"> ' + label;
+            container.appendChild(lbl);
+        });
+    }
+
+    function leerGrupos(panel) {
+        const grupos = [];
+        panel.querySelectorAll('.colacion-grupo').forEach(function (el) {
+            const dias = [];
+            el.querySelectorAll('.colacion-dia:checked').forEach(function (cb) {
+                dias.push(parseInt(cb.value, 10));
+            });
+            const minutos = parseInt(el.querySelector('.colacion-grupo-min').value, 10);
+            if (dias.length && !isNaN(minutos)) {
+                grupos.push({ dias: dias, minutos: minutos });
+            }
+        });
+        return grupos;
+    }
+
+    document.querySelectorAll('.btn-agregar-grupo').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const panel = btn.closest('.colacion-recinto-panel');
+            const cont = panel.querySelector('.colacion-grupos');
+            const clone = tplGrupo.content.cloneNode(true);
+            buildDiasRow(clone.querySelector('.colacion-dias-row'));
+            cont.appendChild(clone);
+        });
+    });
+
+    document.getElementById('accordionColacion').addEventListener('click', function (e) {
+        if (e.target.classList.contains('btn-quitar-grupo')) {
+            e.target.closest('.colacion-grupo').remove();
+        }
+    });
+
+    document.querySelectorAll('.btn-guardar-recinto').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+            const panel = btn.closest('.colacion-recinto-panel');
+            const obraId = panel.dataset.obraId;
+            const nombre = panel.dataset.nombre || '';
+            const defaultMin = parseInt(panel.querySelector('.colacion-default').value, 10);
+            const grupos = leerGrupos(panel);
+            if (isNaN(defaultMin) || defaultMin < 0 || defaultMin > 240) {
+                showAlert('Default inválido (0–240).', false);
+                return;
+            }
+            btn.disabled = true;
+            try {
+                const resp = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        obra_id: obraId,
+                        nombre: nombre,
+                        default_minutos: defaultMin,
+                        grupos: grupos,
+                    }),
+                });
+                const data = await resp.json();
+                if (data.ok) {
+                    const resEl = panel.querySelector('.colacion-resumen');
+                    if (resEl && data.resumen) resEl.textContent = data.resumen;
+                    showAlert('Guardado: ' + (nombre || obraId), true);
+                    if (window.location.search.includes('obra_id=' + obraId)) {
+                        setTimeout(function () { window.location.reload(); }, 800);
+                    }
+                } else {
+                    showAlert(data.error || 'Error al guardar.', false);
+                }
+            } catch (err) {
+                showAlert('Error de red al guardar.', false);
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    });
+})();
+</script>
+{% endblock %}

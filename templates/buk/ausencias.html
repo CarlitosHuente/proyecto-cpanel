@@ -12,7 +12,8 @@
             </p>
         </div>
         <div class="d-flex gap-2 flex-wrap align-items-center">
-            <form method="get" class="d-flex gap-2 align-items-center flex-wrap" action="{{ url_for('buk.ausencias') }}">
+            <form method="get" class="d-flex gap-2 align-items-center flex-wrap" action="{{ url_for('buk.ausencias') }}"
+                onsubmit="if(window.HuenteBukLoading)HuenteBukLoading.mostrar();">
                 <label class="text-white-50 small mb-0" for="mes">Mes</label>
                 <input type="month" name="mes" id="mes" class="form-control form-control-sm bg-black text-white border-secondary"
                     value="{{ mes_input }}" required>
@@ -23,6 +24,7 @@
                 <button type="submit" class="btn btn-outline-light btn-sm">Consultar</button>
             </form>
             <a href="{{ url_for('buk.asistencia') }}" class="btn btn-outline-secondary btn-sm">Asistencia hoy</a>
+            <a href="{{ url_for('buk.calendario') }}" class="btn btn-outline-info btn-sm">Calendario</a>
         </div>
     </div>
 
