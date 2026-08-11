@@ -21,7 +21,9 @@ from utils.buk_calendario import (
     MESES_ES,
     _agregar_marcajes_por_dia,
     _construir_celda,
+    _jornada_otro_recinto,
     _rango_mes,
+    _turno_es_jornada,
     _turno_programado,
 )
 from utils.buk_colacion_config import DIAS_SEMANA, resolver_minutos_colacion
@@ -78,12 +80,12 @@ def alerta_id(
 
 
 def _turno_cuenta_asignacion(t: dict) -> bool:
-    """Al menos una fila de asignación en el mes (cualquier sucursal, incl. licencia/permiso)."""
+    """Al menos una jornada laboral en el mes (horario HH:MM, no fila «-» de Turno Base)."""
     if not (t.get("rut_norm") and t.get("fecha")):
         return False
-    if t.get("licencia") or t.get("permiso") or t.get("vacaciones"):
+    if t.get("licencia") or t.get("permiso"):
         return True
-    return bool((t.get("horario_turno") or "").strip())
+    return _turno_es_jornada(t)
 
 
 def _mes_label(anio: int, mes: int) -> str:
@@ -164,6 +166,7 @@ def _item_alerta(
         "nombre": nombre,
         "fecha": fecha.isoformat() if isinstance(fecha, date) else "",
         "fecha_txt": fecha.strftime("%d/%m") if isinstance(fecha, date) else "",
+        "fecha_sort": fecha.isoformat() if isinstance(fecha, date) else "",
         "obra_id": obra_id,
         "obra_nombre": obra_nombre,
         "detalle": detalle,
@@ -242,6 +245,14 @@ def reporte_alertas_mes(
 
     turnos = turnos_res.get("turnos") or []
     turnos = [t for t in turnos if (t.get("rut_norm") or "") in vigentes_set]
+    from collections import defaultdict as _dd
+
+    turnos_por_rut_fecha: Dict[str, Dict[date, List[dict]]] = _dd(lambda: _dd(list))
+    for t in turnos:
+        rn = t.get("rut_norm") or ""
+        fd = t.get("fecha")
+        if rn and isinstance(fd, date):
+            turnos_por_rut_fecha[rn][fd].append(t)
     turnos_por_rut: Dict[str, List[dict]] = defaultdict(list)
     for t in turnos:
         rn = t.get("rut_norm") or ""
@@ -320,7 +331,12 @@ def reporte_alertas_mes(
             )
             rut = emp.get("rut") or ""
             marcas_map = _agregar_marcajes_por_dia(por_rut_reg.get(rut_norm, []), rut_norm)
-            tiene_turnos_mes = len(turnos_map) > 0
+            tiene_jornadas_mes = any(_turno_es_jornada(t) for t in turnos_map.values())
+            try:
+                oid_int = int(oid)
+            except (TypeError, ValueError):
+                oid_int = None
+            turnos_dia_rut = turnos_por_rut_fecha.get(rut_norm, {})
 
             if eval_fin < inicio:
                 continue
@@ -331,16 +347,20 @@ def reporte_alertas_mes(
                     cursor += timedelta(days=1)
                     continue
                 turno = turnos_map.get(cursor)
+                turno_otro = _jornada_otro_recinto(turnos_dia_rut.get(cursor, []), oid_int)
                 marca = marcas_map.get(cursor)
-                col = resolver_minutos_colacion(oid, cursor, turno)
+                col = resolver_minutos_colacion(
+                    oid, cursor, turno if _turno_es_jornada(turno) else turno_otro,
+                )
                 celda = _construir_celda(
                     cursor,
                     fuera_mes=False,
                     turno=turno,
+                    turno_otro=turno_otro,
                     marca=marca,
                     colacion_min=col["minutos"],
                     colacion_fuente=col["fuente"],
-                    tiene_turnos_mes=tiene_turnos_mes,
+                    tiene_jornadas_mes=tiene_jornadas_mes,
                 )
 
                 base = dict(

@@ -405,6 +405,7 @@ def normalizar_turno(raw: dict) -> dict:
         "licencia": bool(raw.get("licencia")),
         "permiso": bool(raw.get("permiso")),
         "vacaciones": bool(raw.get("vacaciones")),
+        "nombre_turno": (raw.get("nombreTurno") or raw.get("nombre_turno") or "").strip(),
         "nombre_trabajador": (raw.get("nombreTrabajador") or raw.get("nombre_trabajador") or "").strip(),
     }
 

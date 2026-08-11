@@ -6,6 +6,11 @@
     .alertas-grupo-btn:hover { background-color: rgba(255,255,255,0.05) !important; }
     .alertas-grupo-btn .alertas-chevron { display: inline-block; transition: transform 0.15s; }
     .alertas-grupo-btn[aria-expanded="true"] .alertas-chevron { transform: rotate(90deg); }
+    .alertas-sort-th { cursor: pointer; user-select: none; white-space: nowrap; }
+    .alertas-sort-th:hover { color: #fff !important; }
+    .alertas-sort-th .sort-icon { opacity: 0.35; font-size: 0.75rem; }
+    .alertas-sort-th.sort-asc .sort-icon,
+    .alertas-sort-th.sort-desc .sort-icon { opacity: 1; color: #ffc107; }
 </style>
 <div class="container-fluid mt-3">
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
@@ -89,7 +94,7 @@
     ] %}
 
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-        <p class="small text-muted mb-0">Tipos de alerta (clic para ver detalle).</p>
+        <p class="small text-muted mb-0">Tipos de alerta (clic para ver detalle). En cada tabla, clic en encabezado para ordenar.</p>
         <div class="btn-group btn-group-sm">
             <button type="button" class="btn btn-outline-secondary" id="btn-alertas-expandir">Expandir todo</button>
             <button type="button" class="btn btn-outline-secondary" id="btn-alertas-colapsar">Colapsar todo</button>
@@ -111,20 +116,25 @@
         </button>
         <div id="{{ cid }}" class="collapse">
             <div class="table-responsive">
-                <table class="table table-dark table-sm table-hover mb-0 align-middle">
+                <table class="table table-dark table-sm table-hover mb-0 align-middle alertas-tabla-sortable">
                     <thead>
                         <tr class="text-white-50 small">
-                            <th>Fecha</th>
-                            <th>Colaborador</th>
-                            <th>Sucursal</th>
-                            <th>Detalle</th>
+                            <th class="alertas-sort-th" data-sort="fecha" data-type="date">Fecha <i class="bi bi-arrow-down-up sort-icon ms-1"></i></th>
+                            <th class="alertas-sort-th" data-sort="nombre" data-type="text">Colaborador <i class="bi bi-arrow-down-up sort-icon ms-1"></i></th>
+                            <th class="alertas-sort-th" data-sort="sucursal" data-type="text">Sucursal <i class="bi bi-arrow-down-up sort-icon ms-1"></i></th>
+                            <th class="alertas-sort-th" data-sort="detalle" data-type="text">Detalle <i class="bi bi-arrow-down-up sort-icon ms-1"></i></th>
                             <th class="text-center" style="width:90px">Revisada</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for a in items %}
-                        <tr class="{% if a.revisada %}opacity-50{% endif %}" data-alerta-id="{{ a.id }}">
+                        <tr class="{% if a.revisada %}opacity-50{% endif %}" data-alerta-id="{{ a.id }}"
+                            data-sort-fecha="{{ a.fecha_sort or '' }}"
+                            data-sort-nombre="{{ (a.nombre or '')|lower }}"
+                            data-sort-sucursal="{{ (a.obra_nombre or '')|lower }}"
+                            data-sort-detalle="{{ (a.detalle or '')|lower }}"
+                            data-sort-minutos="{{ a.minutos or 0 }}">
                             <td>{{ a.fecha_txt or '—' }}</td>
                             <td>{{ a.nombre }}<br><span class="text-white-50 small">{{ a.rut }}</span></td>
                             <td class="small">{{ a.obra_nombre or '—' }}</td>
@@ -175,6 +185,51 @@
     var btnCol = document.getElementById('btn-alertas-colapsar');
     if (btnExp) btnExp.addEventListener('click', function () { toggleGrupos(true); });
     if (btnCol) btnCol.addEventListener('click', function () { toggleGrupos(false); });
+
+    function sortAlertasTable(th) {
+        var table = th.closest('table');
+        if (!table) return;
+        var tbody = table.querySelector('tbody');
+        if (!tbody) return;
+        var key = th.dataset.sort;
+        var type = th.dataset.type || 'text';
+        var asc = th.dataset.order !== 'asc';
+        table.querySelectorAll('.alertas-sort-th').forEach(function (h) {
+            h.classList.remove('sort-asc', 'sort-desc');
+            h.dataset.order = '';
+            var ic = h.querySelector('.sort-icon');
+            if (ic) ic.className = 'bi bi-arrow-down-up sort-icon ms-1';
+        });
+        th.classList.add(asc ? 'sort-asc' : 'sort-desc');
+        th.dataset.order = asc ? 'asc' : 'desc';
+        var ic = th.querySelector('.sort-icon');
+        if (ic) ic.className = 'bi bi-arrow-' + (asc ? 'up' : 'down') + ' sort-icon ms-1';
+
+        var attr = 'sort' + key.charAt(0).toUpperCase() + key.slice(1);
+        var rows = Array.from(tbody.querySelectorAll('tr'));
+        rows.sort(function (a, b) {
+            var av = a.dataset['sort' + key.charAt(0).toUpperCase() + key.slice(1)] || '';
+            var bv = b.dataset['sort' + key.charAt(0).toUpperCase() + key.slice(1)] || '';
+            if (type === 'date') {
+                av = av || '9999-12-31';
+                bv = bv || '9999-12-31';
+            } else if (type === 'number') {
+                av = parseFloat(av) || 0;
+                bv = parseFloat(bv) || 0;
+            } else {
+                av = String(av).toLowerCase();
+                bv = String(bv).toLowerCase();
+            }
+            if (av < bv) return asc ? -1 : 1;
+            if (av > bv) return asc ? 1 : -1;
+            return 0;
+        });
+        rows.forEach(function (r) { tbody.appendChild(r); });
+    }
+
+    document.querySelectorAll('.alertas-sort-th').forEach(function (th) {
+        th.addEventListener('click', function () { sortAlertasTable(th); });
+    });
 
     document.querySelectorAll('.chk-revisada').forEach(function (chk) {
         chk.addEventListener('change', async function () {

@@ -39,7 +39,7 @@ def _rango_mes(anio: int, mes: int) -> Tuple[date, date]:
 
 
 def _parse_horario_turno(horario: str) -> Tuple[Optional[time], Optional[time]]:
-    if not horario:
+    if not horario or horario.strip() in ("-", "—"):
         return None, None
     m = re.match(r"(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})", horario.strip())
     if not m:
@@ -119,8 +119,61 @@ def _agregar_marcajes_por_dia(registros: List[dict], rut_norm: str) -> Dict[date
     return por_dia
 
 
+def _horario_laboral(horario: Optional[str]) -> bool:
+    """True si Buk trae rango HH:MM-HH:MM (no «-» ni vacío)."""
+    if not horario or horario.strip() in ("-", "—"):
+        return False
+    ini, fin = _parse_horario_turno(horario)
+    return ini is not None and fin is not None
+
+
+def _vacacion_real(turno: dict) -> bool:
+    """vacaciones=true en filas «Turno Base» con horario «-» no es vacaciones reales."""
+    return bool(turno.get("vacaciones") and _horario_laboral(turno.get("horario_turno")))
+
+
+def _turno_es_jornada(turno: Optional[dict]) -> bool:
+    """Día con jornada laboral programada (horario válido, sin licencia/permiso/vacación real)."""
+    if not turno:
+        return False
+    if turno.get("licencia") or turno.get("permiso") or _vacacion_real(turno):
+        return False
+    return _horario_laboral(turno.get("horario_turno"))
+
+
 def _turno_programado(turno: dict) -> bool:
-    return not (turno.get("licencia") or turno.get("permiso") or turno.get("vacaciones"))
+    return _turno_es_jornada(turno)
+
+
+def _nombre_corto_recinto(nombre: str) -> str:
+    n = (nombre or "").strip()
+    if not n:
+        return "Otra sucursal"
+    if len(n) <= 28:
+        return n
+    return n[:25].rstrip() + "…"
+
+
+def _filtrar_turnos_por_rut(turnos: List[dict], rut_norm: str) -> Dict[date, List[dict]]:
+    from collections import defaultdict
+
+    out: Dict[date, List[dict]] = defaultdict(list)
+    for t in turnos:
+        if (t.get("rut_norm") or "") != rut_norm:
+            continue
+        dia = t.get("fecha")
+        if isinstance(dia, date):
+            out[dia].append(t)
+    return out
+
+
+def _jornada_otro_recinto(turnos_dia: List[dict], obra_int: Optional[int]) -> Optional[dict]:
+    for t in turnos_dia:
+        if obra_int is not None and t.get("id_recinto") == obra_int:
+            continue
+        if _turno_es_jornada(t):
+            return t
+    return None
 
 
 def _filtrar_turnos(turnos: List[dict], rut_norm: str, obra_id: str) -> Dict[date, dict]:
@@ -145,10 +198,11 @@ def _construir_celda(
     *,
     fuera_mes: bool,
     turno: Optional[dict],
+    turno_otro: Optional[dict],
     marca: Optional[dict],
     colacion_min: int,
     colacion_fuente: str,
-    tiene_turnos_mes: bool = False,
+    tiene_jornadas_mes: bool = False,
 ) -> dict:
     celda = {
         "fecha": dia.isoformat(),
@@ -161,6 +215,9 @@ def _construir_celda(
         "alerta_turno": False,
         "descanso": False,
         "sin_turno": False,
+        "otro_recinto": False,
+        "otro_recinto_nombre": "",
+        "otro_recinto_horario": "",
         "entrada_tarde_txt": "",
         "entrada_anticipada_txt": "",
         "salida_tarde_txt": "",
@@ -180,12 +237,22 @@ def _construir_celda(
     if fuera_mes:
         return celda
 
-    if turno:
+    if _turno_es_jornada(turno):
         celda["turno_horario"] = turno.get("horario_turno") or ""
         celda["licencia"] = bool(turno.get("licencia"))
         celda["permiso"] = bool(turno.get("permiso"))
-        celda["vacaciones"] = bool(turno.get("vacaciones"))
-    elif tiene_turnos_mes:
+        celda["vacaciones"] = _vacacion_real(turno or {})
+    elif turno_otro and _turno_es_jornada(turno_otro):
+        celda["otro_recinto"] = True
+        celda["otro_recinto_nombre"] = _nombre_corto_recinto(turno_otro.get("nombre_recinto") or "")
+        celda["otro_recinto_horario"] = turno_otro.get("horario_turno") or ""
+    elif turno:
+        celda["licencia"] = bool(turno.get("licencia"))
+        celda["permiso"] = bool(turno.get("permiso"))
+        celda["vacaciones"] = _vacacion_real(turno)
+        if not (celda["licencia"] or celda["permiso"] or celda["vacaciones"]):
+            celda["descanso"] = True
+    elif tiene_jornadas_mes:
         celda["descanso"] = True
     else:
         celda["sin_turno"] = True
@@ -198,8 +265,7 @@ def _construir_celda(
     if salida_dt:
         celda["salida"] = salida_dt.strftime("%H:%M")
 
-    programado = turno and _turno_programado(turno)
-    if programado and not entrada_dt:
+    if _turno_es_jornada(turno) and not entrada_dt:
         celda["sin_marca"] = True
         celda["alerta_turno"] = True
 
@@ -209,7 +275,7 @@ def _construir_celda(
         celda["minutos_neto"] = neto
         celda["horas_neto_txt"] = _format_duracion(neto)
 
-    if turno and entrada_dt:
+    if turno and entrada_dt and _turno_es_jornada(turno):
         ini_t, fin_t = _parse_horario_turno(turno.get("horario_turno") or "")
         if ini_t:
             ini_dt = _dt_dia_hora(dia, ini_t)
@@ -239,6 +305,8 @@ def _resumen_mes(celdas_mes: List[dict]) -> dict:
     dias_trabajados = 0
     dias_ausencia = 0
     dias_programados = 0
+    dias_descanso = 0
+    dias_otro_recinto = 0
     min_atraso = 0
     min_entrada_anticipada = 0
     min_salida_despues = 0
@@ -257,6 +325,10 @@ def _resumen_mes(celdas_mes: List[dict]) -> dict:
             dias_programados += 1
             if c.get("sin_marca"):
                 dias_ausencia += 1
+        if c.get("descanso"):
+            dias_descanso += 1
+        if c.get("otro_recinto"):
+            dias_otro_recinto += 1
         if c.get("entrada"):
             dias_trabajados += 1
         min_atraso += c.get("minutos_atraso") or 0
@@ -270,6 +342,8 @@ def _resumen_mes(celdas_mes: List[dict]) -> dict:
         "dias_trabajados": dias_trabajados,
         "dias_ausencia": dias_ausencia,
         "dias_programados": dias_programados,
+        "dias_descanso": dias_descanso,
+        "dias_otro_recinto": dias_otro_recinto,
         "tiempo_atrasado_txt": _format_duracion(min_atraso),
         "entrada_anticipada_txt": _format_duracion(min_entrada_anticipada),
         "salida_despues_txt": _format_duracion(min_salida_despues),
@@ -279,6 +353,52 @@ def _resumen_mes(celdas_mes: List[dict]) -> dict:
         "licencia": licencia,
         "permiso": permiso,
         "vacaciones": vacaciones,
+    }
+
+
+def _evaluacion_rapida(
+    celdas_mes: List[dict],
+    *,
+    nombre_recinto_filtro: str,
+) -> dict:
+    """Resumen rotación: jornadas en recinto filtrado vs trabajo en otras sucursales."""
+    from collections import Counter
+
+    por_otro: Counter = Counter()
+    fechas_otro: List[str] = []
+    for c in celdas_mes:
+        if c.get("otro_recinto") and c.get("otro_recinto_nombre"):
+            nom = c["otro_recinto_nombre"]
+            por_otro[nom] += 1
+            fechas_otro.append(c.get("fecha") or "")
+
+    resumen = _resumen_mes(celdas_mes)
+    lineas: List[str] = []
+    recinto = nombre_recinto_filtro or "esta sucursal"
+    lineas.append(
+        f"En <strong>{recinto}</strong>: "
+        f"{resumen['dias_programados']} día(s) con turno, "
+        f"{resumen['dias_descanso']} descanso(s), "
+        f"{resumen['dias_trabajados']} con marca."
+    )
+    if resumen["dias_otro_recinto"]:
+        partes = [f"{nom} ({cnt} d.)" for nom, cnt in por_otro.most_common()]
+        lineas.append(
+            f"Rotación: <strong>{resumen['dias_otro_recinto']} día(s)</strong> "
+            f"con jornada en otra sucursal: {', '.join(partes)}."
+        )
+    elif resumen["dias_programados"] == 0 and resumen["dias_descanso"] > 0:
+        lineas.append(
+            "Sin turnos laborales en este recinto en el mes; los días mostrados son descanso o asignación base («-»)."
+        )
+
+    return {
+        "lineas_html": lineas,
+        "otros_recintos": dict(por_otro),
+        **{k: resumen[k] for k in (
+            "dias_programados", "dias_descanso", "dias_otro_recinto",
+            "dias_trabajados", "dias_ausencia",
+        )},
     }
 
 
@@ -343,8 +463,19 @@ def reporte_calendario_mes(
         return vacio
 
     turnos_map = _filtrar_turnos(turnos_res["turnos"], rut_norm, obra_id)
+    turnos_por_dia = _filtrar_turnos_por_rut(turnos_res["turnos"], rut_norm)
+    try:
+        obra_int = int(obra_id)
+    except (TypeError, ValueError):
+        obra_int = None
     marcas_map = _agregar_marcajes_por_dia(registros_res["registros"], rut_norm)
-    tiene_turnos_mes = len(turnos_map) > 0
+    tiene_jornadas_mes = any(_turno_es_jornada(t) for t in turnos_map.values())
+
+    nombre_recinto_filtro = ""
+    for r in listar_recintos().get("recintos") or []:
+        if str(r.get("obra_id")) == str(obra_id):
+            nombre_recinto_filtro = r.get("nombre") or ""
+            break
 
     celdas_mes: List[dict] = []
     semanas: List[List[dict]] = []
@@ -354,21 +485,25 @@ def reporte_calendario_mes(
         for dia in semana:
             fuera = dia.month != mes
             turno = turnos_map.get(dia)
+            turno_otro = _jornada_otro_recinto(turnos_por_dia.get(dia, []), obra_int)
             marca = marcas_map.get(dia)
-            col = resolver_minutos_colacion(obra_id, dia, turno)
+            col = resolver_minutos_colacion(obra_id, dia, turno if _turno_es_jornada(turno) else turno_otro)
             celda = _construir_celda(
                 dia,
                 fuera_mes=fuera,
                 turno=turno,
+                turno_otro=turno_otro,
                 marca=marca,
                 colacion_min=col["minutos"],
                 colacion_fuente=col["fuente"],
-                tiene_turnos_mes=tiene_turnos_mes,
+                tiene_jornadas_mes=tiene_jornadas_mes,
             )
             fila.append(celda)
             if not fuera:
                 celdas_mes.append(celda)
         semanas.append(fila)
+
+    evaluacion = _evaluacion_rapida(celdas_mes, nombre_recinto_filtro=nombre_recinto_filtro)
 
     return {
         "ok": True,
@@ -378,11 +513,13 @@ def reporte_calendario_mes(
         "periodo_desde": inicio.strftime("%d-%m-%Y"),
         "periodo_hasta": fin.strftime("%d-%m-%Y"),
         "obra_id": obra_id,
+        "obra_nombre": nombre_recinto_filtro,
         "rut": rut,
         "rut_norm": rut_norm,
         "empleado": empleado,
         "semanas": semanas,
         "resumen": _resumen_mes(celdas_mes),
+        "evaluacion": evaluacion,
         "colacion_resumen": colacion_resumen,
         "colacion_default": default_minutos_recinto(obra_id),
         "turnos_count": len(turnos_map),
