@@ -28,6 +28,8 @@
 16. [Buk (RRHH + Asistencia)](#16-buk-rrhh--asistencia)
 17. [Reglas NETO y presentación comercial](#17-reglas-neto-y-presentación-comercial)
 18. [Cachés y `/refresh`](#18-cachés-y-refresh)
+19. [Drive vía Apps Script (archivos / fotos)](#19-drive-vía-apps-script-archivos--fotos)
+20. [Fondos por Rendir (FxR)](#20-fondos-por-rendir-fxr)
 
 ---
 
@@ -301,7 +303,9 @@ Datos: `DATA_FABRICA_PAPAYA_IMPORT.sql` / `scripts/export_fabrica_papaya_sql.py`
 
 **Env:** `BUK_TENANT`, `BUK_AUTH_TOKEN` (RRHH); `BUK_ASISTENCIA_TOKEN` (**distinto**); opcional `BUK_ASISTENCIA_API_BASE`, `BUK_ENCUESTA_CARPETA`, flags notificación / `SMTP_*`.
 
-**Reglas:** consultas por id/código/RUT; horas UTC → `America/Santiago`. Horas netas = (salida − entrada) − colación (prioridad: turno Buk → grupo día → default sucursal). Alertas con corte **ayer**; sin turno mes = 0 asignaciones en el mes.
+**Reglas:** consultas por id/código/RUT; horas UTC → `America/Santiago`. Horas netas = (salida − entrada) − colación (prioridad: turno Buk → grupo día → default sucursal). Alertas con corte **ayer**; sin turno mes = 0 jornadas laborales (`HH:MM-HH:MM`) en el mes.
+
+**Turnos / descanso / rotación:** Buk marca días sin jornada con `horarioTurno: "-"` (Descanso, Turno Base en otro recinto). Solo horario válido genera «Sin marca» si falta entrada. Al filtrar recinto A: jornada en B → celda **↗ sucursal**; banner evaluación (días turno aquí, descansos, días en otras sucursales).
 
 ---
 
@@ -335,6 +339,107 @@ Datos: `DATA_FABRICA_PAPAYA_IMPORT.sql` / `scripts/export_fabrica_papaya_sql.py`
 | Manual | `GET /refresh` | Requiere **sesión**; `refrescar_todo_el_cache` |
 
 Si “no veo la última carga”: import + invalidación + `/refresh` logueado antes de depurar lógica.
+
+---
+
+## 19. Drive vía Apps Script (archivos / fotos)
+
+**Descubrimiento operativo (2026-08-10):** para guardar desde la web documentos pesados, imágenes o fotos (cámara) en Google Drive, **no** usar la service account (`credenciales_google.json` / `drive_utils`) contra una carpeta de *Mi unidad*: suele fallar por **cuota 0 GB** de la SA. El camino que sí funciona es el mismo que el mayor: **Flask → POST → Apps Script Web App → DriveApp** (escribe con la cuenta dueña del script, que sí tiene cuota).
+
+### Piezas en uso
+
+| Pieza | Valor / archivo |
+|--------|------------------|
+| Proyecto Apps Script | `SubirArchivosRender` |
+| Web App URL | `https://script.google.com/macros/s/AKfycbxUK2SQ_fDaX1wEcTDLfnefcZPCZDp3A5rrqd2gZ6KBHV7qbBuysYTXltBBLXraNGj7/exec` |
+| Carpeta padre Drive | `contabilidad` ID `1zFjARS82JAuay19WxxgepBl7jYylgPIn` |
+| Subcarpeta respaldos | `respaldoimagenes` (varios archivos; no borra el mayor) |
+| Código canónico del script | [`docs/apps_script_SubirArchivosRender.gs`](apps_script_SubirArchivosRender.gs) |
+| Contab (mayor) | [`routes/contab_routes.py`](../routes/contab_routes.py) → `enviar_archivo_a_script` |
+| Prueba UI | `/drive-prueba/` — [`routes/drive_prueba_routes.py`](../routes/drive_prueba_routes.py) |
+
+### Contrato JSON (obligatorio)
+
+Enviar body como **texto JSON** con `Content-Type: text/plain; charset=utf-8` (evita que se confunda con form-urlencoded y caiga al camino del mayor).
+
+**Agregar archivo/imagen/foto** (no toca `mayor.xlsx`):
+
+```json
+{"accion":"imagen","nombre":"foto.jpg","mime":"image/jpeg","base64":"..."}
+```
+
+Respuesta OK: `OK:https://drive.google.com/file/d/...`  
+Cada llamada **crea un archivo nuevo** en `respaldoimagenes` (se pueden acumular muchos).
+
+**Reemplazar libro mayor** (único camino que manda a papelera el `mayor.xlsx` anterior):
+
+```json
+{"accion":"mayor","base64":"..."}
+```
+
+Respuesta OK: `OK`
+
+**Reglas de seguridad del script**
+
+- Solo `accion === "mayor"` llama a `reemplazarMayor` (papelera + crear).
+- `accion === "imagen"` solo `createFile` en la subcarpeta.
+- Tras editar el `.gs`: **Implementar → Nueva versión** (guardar no actualiza el `/exec`).
+- No probar `doPost` con el botón Ejecutar del editor (`postData` no existe).
+
+### Cómo reutilizarlo en un módulo futuro
+
+1. En Flask: leer bytes del upload o de la cámara → `base64` → `requests.post(URL, data=json.dumps({...}).encode("utf-8"), headers={"Content-Type": "text/plain; charset=utf-8"}, timeout=90)`.
+2. Guardar en BD solo metadatos ligeros (id Drive, URL, nombre, módulo, usuario, fecha) — **no** el binario en MySQL.
+3. Si hace falta otra carpeta: ampliar el script (`accion` + nombre de carpeta) o crear subcarpeta hija y apuntar ahí; no mezclar con el camino `mayor`.
+4. Referencia de prueba: menú Utilidades → Prueba Drive (`permiso` `utilidades`).
+
+### Límites y frecuencia (Apps Script / práctica Huente)
+
+Límites oficiales de Google pueden cambiar; ver [cuotas Apps Script](https://developers.google.com/apps-script/guides/services/quotas). En la práctica para este patrón:
+
+| Límite | Valor orientativo | Nota |
+|--------|-------------------|------|
+| Runtime por request | **6 min** | Suficiente para un archivo; no para lotes enormes en un solo POST |
+| Ejecuciones simultáneas | **~30 / usuario** (dueño del script si “Execute as me”) | Muchos usuarios subiendo a la vez pueden fallar; reintentar |
+| Tamaño POST / URL Fetch | hasta **~50 MB** teórico | Base64 infla ~33%; en Huente la web corta a **8 MB** del archivo original (`drive_prueba`) |
+| Cuota Drive | Cuenta Google dueña del script | No la service account |
+| Web App | No recibe bien `multipart/form-data` | Siempre JSON + base64 en el body |
+| Frecuencia diaria | No hay “N fotos/día” fijo documentado para Web Apps | El cuello real suele ser runtime, simultaneidad y tamaño; uso interno moderado (decenas/cientos al día) suele ir bien |
+
+**Recomendaciones de producto**
+
+- Fotos: comprimir/redimensionar en el cliente (p. ej. JPEG ≤ 1–2 MB) antes del POST.
+- Un archivo por request; no empaquetar ZIP gigantes en un solo `doPost`.
+- Si el volumen crece mucho (miles/día o archivos muy grandes): valorar Shared Drive + API, o almacenamiento en el servidor/hosting.
+- Service account: útil para **leer** Drive (mayor); no confiar en ella para **escribir** en Mi unidad.
+
+### Relación con Contabilidad
+
+Contab Archivos sigue siendo el dueño del mayor; el camino `imagen` es independiente y no debe usarse para pisar el Excel. Detalle Contab: §7.
+
+---
+
+## 20. Fondos por Rendir (FxR)
+
+**Objetivo:** capturar comprobantes (foto/PDF) en el hosting, completar datos (móvil overlay o PC paralelo), marcar **Preparada**, revisión por **superusuario**, **Aprobar** → un PDF (resumen + anexos + detalle de duplicados) a Drive y borrar staging local. Sin OCR.
+
+**Permiso:** `fxr` (menú «Fondos por Rendir»). Catálogos y aprobación: rol `superusuario`.
+
+**Visibilidad:** cada usuario ve solo su inbox y sus rendiciones. El superusuario ve la cola de **preparadas**, puede abrir cualquier rendición, y tiene listado de **todas las aprobadas** (`/fxr/aprobadas` + resumen en home) con enlace al PDF en Drive.
+
+**Perfil usuario (Config → Usuarios):** `nombre` (aparece en la rendición en vez del email) y `fxr_centro_costo_id` (CC por defecto en líneas nuevas + área sugerida). En la rendición: `comentario_firma` bajo el total (ej. «Depositar en cuenta…»).
+
+**Rutas:** `/fxr/` — [`routes/fxr_routes.py`](../routes/fxr_routes.py). Utils: `utils/fxr_db.py`, `fxr_files.py`, `fxr_pdf.py`, `fxr_drive.py`. Templates: `templates/fxr/*`. Staging: `uploads/fxr/` (gitignored).
+
+**Tablas:** `fxr_centro_costo`, `fxr_tipo_gasto`, `fxr_comprobante`, `fxr_rendicion`, `fxr_linea`, `fxr_estado_hist` (DDL en `QUERY_CAMBIOS_PRODUCCION.sql` + auto-ensure al entrar).
+
+**Flujo estados:** `borrador` → `preparada` → `aprobada` | `rechazada` (vuelve editable). Correlativo se asigna solo al aprobar.
+
+**Líneas (tabla global):** `tipo_doc` (boleta/factura/bh/otro), `n_doc` (obligatorio factura/BH), `tipo_gasto_id`, `centro_costo_id`, monto CLP entero, etc. Duplicado `tipo_doc`+`n_doc_norm` entre usuarios: alerta; se guarda; **bloquea Aprobar** hasta autorizar. El PDF lista quién/cuándo/cuánto/rendición del otro.
+
+**Captura:** JPEG escáner liviano (Pillow); PDF con eliminación de páginas (`pypdf`). Inbox → seleccionar → rendir. Guardar vs Registrar (overlay).
+
+**PDF (Carta):** portada estilo formato Excel (logo `static/img/logo.png`, emisor Comercial SpA RUT 77.332.804-8, caja celeste, tabla amarilla con columnas acotadas). Sin hojas «Anexo» vacías. Tipos de gasto con `permite_agrupar` se suman en una fila; imágenes en grilla o editor `/fxr/rendicion/<id>/collage`. PDFs de comprobante se fusionan al final. Al aprobar: Apps Script → limpia staging.
 
 ---
 

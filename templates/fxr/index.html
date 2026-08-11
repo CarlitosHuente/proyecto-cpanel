@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Fondos por Rendir{% endblock %}
+{% block content %}
+<div class="container-fluid mt-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <h2 class="text-info mb-0"><i class="bi bi-receipt"></i> Fondos por Rendir</h2>
+    <div class="d-flex flex-wrap gap-2">
+      {% if es_super %}
+      <a class="btn btn-warning btn-sm" href="{{ url_for('fxr.revision_cola') }}">Revisión ({{ preparadas|length }})</a>
+      <a class="btn btn-success btn-sm" href="{{ url_for('fxr.aprobadas') }}">Aprobadas ({{ aprobadas|length }})</a>
+      <a class="btn btn-outline-light btn-sm" href="{{ url_for('fxr.admin_cc') }}">Centros de costo</a>
+      <a class="btn btn-outline-light btn-sm" href="{{ url_for('fxr.admin_tg') }}">Tipos de gasto</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-5">
+      <div class="card bg-dark border-secondary">
+        <div class="card-header border-secondary text-warning">Capturar / cargar</div>
+        <div class="card-body">
+          <form method="post" action="{{ url_for('fxr.subir') }}" enctype="multipart/form-data" class="mb-3">
+            <input type="file" name="archivo" class="form-control bg-black text-white border-secondary mb-2"
+                   accept="image/*,application/pdf,capture=environment" capture="environment" required>
+            <div class="d-flex gap-2 flex-wrap">
+              <button class="btn btn-success" name="modo" value="guardar" type="submit">Guardar (inbox)</button>
+              <button class="btn btn-outline-info" name="modo" value="registrar" type="submit">Registrar (completar ahora)</button>
+            </div>
+            <p class="small text-muted mt-2 mb-0">Fotos se procesan tipo escáner (livianas). PDF: puedes eliminar hojas después.</p>
+          </form>
+
+          <h6 class="text-light">Inbox ({{ inbox|length }})</h6>
+          {% if inbox %}
+          <form method="post" action="{{ url_for('fxr.nueva_rendicion') }}">
+            <div class="mb-2">
+              <input type="text" name="area" class="form-control form-control-sm bg-black text-white border-secondary" placeholder="Área (opcional)">
+            </div>
+            <div class="list-group list-group-flush mb-2">
+              {% for c in inbox %}
+              <label class="list-group-item bg-black text-white border-secondary d-flex gap-2 align-items-center">
+                <input type="checkbox" name="comp_ids" value="{{ c.id }}">
+                <span class="small flex-grow-1">#{{ c.id }} · {{ c.mime }} · {{ c.num_paginas }} pág · {{ c.created_at }}</span>
+                <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('fxr.servir_archivo', cid=c.id) }}" target="_blank">Ver</a>
+                {% if 'pdf' in (c.mime or '') %}
+                <a class="btn btn-sm btn-outline-warning" href="{{ url_for('fxr.paginas_pdf', cid=c.id) }}">Páginas</a>
+                {% endif %}
+              </label>
+              {% endfor %}
+            </div>
+            <button class="btn btn-primary btn-sm" type="submit">Rendir seleccionados</button>
+          </form>
+          {% else %}
+          <p class="text-muted small">Sin comprobantes en inbox.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      <div class="card bg-dark border-secondary">
+        <div class="card-header border-secondary text-info">Mis rendiciones</div>
+        <div class="table-responsive">
+          <table class="table table-dark table-sm mb-0">
+            <thead><tr><th>ID</th><th>N°</th><th>Estado</th><th>Total</th><th>Fecha</th><th></th></tr></thead>
+            <tbody>
+            {% for r in rendiciones %}
+              <tr>
+                <td>{{ r.id }}</td>
+                <td>{{ r.correlativo or '—' }}</td>
+                <td><span class="badge bg-secondary">{{ r.estado }}</span></td>
+                <td class="text-end">{{ r.total|dinero }}</td>
+                <td>{{ r.fecha_rendicion or '—' }}</td>
+                <td><a class="btn btn-sm btn-outline-light" href="{{ url_for('fxr.rendicion', rid=r.id) }}">Abrir</a></td>
+              </tr>
+            {% else %}
+              <tr><td colspan="6" class="text-muted">Sin rendiciones.</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if es_super and aprobadas %}
+  <div class="card bg-dark border-secondary mt-3">
+    <div class="card-header border-secondary text-success d-flex justify-content-between align-items-center">
+      <span>Últimas aprobadas (todas)</span>
+      <a class="btn btn-sm btn-outline-success" href="{{ url_for('fxr.aprobadas') }}">Ver todas</a>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-dark table-sm mb-0">
+        <thead>
+          <tr><th>N°</th><th>Usuario</th><th>Área</th><th class="text-end">Total</th><th>Aprobada</th><th></th></tr>
+        </thead>
+        <tbody>
+        {% for r in aprobadas[:15] %}
+          <tr>
+            <td>{{ r.correlativo or r.id }}</td>
+            <td>{{ r.nombre_snapshot }}<br><span class="small text-muted">{{ r.usuario_email }}</span></td>
+            <td>{{ r.area or '—' }}</td>
+            <td class="text-end">{{ r.total|dinero }}</td>
+            <td class="small">{{ r.aprobada_at or '—' }}</td>
+            <td class="text-nowrap">
+              <a class="btn btn-sm btn-outline-light" href="{{ url_for('fxr.rendicion', rid=r.id) }}">Abrir</a>
+              {% if r.pdf_url %}
+              <a class="btn btn-sm btn-outline-success" href="{{ r.pdf_url }}" target="_blank">PDF</a>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

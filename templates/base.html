@@ -164,12 +164,11 @@
             </button>
         </div>
 
-        {% if fecha_actualizacion %}
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 <div style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; width: auto; max-width: 90%;">
                 {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    <div class="alert alert-{{ category }} alert-dismissible fade show shadow" role="alert">
                         {{ message }}
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
                     </div>
@@ -178,6 +177,7 @@
             {% endif %}
         {% endwith %}
 
+        {% if fecha_actualizacion %}
         <div style="font-size: 0.7rem; color: #ccc; font-style: italic; padding-left: 12px;" class="d-none d-md-block">
             Act: {{ fecha_actualizacion.strftime("%d/%m %H:%M") }}
         </div>
@@ -327,6 +327,12 @@
         </a>
         {% endif %}
         
+        {% if tiene_permiso(rol_actual, 'fxr') %}
+        <a href="{{ url_for('fxr.index') }}" class="d-block px-3 py-2 text-white">
+            <span class="texto-menu">Fondos por Rendir</span>
+        </a>
+        {% endif %}
+
         {% if tiene_permiso(session.get('rol'), 'utilidades') %}
         <div class="dropdown">
             <a class="dropdown-toggle d-block px-3 py-2 text-white" href="#" role="button" id="utilidadesDropdown" data-bs-toggle="dropdown" aria-expanded="false">
@@ -334,6 +340,7 @@
             </a>
             <ul class="dropdown-menu bg-dark border-0" aria-labelledby="utilidadesDropdown">
                 <li><a class="dropdown-item text-white" href="{{ url_for('utilidades.calculadora_margen') }}"><i class="bi bi-percent me-2 text-info"></i>Calculadoras</a></li>
+                <li><a class="dropdown-item text-white" href="{{ url_for('drive_prueba.index') }}"><i class="bi bi-cloud-upload me-2 text-warning"></i>Prueba Drive</a></li>
             </ul>
         </div>
         {% endif %}

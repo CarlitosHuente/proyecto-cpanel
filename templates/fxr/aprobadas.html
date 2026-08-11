@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}FxR — Aprobadas{% endblock %}
+{% block content %}
+<div class="container-fluid mt-3">
+  <a href="{{ url_for('fxr.index') }}" class="btn btn-sm btn-outline-secondary mb-2">← FxR</a>
+  <h2 class="text-success mb-3">Rendiciones aprobadas (todas)</h2>
+  <div class="table-responsive">
+    <table class="table table-dark table-sm align-middle">
+      <thead>
+        <tr>
+          <th>N°</th><th>Usuario</th><th>Área</th><th>Fecha rendición</th>
+          <th class="text-end">Total</th><th>Aprobada</th><th>Por</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for r in items %}
+        <tr>
+          <td><strong>{{ r.correlativo or '—' }}</strong></td>
+          <td>{{ r.nombre_snapshot }}<br><span class="small text-muted">{{ r.usuario_email }}</span></td>
+          <td>{{ r.area or '—' }}</td>
+          <td>{{ r.fecha_rendicion or '—' }}</td>
+          <td class="text-end">{{ r.total|dinero }}</td>
+          <td class="small">{{ r.aprobada_at or '—' }}</td>
+          <td class="small">{{ r.aprobada_por or '—' }}</td>
+          <td class="text-nowrap">
+            <a class="btn btn-sm btn-outline-light" href="{{ url_for('fxr.rendicion', rid=r.id) }}">Abrir</a>
+            {% if r.pdf_url %}
+            <a class="btn btn-sm btn-success" href="{{ r.pdf_url }}" target="_blank">PDF Drive</a>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" class="text-muted">Aún no hay rendiciones aprobadas.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

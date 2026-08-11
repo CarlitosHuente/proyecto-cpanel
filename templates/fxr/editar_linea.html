@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Línea #{{ linea.id }}{% endblock %}
+{% block content %}
+<style>
+  .fxr-split { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; min-height: 70vh; }
+  @media (max-width: 900px) { .fxr-split { grid-template-columns: 1fr; } }
+  .fxr-overlay-wrap { position: relative; min-height: 70vh; border: 1px solid #444; border-radius: .5rem; overflow: hidden; }
+  .fxr-overlay-wrap img, .fxr-overlay-wrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: .38; background: #111; }
+  .fxr-overlay-form { position: relative; z-index: 2; padding: 1rem; max-width: 480px; margin: 1rem auto; background: rgba(0,0,0,.72); border-radius: .5rem; }
+</style>
+<div class="container-fluid mt-3">
+  <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+    <a href="{{ url_for('fxr.rendicion', rid=r.id) }}" class="btn btn-sm btn-outline-secondary">← Rendición</a>
+    <a href="{{ url_for('fxr.preview', rid=r.id) }}" class="btn btn-sm btn-outline-info">Vista previa</a>
+    {% if editable and 'pdf' in (linea.mime or '') %}
+    <a class="btn btn-sm btn-outline-warning"
+       href="{{ url_for('fxr.paginas_pdf', cid=linea.comprobante_id, next_linea=linea.id) }}">
+      Eliminar hojas PDF
+    </a>
+    {% endif %}
+    {% if editable %}
+    <form method="post" action="{{ url_for('fxr.eliminar_linea', linea_id=linea.id) }}" class="d-inline"
+          onsubmit="return confirm('¿Quitar de esta rendición? El documento vuelve al inbox.');">
+      <input type="hidden" name="rid" value="{{ r.id }}">
+      <button class="btn btn-sm btn-outline-warning" type="submit">Quitar → inbox</button>
+    </form>
+    {% endif %}
+  </div>
+  <h3 class="text-info">Comprobante · línea #{{ linea.id }}</h3>
+
+  {% if dups %}
+  <div class="alert alert-danger">
+    <strong>N° documento ya rendido / en proceso:</strong>
+    <ul class="mb-0">
+      {% for d in dups %}
+      <li>
+        Rendición {% if d.correlativo %}N° {{ d.correlativo }}{% else %}#{{ d.rendicion_id }}{% endif %}
+        · {{ d.nombre_snapshot or d.usuario_email }}
+        · {{ d.created_at }}
+        · {{ d.monto|dinero }}
+        · estado {{ d.estado }}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if overlay %}
+  <div class="fxr-overlay-wrap mb-3">
+    {% if 'pdf' in (linea.mime or '') %}
+    <iframe src="{{ url_for('fxr.servir_archivo', cid=linea.comprobante_id) }}" title="pdf"></iframe>
+    {% else %}
+    <img src="{{ url_for('fxr.servir_archivo', cid=linea.comprobante_id) }}" alt="comprobante">
+    {% endif %}
+    <div class="fxr-overlay-form text-white">
+      {% include "fxr/_form_linea.html" %}
+    </div>
+  </div>
+  {% else %}
+  <div class="fxr-split">
+    <div class="border border-secondary rounded bg-black p-2 d-flex align-items-center justify-content-center">
+      {% if 'pdf' in (linea.mime or '') %}
+      <iframe src="{{ url_for('fxr.servir_archivo', cid=linea.comprobante_id) }}" style="width:100%;height:70vh;border:0" title="pdf"></iframe>
+      {% else %}
+      <img src="{{ url_for('fxr.servir_archivo', cid=linea.comprobante_id) }}" alt="comprobante" style="max-width:100%;max-height:70vh;object-fit:contain">
+      {% endif %}
+    </div>
+    <div class="card bg-dark border-secondary">
+      <div class="card-body text-white">
+        {% include "fxr/_form_linea.html" %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

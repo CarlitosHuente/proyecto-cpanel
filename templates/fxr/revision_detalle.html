@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Revisar rendición #{{ r.id }}{% endblock %}
+{% block content %}
+<style>
+  .fxr-carousel { position: relative; background: #000; border-radius: .35rem; min-height: 360px; }
+  .fxr-carousel-slide { display: none; text-align: center; padding: .5rem; }
+  .fxr-carousel-slide.active { display: block; }
+  .fxr-carousel-slide img { max-width: 100%; max-height: 380px; object-fit: contain; }
+  .fxr-carousel-slide iframe { width: 100%; height: 380px; border: 0; background: #111; }
+  .fxr-carousel-nav { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-top: .5rem; }
+  .fxr-line-meta { border-top: 1px solid #444; margin-top: .75rem; padding-top: .5rem; }
+</style>
+<div class="container-fluid mt-3">
+  <a href="{{ url_for('fxr.revision_cola') }}" class="btn btn-sm btn-outline-secondary mb-2">← Cola</a>
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <h2 class="text-warning mb-0">Revisión · {{ r.nombre_snapshot }} · {{ r.total|dinero }}</h2>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-warning btn-sm" href="{{ url_for('fxr.collage', rid=r.id) }}">Colocar imágenes</a>
+      <form method="post" action="{{ url_for('fxr.rechazar', rid=r.id) }}" class="d-flex gap-2">
+        <input name="motivo" class="form-control form-control-sm bg-black text-white border-secondary" placeholder="Motivo rechazo" required style="min-width:200px">
+        <button class="btn btn-outline-danger btn-sm">Rechazar</button>
+      </form>
+      <form method="post" action="{{ url_for('fxr.aprobar', rid=r.id) }}" onsubmit="return confirm('¿Aprobar, generar PDF Carta, subir a Drive y borrar staging?');">
+        <button class="btn btn-success btn-sm" {% if dups_bloquean %}disabled title="Autoriza duplicados primero"{% endif %}>Aprobar</button>
+      </form>
+    </div>
+  </div>
+
+  {% if dups_bloquean %}
+  <div class="alert alert-danger">Duplicados sin autorizar: {{ dups_bloquean|length }}. Usa el botón Autorizar en cada comprobante del grupo.</div>
+  {% endif %}
+
+  {% if dups_info %}
+  <div class="alert alert-warning small">
+    <strong>Referencias de duplicados:</strong>
+    <ul class="mb-0">
+      {% for d in dups_info %}
+      <li>
+        N° {{ d.n_doc }} → también en {% if d.otro_correlativo %}N° {{ d.otro_correlativo }}{% else %}#{{ d.otro_rendicion_id }}{% endif %}
+        · {{ d.otro_usuario }} · {{ d.otro_cuando }} · {{ d.otro_monto|dinero }}
+        {% if d.autorizado %}(autorizado){% else %}(pendiente){% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% for g in grupos %}
+  {% set gid = 'g' ~ loop.index %}
+  <div class="card bg-dark border-secondary mb-4">
+    <div class="card-header border-secondary d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <span class="text-info">
+        <strong>{{ g.nombre }}</strong>
+        · {{ g.lineas|length }} comprobante(s)
+        · subtotal <strong class="text-white">{{ g.total|dinero }}</strong>
+      </span>
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-lg-7">
+          <div class="fxr-carousel" data-carousel="{{ gid }}">
+            {% for l in g.lineas %}
+            <div class="fxr-carousel-slide {% if loop.first %}active{% endif %}" data-idx="{{ loop.index0 }}">
+              {% if 'pdf' in (l.mime or '') %}
+              <iframe src="{{ url_for('fxr.servir_archivo', cid=l.comprobante_id) }}" title="pdf"></iframe>
+              {% else %}
+              <img src="{{ url_for('fxr.servir_archivo', cid=l.comprobante_id) }}" alt="">
+              {% endif %}
+              <div class="fxr-line-meta text-white small text-start px-2">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                  <div>
+                    <b>{{ l.concepto or '—' }}</b>
+                    · {{ l.tipo_doc }} {{ l.n_doc or '' }}
+                    · {{ l.fecha_comprobante or '—' }}
+                    · {{ l.monto|dinero }}
+                    · CC: {{ l.centro_costo_nombre or '—' }}
+                    {% if l.observaciones %}<br><span class="text-muted">{{ l.observaciones }}</span>{% endif %}
+                  </div>
+                  <div class="d-flex gap-1">
+                    {% if l.duplicado_n_doc and not l.duplicado_autorizado %}
+                    <form method="post" action="{{ url_for('fxr.autorizar_dup', linea_id=l.id) }}">
+                      <button class="btn btn-sm btn-warning">Autorizar dup</button>
+                    </form>
+                    {% elif l.duplicado_n_doc %}
+                    <span class="badge bg-warning text-dark">Dup OK</span>
+                    {% endif %}
+                    <a class="btn btn-sm btn-outline-info" href="{{ url_for('fxr.editar_linea', linea_id=l.id) }}" target="_blank">Detalle</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% if g.lineas|length > 1 %}
+          <div class="fxr-carousel-nav">
+            <button type="button" class="btn btn-outline-light btn-sm fxr-prev" data-target="{{ gid }}">‹ Anterior</button>
+            <span class="text-muted small fxr-counter" data-target="{{ gid }}">1 / {{ g.lineas|length }}</span>
+            <button type="button" class="btn btn-outline-light btn-sm fxr-next" data-target="{{ gid }}">Siguiente ›</button>
+          </div>
+          {% endif %}
+        </div>
+        <div class="col-lg-5">
+          <h6 class="text-warning">Comprobantes del grupo</h6>
+          <ul class="list-group list-group-flush">
+            {% for l in g.lineas %}
+            <li class="list-group-item bg-black text-white border-secondary d-flex justify-content-between align-items-center fxr-jump"
+                data-target="{{ gid }}" data-idx="{{ loop.index0 }}" style="cursor:pointer">
+              <span class="small">{{ loop.index }}. {{ l.concepto or l.tipo_doc }} · {{ l.n_doc or '—' }}</span>
+              <span class="small">{{ l.monto|dinero }}</span>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <p class="text-muted">Sin líneas.</p>
+  {% endfor %}
+</div>
+<script>
+(function () {
+  function show(key, idx) {
+    const root = document.querySelector('[data-carousel="' + key + '"]');
+    if (!root) return;
+    const slides = root.querySelectorAll('.fxr-carousel-slide');
+    if (!slides.length) return;
+    const n = slides.length;
+    idx = ((idx % n) + n) % n;
+    slides.forEach((s, i) => s.classList.toggle('active', i === idx));
+    root.dataset.current = String(idx);
+    const counter = document.querySelector('.fxr-counter[data-target="' + key + '"]');
+    if (counter) counter.textContent = (idx + 1) + ' / ' + n;
+  }
+  document.querySelectorAll('.fxr-prev').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.target;
+      const root = document.querySelector('[data-carousel="' + key + '"]');
+      const cur = parseInt(root.dataset.current || '0', 10);
+      show(key, cur - 1);
+    });
+  });
+  document.querySelectorAll('.fxr-next').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.target;
+      const root = document.querySelector('[data-carousel="' + key + '"]');
+      const cur = parseInt(root.dataset.current || '0', 10);
+      show(key, cur + 1);
+    });
+  });
+  document.querySelectorAll('.fxr-jump').forEach(li => {
+    li.addEventListener('click', () => show(li.dataset.target, parseInt(li.dataset.idx, 10)));
+  });
+})();
+</script>
+{% endblock %}

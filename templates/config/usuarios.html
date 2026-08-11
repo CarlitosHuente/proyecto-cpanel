@@ -25,7 +25,9 @@
         <thead>
             <tr>
                 <th>ID</th>
+                <th>Nombre</th>
                 <th>Email</th>
+                <th>CC FxR</th>
                 <th>Rol</th>
                 <th>Activo</th>
                 <th>Creado</th>
@@ -37,7 +39,9 @@
             {% for u in usuarios %}
             <tr>
                 <td>{{ u.id }}</td>
+                <td>{{ u.nombre or '—' }}</td>
                 <td>{{ u.email }}</td>
+                <td>{{ u.fxr_cc_codigo or '—' }}</td>
                 <td>{{ u.rol }}</td>
                 <td>{{ 'Sí' if u.activo else 'No' }}</td>
                 <td>{{ u.creado_en }}</td>

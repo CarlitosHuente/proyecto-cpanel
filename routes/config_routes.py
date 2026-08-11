@@ -45,10 +45,23 @@ def obtener_lista_sucursales():
 @login_requerido
 @permiso_modulo("config")
 def usuarios():
+    # Columnas FxR (nombre / CC) se aseguran al entrar a /fxr; aquí toleramos si aún no existen.
     conn = get_db_connection()
     with conn.cursor() as cur:
-        # Traemos también sucursal_id por si quieres mostrarlo en el futuro
-        cur.execute("SELECT id, email, rol, activo, creado_en, sucursal_id FROM usuarios_huente ORDER BY id ASC")
+        try:
+            from utils.fxr_db import asegurar_esquema_fxr
+            asegurar_esquema_fxr()
+        except Exception:
+            pass
+        cur.execute(
+            """
+            SELECT u.id, u.email, u.rol, u.activo, u.creado_en, u.sucursal_id,
+                   u.nombre, u.fxr_centro_costo_id, cc.codigo AS fxr_cc_codigo
+            FROM usuarios_huente u
+            LEFT JOIN fxr_centro_costo cc ON cc.id = u.fxr_centro_costo_id
+            ORDER BY u.id ASC
+            """
+        )
         usuarios = cur.fetchall()
     conn.close()
     return render_template('config/usuarios.html', usuarios=usuarios, permisos=PERMISOS)
@@ -60,16 +73,30 @@ def usuarios():
 def editar_usuario(user_id):
     conn = get_db_connection()
 
+    try:
+        from utils.fxr_db import asegurar_esquema_fxr, listar_centros_costo
+        asegurar_esquema_fxr()
+        centros_fxr = listar_centros_costo(solo_activos=True)
+    except Exception:
+        centros_fxr = []
+
     if request.method == 'POST':
         email = request.form.get('email', '').strip()
         rol = request.form.get('rol', '').strip()
         activo = 1 if request.form.get('activo') == 'on' else 0
         nueva_clave = request.form.get('password', '').strip()
-        
+        nombre = (request.form.get('nombre') or '').strip()[:190] or None
+        fxr_cc = request.form.get('fxr_centro_costo_id') or None
+        if fxr_cc:
+            try:
+                fxr_cc = int(fxr_cc)
+            except ValueError:
+                fxr_cc = None
+
         # --- NUEVO: Capturar Sucursal ---
         sucursal_id = request.form.get("sucursal_id")
-        if not sucursal_id: 
-            sucursal_id = None # Si selecciona "Sin sucursal", guardamos NULL
+        if not sucursal_id:
+            sucursal_id = None  # Si selecciona "Sin sucursal", guardamos NULL
         # --------------------------------
 
         with conn.cursor() as cur:
@@ -78,19 +105,21 @@ def editar_usuario(user_id):
                 cur.execute(
                     """
                     UPDATE usuarios_huente
-                    SET email=%s, rol=%s, activo=%s, password_hash=%s, sucursal_id=%s
+                    SET email=%s, rol=%s, activo=%s, password_hash=%s, sucursal_id=%s,
+                        nombre=%s, fxr_centro_costo_id=%s
                     WHERE id=%s
                     """,
-                    (email, rol, activo, password_hash, sucursal_id, user_id)
+                    (email, rol, activo, password_hash, sucursal_id, nombre, fxr_cc, user_id)
                 )
             else:
                 cur.execute(
                     """
                     UPDATE usuarios_huente
-                    SET email=%s, rol=%s, activo=%s, sucursal_id=%s
+                    SET email=%s, rol=%s, activo=%s, sucursal_id=%s,
+                        nombre=%s, fxr_centro_costo_id=%s
                     WHERE id=%s
                     """,
-                    (email, rol, activo, sucursal_id, user_id)
+                    (email, rol, activo, sucursal_id, nombre, fxr_cc, user_id)
                 )
             conn.commit()
 
@@ -99,11 +128,13 @@ def editar_usuario(user_id):
 
     # GET: Cargar datos usuario + Lista de sucursales
     sucursales = obtener_lista_sucursales()
-    
+
     with conn.cursor() as cur:
-        # Asegúrate de incluir sucursal_id en el SELECT
         cur.execute(
-            "SELECT id, email, rol, activo, sucursal_id FROM usuarios_huente WHERE id=%s",
+            """
+            SELECT id, email, rol, activo, sucursal_id, nombre, fxr_centro_costo_id
+            FROM usuarios_huente WHERE id=%s
+            """,
             (user_id,)
         )
         usuario = cur.fetchone()
@@ -112,22 +143,35 @@ def editar_usuario(user_id):
     if not usuario:
         abort(404)
 
-    return render_template('config/usuario_editar.html',
-                       usuario=usuario,
-                       roles=PERMISOS.keys(),
-                       sucursales=sucursales) # Pasamos la lista al HTML
+    return render_template(
+        'config/usuario_editar.html',
+        usuario=usuario,
+        roles=PERMISOS.keys(),
+        sucursales=sucursales,
+        centros_fxr=centros_fxr,
+    )
 
 
 @config_bp.route('/usuarios/nuevo', methods=['GET', 'POST'])
 @login_requerido
 @permiso_modulo("config")
 def nuevo_usuario():
+    try:
+        from utils.fxr_db import asegurar_esquema_fxr, listar_centros_costo
+        asegurar_esquema_fxr()
+        centros_fxr = listar_centros_costo(solo_activos=True)
+    except Exception:
+        centros_fxr = []
+
     # GET: Necesitamos la lista para mostrar el formulario vacío
     if request.method == "GET":
         sucursales = obtener_lista_sucursales()
-        return render_template("config/usuario_nuevo.html",
-                           roles=PERMISOS.keys(),
-                           sucursales=sucursales)
+        return render_template(
+            "config/usuario_nuevo.html",
+            roles=PERMISOS.keys(),
+            sucursales=sucursales,
+            centros_fxr=centros_fxr,
+        )
 
     # POST: Procesar creación
     conn = get_db_connection()
@@ -135,29 +179,42 @@ def nuevo_usuario():
     rol = request.form.get("rol", "").strip()
     activo = 1 if request.form.get("activo") == "on" else 0
     password = request.form.get("password", "").strip()
-    
+    nombre = (request.form.get("nombre") or "").strip()[:190] or None
+    fxr_cc = request.form.get("fxr_centro_costo_id") or None
+    if fxr_cc:
+        try:
+            fxr_cc = int(fxr_cc)
+        except ValueError:
+            fxr_cc = None
+
     # --- NUEVO: Capturar Sucursal ---
     sucursal_id = request.form.get("sucursal_id")
-    if not sucursal_id: sucursal_id = None
+    if not sucursal_id:
+        sucursal_id = None
     # --------------------------------
 
     if not email or not rol or not password:
         conn.close()
-        # Si falla, recargamos la lista de sucursales
         sucursales = obtener_lista_sucursales()
-        return render_template("config/usuario_nuevo.html",
-                            error="Todos los campos son obligatorios.",
-                            roles=PERMISOS.keys(),
-                            sucursales=sucursales)
-    
+        return render_template(
+            "config/usuario_nuevo.html",
+            error="Todos los campos son obligatorios.",
+            roles=PERMISOS.keys(),
+            sucursales=sucursales,
+            centros_fxr=centros_fxr,
+        )
+
     password_hash = generate_password_hash(password)
 
     with conn.cursor() as cur:
-        # Insertamos el sucursal_id
-        cur.execute("""
-            INSERT INTO usuarios_huente (email, rol, activo, password_hash, sucursal_id)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (email, rol, activo, password_hash, sucursal_id))
+        cur.execute(
+            """
+            INSERT INTO usuarios_huente
+                (email, rol, activo, password_hash, sucursal_id, nombre, fxr_centro_costo_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (email, rol, activo, password_hash, sucursal_id, nombre, fxr_cc),
+        )
         conn.commit()
 
     conn.close()

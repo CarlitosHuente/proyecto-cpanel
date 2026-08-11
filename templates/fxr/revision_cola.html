@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Revisión FxR{% endblock %}
+{% block content %}
+<div class="container mt-3">
+  <a href="{{ url_for('fxr.index') }}" class="btn btn-sm btn-outline-secondary mb-2">← FxR</a>
+  <h2 class="text-warning">Cola de revisión</h2>
+  <p class="text-muted">Rendiciones en estado Preparada (solo superusuario).</p>
+  <div class="table-responsive">
+    <table class="table table-dark table-sm">
+      <thead><tr><th>ID</th><th>Usuario</th><th>Área</th><th>Total</th><th>Preparada</th><th></th></tr></thead>
+      <tbody>
+      {% for r in items %}
+        <tr>
+          <td>{{ r.id }}</td>
+          <td>{{ r.nombre_snapshot }}<br><span class="small text-muted">{{ r.usuario_email }}</span></td>
+          <td>{{ r.area }}</td>
+          <td class="text-end">{{ r.total|dinero }}</td>
+          <td>{{ r.preparada_at }}</td>
+          <td><a class="btn btn-sm btn-info" href="{{ url_for('fxr.revision_detalle', rid=r.id) }}">Revisar</a></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="text-muted">Sin pendientes.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

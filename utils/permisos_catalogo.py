@@ -125,10 +125,22 @@ CATALOGO: List[dict] = [
         "hijos": [],
     },
     {
+        "id": "fxr",
+        "label": "Fondos por Rendir",
+        "desc": "Rendición de gastos: capturas, revisión y PDF a Drive.",
+        "hijos": [],
+    },
+    {
         "id": "utilidades",
         "label": "Utilidades",
         "desc": "Calculadoras y herramientas de apoyo.",
-        "hijos": [],
+        "hijos": [
+            {
+                "id": "utilidades.drive_prueba",
+                "label": "Prueba Drive",
+                "desc": "Subida de prueba a Drive (respaldoimagenes).",
+            },
+        ],
     },
     {
         "id": "config",
@@ -185,6 +197,7 @@ PAGINAS_INICIO: List[dict] = [
     {"endpoint": "costeo.rentabilidad_gerencia", "label": "Rentabilidad Productos"},
     {"endpoint": "fabrica.calendario_produccion", "label": "Fábrica — Calendario"},
     {"endpoint": "fabrica_papaya.informe_semanal", "label": "Fábrica Papaya — Informe semanal"},
+    {"endpoint": "fxr.index", "label": "Fondos por Rendir"},
     {"endpoint": "utilidades.calculadora_margen", "label": "Utilidades — Calculadoras"},
     {"endpoint": "config.usuarios", "label": "Config — Usuarios"},
     {"endpoint": "config.accesos", "label": "Config — Centro de Accesos"},

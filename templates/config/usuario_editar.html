@@ -12,6 +12,31 @@
     </div>
 
     <div class="mb-3">
+        <label class="form-label text-white">Nombre (FxR / documentos)</label>
+        <input type="text" name="nombre" class="form-control"
+               value="{{ usuario.nombre or '' }}" maxlength="190"
+               placeholder="Ej. Carlos Carvajal">
+        <div class="form-text text-muted">
+            Si está vacío, en Fondos por Rendir se usa el email.
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label text-white">Centro de costo FxR (por defecto)</label>
+        <select name="fxr_centro_costo_id" class="form-select">
+            <option value="">— Sin centro por defecto —</option>
+            {% for c in centros_fxr or [] %}
+            <option value="{{ c.id }}" {% if usuario.fxr_centro_costo_id == c.id %}selected{% endif %}>
+                {{ c.codigo }} — {{ c.nombre }}
+            </option>
+            {% endfor %}
+        </select>
+        <div class="form-text text-muted">
+            Se prellena en las líneas nuevas de rendición y como área sugerida.
+        </div>
+    </div>
+
+    <div class="mb-3">
         <label class="form-label text-white">Rol</label>
         <select name="rol" class="form-select" required>
             {% for r in roles %}

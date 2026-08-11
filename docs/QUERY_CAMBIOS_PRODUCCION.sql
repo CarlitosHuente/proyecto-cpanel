@@ -504,3 +504,165 @@ CREATE TABLE IF NOT EXISTS mail_pdf_inbox (
 -- Rollback:
 -- DROP TABLE IF EXISTS mail_pdf_inbox;
 
+
+-- [2026-08-11] [IA] [FxR — Fondos por Rendir]
+-- Motivo: Módulo nuevo rendición de gastos (comprobantes, líneas globales, aprobación, PDF Drive).
+-- Entorno probado: local
+-- SQL: las tablas también se crean al entrar a /fxr (asegurar_esquema_fxr). Este bloque es para prod explícito.
+
+CREATE TABLE IF NOT EXISTS fxr_centro_costo (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    codigo VARCHAR(40) NOT NULL,
+    nombre VARCHAR(120) NOT NULL,
+    activo TINYINT(1) NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_fxr_cc_codigo (codigo)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fxr_tipo_gasto (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    codigo VARCHAR(40) NOT NULL,
+    nombre VARCHAR(120) NOT NULL,
+    activo TINYINT(1) NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_fxr_tg_codigo (codigo)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fxr_rendicion (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    correlativo INT NULL,
+    usuario_email VARCHAR(190) NOT NULL,
+    nombre_snapshot VARCHAR(190) NOT NULL DEFAULT '',
+    area VARCHAR(120) NOT NULL DEFAULT '',
+    fecha_rendicion DATE NULL,
+    tipo VARCHAR(60) NOT NULL DEFAULT 'RENDICION_DE_FONDO',
+    estado VARCHAR(20) NOT NULL DEFAULT 'borrador',
+    total INT NOT NULL DEFAULT 0,
+    motivo_rechazo TEXT NULL,
+    pdf_drive_id VARCHAR(120) NULL,
+    pdf_url VARCHAR(500) NULL,
+    preparada_at DATETIME NULL,
+    aprobada_at DATETIME NULL,
+    aprobada_por VARCHAR(190) NULL,
+    rechazada_at DATETIME NULL,
+    rechazada_por VARCHAR(190) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_fxr_correlativo (correlativo),
+    KEY idx_fxr_rend_usuario (usuario_email),
+    KEY idx_fxr_rend_estado (estado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fxr_comprobante (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    usuario_email VARCHAR(190) NOT NULL,
+    rendicion_id INT NULL,
+    archivo_local VARCHAR(500) NOT NULL,
+    mime VARCHAR(120) NOT NULL DEFAULT 'application/octet-stream',
+    num_paginas INT NOT NULL DEFAULT 1,
+    estado_archivo VARCHAR(30) NOT NULL DEFAULT 'staging',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_fxr_comp_usuario (usuario_email),
+    KEY idx_fxr_comp_rend (rendicion_id),
+    CONSTRAINT fk_fxr_comp_rend FOREIGN KEY (rendicion_id)
+        REFERENCES fxr_rendicion(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fxr_linea (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    rendicion_id INT NOT NULL,
+    comprobante_id INT NOT NULL,
+    orden INT NOT NULL DEFAULT 0,
+    tipo_doc VARCHAR(20) NOT NULL DEFAULT 'otro',
+    n_doc VARCHAR(80) NULL,
+    n_doc_norm VARCHAR(80) NULL,
+    fecha_comprobante DATE NULL,
+    concepto VARCHAR(255) NOT NULL DEFAULT '',
+    tipo_gasto_id INT NULL,
+    centro_costo_id INT NULL,
+    monto INT NOT NULL DEFAULT 0,
+    observaciones TEXT NULL,
+    duplicado_n_doc TINYINT(1) NOT NULL DEFAULT 0,
+    duplicado_autorizado TINYINT(1) NOT NULL DEFAULT 0,
+    duplicado_autorizado_por VARCHAR(190) NULL,
+    duplicado_autorizado_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_fxr_linea_rend (rendicion_id),
+    KEY idx_fxr_linea_ndoc (tipo_doc, n_doc_norm),
+    KEY idx_fxr_linea_comp (comprobante_id),
+    CONSTRAINT fk_fxr_linea_rend FOREIGN KEY (rendicion_id)
+        REFERENCES fxr_rendicion(id) ON DELETE CASCADE,
+    CONSTRAINT fk_fxr_linea_comp FOREIGN KEY (comprobante_id)
+        REFERENCES fxr_comprobante(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_fxr_linea_tg FOREIGN KEY (tipo_gasto_id)
+        REFERENCES fxr_tipo_gasto(id) ON DELETE SET NULL,
+    CONSTRAINT fk_fxr_linea_cc FOREIGN KEY (centro_costo_id)
+        REFERENCES fxr_centro_costo(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fxr_estado_hist (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    rendicion_id INT NOT NULL,
+    estado_desde VARCHAR(20) NULL,
+    estado_hasta VARCHAR(20) NOT NULL,
+    usuario_email VARCHAR(190) NOT NULL,
+    nota VARCHAR(500) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_fxr_hist_rend (rendicion_id),
+    CONSTRAINT fk_fxr_hist_rend FOREIGN KEY (rendicion_id)
+        REFERENCES fxr_rendicion(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT IGNORE INTO fxr_tipo_gasto (codigo, nombre, activo) VALUES
+ ('estacionamiento','Estacionamiento',1),
+ ('peaje','Peaje',1),
+ ('viatico','Viático',1),
+ ('otro','Otro',1);
+
+INSERT IGNORE INTO fxr_centro_costo (codigo, nombre, activo) VALUES
+ ('ADM','Administración',1),
+ ('OPE','Operaciones',1),
+ ('COM','Comercial',1);
+
+-- Rollback:
+-- DROP TABLE IF EXISTS fxr_estado_hist;
+-- DROP TABLE IF EXISTS fxr_linea;
+-- DROP TABLE IF EXISTS fxr_comprobante;
+-- DROP TABLE IF EXISTS fxr_rendicion;
+-- DROP TABLE IF EXISTS fxr_tipo_gasto;
+-- DROP TABLE IF EXISTS fxr_centro_costo;
+
+
+-- [2026-08-11] [IA] [FxR — agrupar + layout collage]
+-- Motivo: permite_agrupar en tipo_gasto; layout_json en rendicion para collage de imágenes.
+-- Nota: sin IF NOT EXISTS (MySQL/MariaDB de cPanel no lo soporta). Si la columna ya existe, omitir esa línea.
+-- SQL:
+ALTER TABLE fxr_tipo_gasto ADD COLUMN permite_agrupar TINYINT(1) NOT NULL DEFAULT 0;
+ALTER TABLE fxr_rendicion ADD COLUMN layout_json MEDIUMTEXT NULL;
+UPDATE fxr_tipo_gasto SET permite_agrupar=1 WHERE codigo IN ('peaje','estacionamiento');
+-- Rollback:
+-- ALTER TABLE fxr_tipo_gasto DROP COLUMN permite_agrupar;
+-- ALTER TABLE fxr_rendicion DROP COLUMN layout_json;
+
+
+-- [2026-08-11] [IA] [FxR — comentario/firma + perfil usuario]
+-- Motivo: comentario bajo el total en PDF; nombre legible y CC por defecto en usuarios_huente.
+-- Entorno probado: local
+-- SQL: (MySQL sin IF NOT EXISTS en ADD COLUMN: omitir si la columna ya existe)
+
+ALTER TABLE fxr_rendicion ADD COLUMN comentario_firma TEXT NULL;
+ALTER TABLE usuarios_huente ADD COLUMN nombre VARCHAR(190) NULL;
+ALTER TABLE usuarios_huente ADD COLUMN fxr_centro_costo_id INT NULL;
+
+-- Opcional FK (solo si quieres integridad referencial):
+-- ALTER TABLE usuarios_huente
+--   ADD CONSTRAINT fk_usuarios_fxr_cc
+--   FOREIGN KEY (fxr_centro_costo_id) REFERENCES fxr_centro_costo(id) ON DELETE SET NULL;
+
+-- Rollback:
+-- ALTER TABLE fxr_rendicion DROP COLUMN comentario_firma;
+-- ALTER TABLE usuarios_huente DROP COLUMN fxr_centro_costo_id;
+-- ALTER TABLE usuarios_huente DROP COLUMN nombre;
+

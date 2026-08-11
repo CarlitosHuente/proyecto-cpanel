@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Prueba Drive — imágenes{% endblock %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 640px;">
+    <h2 class="text-info mb-1"><i class="bi bi-cloud-upload"></i> Prueba Drive</h2>
+    <p class="text-muted small mb-4">
+        Sube un archivo a la carpeta <code>respaldoimagenes</code> vía Apps Script.
+        No modifica el mayor ni Contabilidad. Solo para prueba local.
+    </p>
+
+    <div class="card bg-dark border-secondary shadow">
+        <div class="card-body text-white">
+            <form method="post" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label class="form-label" for="archivo">Archivo (imagen, PDF, etc.)</label>
+                    <input type="file" class="form-control bg-black text-white border-secondary" id="archivo" name="archivo" required>
+                    <div class="form-text text-muted">Máximo 8 MB. Primero publica el script dual en Google.</div>
+                </div>
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-upload"></i> Subir a Drive
+                </button>
+                <a href="{{ url_for('utilidades.calculadora_margen') }}" class="btn btn-outline-secondary ms-2">Volver</a>
+            </form>
+        </div>
+    </div>
+
+    {% if resultado %}
+    <div class="mt-4 p-3 border {% if resultado.ok %}border-success{% else %}border-danger{% endif %} rounded bg-black text-white">
+        <div class="small text-muted mb-1">Respuesta del script</div>
+        <code class="d-block text-break">{{ resultado.respuesta }}</code>
+        {% if resultado.url %}
+        <a class="btn btn-sm btn-outline-info mt-3" href="{{ resultado.url }}" target="_blank" rel="noopener">Abrir en Drive</a>
+        {% endif %}
+        {% if resultado.detalle %}
+        <hr class="border-secondary">
+        <div class="small text-muted mb-1">Detalle local (lo que envió Flask)</div>
+        <pre class="small text-break mb-0" style="white-space: pre-wrap;">{{ resultado.detalle | tojson(indent=2) }}</pre>
+        {% endif %}
+        <p class="small text-muted mt-3 mb-0">
+            En Google: proyecto <strong>SubirArchivosRender</strong> → icono reloj
+            <strong>Ejecuciones</strong> → última <code>doPost</code> → ver mensaje / stack.
+        </p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

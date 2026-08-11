@@ -124,10 +124,20 @@ def cargar_comentarios(): return cargar_json(COMENTARIOS_FILE_NAME, {})
 def guardar_comentarios(data): guardar_json(COMENTARIOS_FILE_NAME, data)
 
 def enviar_archivo_a_script(path_archivo):
+    """Sube mayor.xlsx vía Apps Script. JSON accion=mayor (no usa el camino de imágenes)."""
     with open(path_archivo, "rb") as f:
         archivo_base64 = base64.b64encode(f.read()).decode("utf-8")
+    payload = json.dumps(
+        {"accion": "mayor", "base64": archivo_base64},
+        separators=(",", ":"),
+    )
     try:
-        response = requests.post(URL_WEBHOOK_SCRIPT, data=archivo_base64)
+        response = requests.post(
+            URL_WEBHOOK_SCRIPT,
+            data=payload.encode("utf-8"),
+            headers={"Content-Type": "text/plain; charset=utf-8"},
+            timeout=120,
+        )
         return response.text
     except Exception as e:
         return f"ERROR: {e}"

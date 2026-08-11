@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Rendición #{{ r.id }}{% endblock %}
+{% block content %}
+<div class="container-fluid mt-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div>
+      <a href="{{ url_for('fxr.index') }}" class="btn btn-sm btn-outline-secondary">← Inbox</a>
+      <h2 class="text-info d-inline-block ms-2 mb-0">Rendición {% if r.correlativo %}N° {{ r.correlativo }}{% else %}#{{ r.id }}{% endif %}</h2>
+      <span class="badge bg-secondary ms-2">{{ r.estado }}</span>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-info" href="{{ url_for('fxr.preview', rid=r.id) }}">Vista previa</a>
+      <a class="btn btn-outline-warning" href="{{ url_for('fxr.collage', rid=r.id) }}">Colocar imágenes</a>
+      {% if editable %}
+      <form method="post" action="{{ url_for('fxr.preparar', rid=r.id) }}" onsubmit="return confirm('¿Marcar como Preparada para revisión?');">
+        <button class="btn btn-warning" type="submit">Marcar Preparada</button>
+      </form>
+      <form method="post" action="{{ url_for('fxr.eliminar_rendicion', rid=r.id) }}"
+            onsubmit="return confirm('¿Eliminar esta rendición? Los documentos vuelven al inbox.');">
+        <button class="btn btn-outline-danger" type="submit">Eliminar rendición</button>
+      </form>
+      {% endif %}
+      {% if es_super and r.estado == 'preparada' %}
+      <a class="btn btn-info" href="{{ url_for('fxr.revision_detalle', rid=r.id) }}">Revisar / aprobar</a>
+      {% endif %}
+      {% if r.pdf_url %}
+      <a class="btn btn-success" href="{{ r.pdf_url }}" target="_blank">PDF Drive</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if r.motivo_rechazo %}
+  <div class="alert alert-warning">Rechazada: {{ r.motivo_rechazo }}</div>
+  {% endif %}
+  {% if faltantes %}
+  <div class="alert alert-danger">
+    <strong>No se puede marcar Preparada hasta completar:</strong>
+    <ul class="mb-0 mt-1">
+      {% for e in faltantes %}<li>{{ e }}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+  {% if dups_bloquean %}
+  <div class="alert alert-danger">Hay {{ dups_bloquean|length }} documento(s) duplicado(s) sin autorizar. Un superusuario debe autorizarlos antes de aprobar.</div>
+  {% endif %}
+
+  {% if editable %}
+  <form method="post" action="{{ url_for('fxr.actualizar_cabecera', rid=r.id) }}" class="row g-2 mb-3">
+    <div class="col-md-3"><input class="form-control bg-black text-white border-secondary" name="nombre_snapshot" value="{{ r.nombre_snapshot }}" placeholder="Nombre"></div>
+    <div class="col-md-2"><input class="form-control bg-black text-white border-secondary" name="area" value="{{ r.area }}" placeholder="Área"></div>
+    <div class="col-md-2"><input type="date" class="form-control bg-black text-white border-secondary" name="fecha_rendicion" value="{{ r.fecha_rendicion }}"></div>
+    <div class="col-md-5">
+      <textarea class="form-control bg-black text-white border-secondary" name="comentario_firma" rows="2"
+                placeholder="Comentario / firma (ej. Depositar en cuenta …)">{{ r.comentario_firma or '' }}</textarea>
+    </div>
+    <div class="col-12"><button class="btn btn-outline-light btn-sm">Guardar cabecera</button></div>
+  </form>
+  {% else %}
+  <p class="text-muted mb-1">{{ r.nombre_snapshot }} · {{ r.area }} · {{ r.fecha_rendicion }} · Total <strong class="text-white">{{ r.total|dinero }}</strong></p>
+  {% if r.comentario_firma %}<p class="text-info small">{{ r.comentario_firma }}</p>{% endif %}
+  {% endif %}
+
+  <div class="table-responsive">
+    <table class="table table-dark table-sm align-middle">
+      <thead>
+        <tr>
+          <th>#</th><th>Tipo</th><th>N° Doc</th><th>Fecha</th><th>Concepto</th>
+          <th>T.Gasto</th><th>C.Costo</th><th class="text-end">Monto</th><th>Dup</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for l in lineas %}
+        <tr class="{% if l.duplicado_n_doc and not l.duplicado_autorizado %}table-danger{% elif l.duplicado_n_doc %}table-warning{% endif %}">
+          <td>{{ loop.index }}</td>
+          <td>{{ l.tipo_doc }}</td>
+          <td>{{ l.n_doc or '—' }}</td>
+          <td>{{ l.fecha_comprobante or '—' }}</td>
+          <td>{{ l.concepto or '—' }}</td>
+          <td>{{ l.tipo_gasto_nombre or '—' }}</td>
+          <td>{{ l.centro_costo_nombre or '—' }}</td>
+          <td class="text-end">{{ l.monto|dinero }}</td>
+          <td>
+            {% if l.duplicado_n_doc %}
+              {% if l.duplicado_autorizado %}<span class="badge bg-warning text-dark">Autorizado</span>
+              {% else %}<span class="badge bg-danger">Pendiente</span>{% endif %}
+            {% endif %}
+          </td>
+          <td class="text-nowrap">
+            <a class="btn btn-sm btn-outline-info" href="{{ url_for('fxr.editar_linea', linea_id=l.id) }}">
+              {% if editable %}Editar{% else %}Ver{% endif %}
+            </a>
+            {% if editable %}
+            <form method="post" action="{{ url_for('fxr.eliminar_linea', linea_id=l.id) }}" class="d-inline"
+                  onsubmit="return confirm('¿Quitar de esta rendición? El documento vuelve al inbox.');">
+              <input type="hidden" name="rid" value="{{ r.id }}">
+              <button class="btn btn-sm btn-outline-warning" type="submit" title="Volver al inbox">Quitar</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="10" class="text-muted">Sin líneas.</td></tr>
+      {% endfor %}
+      </tbody>
+      <tfoot><tr><th colspan="7" class="text-end">Total</th><th class="text-end">{{ r.total|dinero }}</th><th colspan="2"></th></tr></tfoot>
+    </table>
+  </div>
+</div>
+{% endblock %}

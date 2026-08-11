@@ -17,6 +17,22 @@
         </div>
 
         <div class="mb-3">
+            <label class="form-label text-white">Nombre (FxR / documentos)</label>
+            <input type="text" name="nombre" class="form-control" maxlength="190"
+                   placeholder="Ej. Carlos Carvajal">
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label text-white">Centro de costo FxR (por defecto)</label>
+            <select name="fxr_centro_costo_id" class="form-select">
+                <option value="">— Sin centro por defecto —</option>
+                {% for c in centros_fxr or [] %}
+                <option value="{{ c.id }}">{{ c.codigo }} — {{ c.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="mb-3">
             <label class="form-label text-white">Rol</label>
             <select name="rol" class="form-select" required>
                 {% for r in roles %}

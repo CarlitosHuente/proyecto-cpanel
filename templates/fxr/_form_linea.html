@@ -1,0 +1,57 @@
+<form method="post">
+  {% if overlay %}<input type="hidden" name="overlay" value="1">{% endif %}
+  <div class="row g-2">
+    <div class="col-6">
+      <label class="form-label small">Tipo doc</label>
+      <select name="tipo_doc" class="form-select bg-black text-white border-secondary" {% if not editable %}disabled{% endif %}>
+        {% for t in tipos_doc %}
+        <option value="{{ t }}" {% if linea.tipo_doc==t %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-6">
+      <label class="form-label small">N° doc (factura/BH obligatorio)</label>
+      <input name="n_doc" value="{{ linea.n_doc or '' }}" class="form-control bg-black text-white border-secondary" {% if not editable %}readonly{% endif %}>
+    </div>
+    <div class="col-6">
+      <label class="form-label small">Fecha</label>
+      <input type="date" name="fecha_comprobante" value="{{ linea.fecha_comprobante or '' }}" class="form-control bg-black text-white border-secondary" {% if not editable %}readonly{% endif %}>
+    </div>
+    <div class="col-6">
+      <label class="form-label small">Monto</label>
+      <input name="monto" value="{{ linea.monto or '' }}" class="form-control bg-black text-white border-secondary" {% if not editable %}readonly{% endif %}>
+    </div>
+    <div class="col-12">
+      <label class="form-label small">Concepto</label>
+      <input name="concepto" value="{{ linea.concepto or '' }}" class="form-control bg-black text-white border-secondary" {% if not editable %}readonly{% endif %}>
+    </div>
+    <div class="col-6">
+      <label class="form-label small">Tipo gasto</label>
+      <select name="tipo_gasto_id" class="form-select bg-black text-white border-secondary" {% if not editable %}disabled{% endif %}>
+        <option value="">—</option>
+        {% for t in tipos_gasto %}
+        <option value="{{ t.id }}" {% if linea.tipo_gasto_id==t.id %}selected{% endif %}>{{ t.nombre }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-6">
+      <label class="form-label small">Centro de costo</label>
+      <select name="centro_costo_id" class="form-select bg-black text-white border-secondary" {% if not editable %}disabled{% endif %}>
+        <option value="">—</option>
+        {% for c in centros %}
+        <option value="{{ c.id }}" {% if linea.centro_costo_id==c.id %}selected{% endif %}>{{ c.codigo }} — {{ c.nombre }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-12">
+      <label class="form-label small">Observaciones</label>
+      <textarea name="observaciones" rows="2" class="form-control bg-black text-white border-secondary" {% if not editable %}readonly{% endif %}>{{ linea.observaciones or '' }}</textarea>
+    </div>
+    {% if editable %}
+    <div class="col-12 d-flex gap-2 mt-2">
+      <button class="btn btn-success" type="submit">Guardar</button>
+      <button class="btn btn-outline-light" type="submit" name="volver" value="1">Guardar y volver</button>
+    </div>
+    {% endif %}
+  </div>
+</form>

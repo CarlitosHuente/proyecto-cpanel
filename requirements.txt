@@ -15,3 +15,4 @@ pymysql
 pdfplumber
 pypdf
 reportlab
+Pillow
