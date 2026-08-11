@@ -11,9 +11,10 @@ from routes.seremi_routes import seremi_bp
 from routes.config_routes import config_bp
 from datetime import timedelta
 from routes.contab_routes import contab_bp
-from utils.sheet_cache import refrescar_todo_el_cache, obtener_fecha_actualizacion
-from flask import redirect, request
-from utils.auth import tiene_permiso, tiene_seccion
+from utils.sheet_cache import obtener_fecha_actualizacion
+from utils.auth import tiene_permiso, tiene_seccion, login_requerido
+from utils.secret_key import obtener_secret_key
+from utils.safe_redirect import url_interna_segura
 from routes.finanzas_routes import finanzas_bp
 from routes.sucursales_routes import sucursales_bp
 from routes.fabrica_routes import fabrica_bp
@@ -33,6 +34,16 @@ from utils.formato_fecha import fecha_ddmmaaaa
 
 app = Flask(__name__, template_folder=os.path.join(BASE_DIR, 'templates'))
 app.permanent_session_lifetime = timedelta(minutes=45) #Tiempo Maximo de inactividad.
+app.secret_key = obtener_secret_key()
+
+# Cookies de sesión: HttpOnly + SameSite=Lax siempre.
+# Secure: apagado por defecto (local HTTP y deploy sin tocar cPanel).
+# En HostChile con HTTPS conviene SESSION_COOKIE_SECURE=1 (opcional).
+_secure_env = (os.environ.get("SESSION_COOKIE_SECURE") or "").strip().lower()
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = _secure_env in ("1", "true", "yes", "on")
+
 UPLOAD_FOLDER_CONTAB = os.path.join(BASE_DIR, "uploads", "contab")
 # Crea la carpeta si no existe
 os.makedirs(UPLOAD_FOLDER_CONTAB, exist_ok=True)
@@ -51,7 +62,6 @@ def inyectar_fecha_actualizacion():
         "fecha_actualizacion": obtener_fecha_actualizacion("comercial")  # puedes cambiar por el que consideres principal
     }
 
-app.secret_key = "clave_secreta_web"
 app.register_blueprint(ventas_bp)
 app.register_blueprint(auth_bp)
 app.register_blueprint(dashboard_bp)
@@ -117,11 +127,13 @@ def filtro_ddmmaaaa(val, con_hora=False):
     return out if out else "—"
 
 @app.route("/refresh")
+@login_requerido
 def refresh_global():
     from utils.sheet_cache import refrescar_todo_el_cache
     refrescar_todo_el_cache()
     flash("✅ Datos actualizados con éxito", "success")
-    return redirect(request.referrer or "/")
+    destino = url_interna_segura(request.referrer, fallback="/")
+    return redirect(destino)
 
 
 

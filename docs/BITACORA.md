@@ -1,0 +1,124 @@
+# Bitácora de cambios — Huente cPanel
+
+**Para qué sirve:** historial de **qué cambió y cuándo**.  
+**Estado actual de cada módulo:** [`DICCIONARIO_APLICACIONES.md`](DICCIONARIO_APLICACIONES.md).  
+**Cómo trabajar:** [`RESUMEN_OPERATIVO.md`](RESUMEN_OPERATIVO.md).
+
+Al cerrar un cambio relevante: entrada breve aquí + actualizar diccionario si cambió el “cómo funciona”.
+
+---
+
+## 2026-08-10 — Seguridad perimetral (externos)
+
+- `SECRET_KEY` por env o `instance/flask_secret_key` (sin hardcode).
+- Bypass login por `Host: localhost` eliminado; solo `ALLOW_DEV_LOGIN=1` local.
+- `/refresh` exige sesión; redirect interno seguro.
+- Rate-limit login; cookies `HttpOnly` + `SameSite=Lax`.
+- Rama de restauración: `RestauracionAntesdeSeguridad`.
+- Documentación reorganizada: este archivo + resumen + diccionario (reemplazan bitácora monolítica y resumen operativo antiguos).
+
+## 2026-08-10 — UX filtros de reportes
+
+- Reportes no auto-aplican al cambiar controles; botón «Aplicar filtros» / «Consultar» + overlay.
+- Excepción: carga inicial y limpiezas cruzadas de campos.
+
+## 2026-08-10 — Buk: calendario, alertas, overlay
+
+- Calendario mensual (turnos + marcajes + horas netas + colación por recinto).
+- Panel alertas agrupadas por tipo (colapsable) + revisadas en JSON.
+- Overlay de carga al consultar/navegar (`buk_loading.js`).
+- Ver diccionario § Buk.
+
+## 2026-07-11 — Promoción vs Individual (dashboard)
+
+- Submódulo `/dashboard/promos`: lee líneas PROMOCIÓN (excluidas del KPI principal).
+- Recetas de combo, KPIs ticket/mix/acompañamiento, simulador what-if cliente.
+- Ver diccionario § Dashboard → Promos.
+
+## 2026-07-11 — Arqueo: bandeja PDF por IMAP
+
+- Tabla `mail_pdf_inbox`, sync IMAP HostChile, UI ver/descargar/ignorar, cron con `MAIL_SYNC_TOKEN`.
+- Ver diccionario § Arqueo.
+
+## 2026-07-11 — Contab: drill-down KPIs dashboard gestión
+
+- Cards clickeables → modal serie ene–dic YoY (`serie_kpis_mensual`).
+- Ver diccionario § Contabilidad.
+
+## 2026-07-07 — Seremi: filtros mes/año
+
+- Vistas mensuales y prints con sucursal + mes + año; cambio aceite por período.
+- Ver diccionario § Seremi.
+
+## 2026-07-07 — Contab: macros P&amp;L opcionales
+
+- `/contab/macros_gestion` + `macros_gestion.json` (`activo: false` por defecto = sin cambio de comportamiento).
+
+## 2026-07-06 — Contab: KPIs unificados y resumen %
+
+- `utils/gestion_estructura.py` compartido; dashboard e informe alineados; ventas brutas = suma 4xx; ranking sucursales.
+- Ver diccionario § Contabilidad.
+
+## 2026-05-28 — DespachoWeb
+
+- Carga PDF unitario/masivo, validación, órdenes MySQL AppSheet, resumen productos, impresión comprobante.
+- Dep `pypdf` para masivo. Ver diccionario § DespachoWeb.
+
+## 2026-05-24 — Centro de Accesos
+
+- `permisos_catalogo` + `data/roles_config.json`; UI `/config/accesos`; menú granular; inicio por rol.
+- Fix escritura en `data/` + recarga por mtime. Ver diccionario § Auth.
+
+## 2026-05-24 — Ventas por horario
+
+- `/dashboard/ventas-horario` + service; comparar 7 días / detalle día. Ver diccionario § Dashboard.
+
+## 2026-05-11 / 05-12 — Histórico de productos
+
+- `/ventas/historico`; comparación por mismas semanas; cache JS. Ver diccionario § Ventas.
+
+## 2026-05-11 — Acumulado de gestión
+
+- `/contab/acumulado_gestion` (4.ª pestaña gestión). Ver diccionario § Contabilidad.
+
+## 2026-05 — Fábrica empanadas: resumen mensual
+
+- Bloque resumen bajo calendario (`|metrico`, % merma 1 decimal). Ver diccionario § Fábrica.
+
+## 2026-05 (línea comercial/dashboard)
+
+- Pipeline NETO/presentación en `sheet_cache`; import/revertir comercial + historial cargas.
+- Endpoints livianos `latest-date-info` / `sucursales`.
+- Presentación CLP global (`formato_dinero` / `HuenteFmt` en `base.html`).
+- Rendimiento overlays dashboard. Ver diccionario §§ Ventas/Dashboard/Config/NETO.
+
+## Arqueo de caja (módulo)
+
+- Import sistema, terreno, cuadratura día/semana, auditoría, export, canales UI, tipos de pago, reporte mensual.
+- Ver diccionario § Arqueo (estado actual completo).
+
+## Fábrica Papaya (módulo)
+
+- Tablas MySQL + AppSheet + informe semanal/mes/día web. Ver diccionario § Fábrica Papaya.
+
+---
+
+## Pendiente (no cerrado)
+
+| Ítem | Notas |
+|------|--------|
+| Fábrica empanadas N.2 | Definir con ops: campo “Empanada” vs `cant_producida` y “Queso cortado”; luego ALTER + UI |
+| Hosting | Plan HostChile, URL prod/staging, backups, índices ventas en prod |
+| Deploy doc | Checklist cPanel paso a paso cuando el equipo lo cierre |
+
+---
+
+## Referencia rápida de archivos tocados en la línea comercial (histórico)
+
+`utils/sheet_cache.py`, `utils/ventas_excel_import.py`, `routes/dashboard_routes.py`, `routes/ventas_routes.py`, `routes/contab_routes.py`, `routes/config_routes.py`, `utils/gestion_estructura.py`, `static/js/dashboard.js`, `static/js/ventas_historico.js`, `static/js/formato_huente.js`, `utils/formato_dinero.py`, blueprints arqueo/despacho/buk/fábricas según módulos.
+
+Rama de integración frecuente: `feature/comercial-ventas-dashboard`.
+
+---
+
+*Entradas nuevas arriba. Detalle de funcionamiento → diccionario.*

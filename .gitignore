@@ -6,6 +6,7 @@ __pycache__/
 .DS_Store
 credentials
 uploads
+instance/
 credenciales_google.json
 .env
 *.json

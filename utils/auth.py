@@ -1,4 +1,5 @@
 from functools import wraps
+import os
 
 from werkzeug.security import check_password_hash
 from flask import session, redirect, url_for, render_template, request
@@ -14,6 +15,16 @@ from utils.roles_config import (
 
 # Compatibilidad con código que importa PERMISOS (siempre leer vía obtener_permisos())
 PERMISOS = obtener_permisos()
+
+
+def _allow_dev_login() -> bool:
+    """Solo con ALLOW_DEV_LOGIN=1 en .env local. Nunca usar Host header."""
+    return (os.environ.get("ALLOW_DEV_LOGIN") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
 
 
 def recargar_permisos():
@@ -54,12 +65,12 @@ def tiene_seccion(rol, seccion_id: str) -> bool:
 def login_requerido(f):
     @wraps(f)
     def decorado(*args, **kwargs):
-        if ("localhost" in request.host or "127.0.0.1" in request.host) and "usuario" not in session:
+        if "usuario" not in session and _allow_dev_login():
             session["usuario"] = "developer@local.test"
             session["rol"] = "superusuario"
             session["sucursal_id"] = None
             print("=====================================================================")
-            print("== MODO DESARROLLO: Bypass de login activado automáticamente.      ==")
+            print("== MODO DESARROLLO: Bypass de login (ALLOW_DEV_LOGIN=1).            ==")
             print("== Usuario simulado: developer@local.test (Superusuario)           ==")
             print("=====================================================================")
 

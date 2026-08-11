@@ -12,11 +12,12 @@ from typing import Dict, Optional
 ROOT_DIR = Path(__file__).resolve().parent.parent
 ENV_FILE = ROOT_DIR / ".env"
 
-# Fallback local solo si falta `.env` o variables DB incompletas (antes estaban en utils/db.py).
+# Fallback local solo si falta `.env` o variables DB incompletas.
+# Sin password por defecto (usar DB_PASSWORD en .env).
 _LOCAL_DB_DEFAULTS = {
     "host": "localhost",
     "user": "root",
-    "password": "26235834",
+    "password": "",
     "database": "huente_app",
 }
 
