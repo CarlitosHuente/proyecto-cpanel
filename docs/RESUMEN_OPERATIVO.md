@@ -1,12 +1,13 @@
 # Resumen operativo — Huente cPanel
 
-**Para qué sirve este archivo:** cómo trabajar en el proyecto (equipo + IA), entornos, deploy, reglas transversales y checklist.  
+**Para qué sirve este archivo:** cómo trabajar en el proyecto (equipo + IA), entornos, deploy, reglas transversales, rendimiento y checklist.  
+**Lectura obligatoria** al iniciar cualquier cambio (humano o IA): este resumen primero; luego el diccionario del módulo tocado.  
 **No documenta módulos:** eso vive en [`DICCIONARIO_APLICACIONES.md`](DICCIONARIO_APLICACIONES.md).  
 **No es historial de cambios:** eso vive en [`BITACORA.md`](BITACORA.md).
 
 | Documento | Contenido |
 |-----------|-----------|
-| **Este** | Método de trabajo, stack, entornos, SQL, presentación, seguridad operativa |
+| **Este** | Método de trabajo, stack, entornos, SQL, presentación, seguridad, **rendimiento / cron** |
 | [`DICCIONARIO_APLICACIONES.md`](DICCIONARIO_APLICACIONES.md) | Cómo funciona cada módulo (rutas, datos, reglas, archivos) |
 | [`BITACORA.md`](BITACORA.md) | Qué cambió y cuándo (changelog) |
 | [`QUERY_CAMBIOS_PRODUCCION.sql`](QUERY_CAMBIOS_PRODUCCION.sql) | DDL/DML a replicar en producción |
@@ -26,7 +27,7 @@ ERP interno web para operación, ventas, control sanitario y gestión financiera
 | Backend | Python + Flask monolítico; blueprints en `routes/`; lógica en `services/` y `utils/` |
 | Frontend | Jinja2 + JS vanilla + Bootstrap 5 (CDN); Plotly / Chart.js donde aplique |
 | Datos | MySQL (`pymysql`, `utils/db.py` + `utils/env_config.py`) |
-| Integraciones | Google Sheets CSV / Drive (lectura SA + escritura vía Apps Script); Buk RRHH + Buk Asistencia; IMAP (PDFs arqueo) |
+| Integraciones | Google Sheets CSV / Drive (lectura SA + escritura vía Apps Script); Buk RRHH + Buk Asistencia; IMAP/SMTP (casilla HostChile) |
 | Config local | `.env` (plantilla `.env.example`); JSON en `data/` / `instance/` según módulo |
 
 **Regla HostingChile:** priorizar compatibilidad Linux/cPanel/Passenger; stack simple (`Flask + MySQL + templates`); rutas case-sensitive; no dependencias que el hosting no soporte.
@@ -53,7 +54,7 @@ No duplicar el mismo detalle en los tres archivos: el diccionario es la verdad d
 **Orden obligatorio** en cambios de negocio o alcance ambiguo:
 
 0. En desarrollo, pruebas/scripts/lint se ejecutan **sin pedir RUN** al usuario en cada paso (salvo acciones destructivas o deploy a producción).
-1. Entender objetivo, alcance e impacto.
+1. Entender objetivo, alcance e impacto (**incluir costo en CPU/red/hosting** — ver §12).
 2. Proponer 1–3 enfoques (archivos, riesgos, BD).
 3. Validar el camino con quien pide el cambio.
 4. Implementar (commits acotados).
@@ -61,7 +62,7 @@ No duplicar el mismo detalle en los tres archivos: el diccionario es la verdad d
 6. Documentar (diccionario y/o bitácora según §3).
 7. Preparar producción (checklist §8).
 
-**Principio:** estabilidad y continuidad operacional.
+**Principio:** estabilidad, continuidad operacional y **rapidez percibida** en hosting compartido.
 
 **Git**
 
@@ -92,7 +93,7 @@ No duplicar el mismo detalle en los tres archivos: el diccionario es la verdad d
 4. `python3 app.py` desde la raíz.
 5. Opcional desarrollo sin login: `ALLOW_DEV_LOGIN=1` en `.env` **solo local** (nunca en cPanel).
 
-Variables habituales: ver `.env.example` (`DB_*`, `SECRET_KEY`, `BUK_*`, `IMAP_*`, `MAIL_SYNC_TOKEN`, etc.). Lectura central: `utils/env_config.py`.
+Variables habituales: ver `.env.example` (`DB_*`, `SECRET_KEY`, `BUK_*`, `IMAP_*`, `MAIL_SYNC_TOKEN`, `SMTP_*` opcionales, etc.). Lectura central: `utils/env_config.py`.
 
 ---
 
@@ -134,6 +135,7 @@ Enfoque actual: mitigar **ataques externos** (sin cuenta). Detalle de cambios en
 - `/refresh` requiere sesión.
 - Rate-limit de intentos fallidos de login.
 - Cookies: `HttpOnly` + `SameSite=Lax`; opcional `SESSION_COOKIE_SECURE=1` en HTTPS.
+- Endpoints de cron (`MAIL_SYNC_TOKEN`): no exponer el token; no loguear el valor.
 
 ---
 
@@ -168,4 +170,28 @@ Enfoque actual: mitigar **ataques externos** (sin cuenta). Detalle de cambios en
 
 ---
 
-*Documento operativo. Al crear módulos: actualizar el diccionario (obligatorio).*
+## 12. Rendimiento y carga en hosting (prioridad alta)
+
+El sitio corre en **cPanel / Passenger compartido**: CPU, workers y memoria son limitados. Toda feature nueva debe **velar por la rapidez del sistema**.
+
+**Reglas**
+
+- Preferir trabajo **bajo demanda** (usuario pulsa Consultar / Enviar) frente a jobs frecuentes en background.
+- **No** diseñar crons agresivos (cada 1–15 min) “por si acaso”. Preferir **1 ejecución/día** (o solo los días de negocio) alineada a la hora configurada.
+- Llamadas a **Buk / APIs externas** y reportes de alertas son caros: no recalcularlos en cada tick de cron si no corresponde enviar.
+- Consultas MySQL: filtrar por fecha/índices; evitar full scans en tablas grandes; reutilizar cachés existentes (`/refresh`, sheet_cache) en vez de invalidar a ciegas.
+- UI: overlays de carga en acciones lentas; no auto-disparar APIs pesadas al mover un filtro.
+- Correo: una casilla HostChile (`IMAP_*` recepción Arqueo; mismo fallback para SMTP salida). Mailer común `utils/mail_smtp.py` + plantilla `utils/mail_reporte_html.py`.
+
+**Notificaciones / cron (Alertas Buk y futuros)**
+
+- Config UI: `/config/notificaciones` → destinarios + días + hora (Chile).
+- Endpoint: `GET|POST /config/notificaciones/cron?token=MAIL_SYNC_TOKEN` (o header `X-Mail-Sync-Token`).
+- **Recomendado en cPanel:** un cron **diario** a la hora elegida (ej. `curl` a las 08:00 sobre el dominio prod), no cada 15 minutos. Si el día no está marcado o ya se envió hoy, el endpoint sale rápido sin armar el reporte Buk.
+- Envío manual sigue disponible en Buk → Alertas (sin cron).
+
+**Al diseñar jobs futuros:** preguntar “¿puede ser 1×/día o bajo demanda?” antes de proponer polling frecuente.
+
+---
+
+*Documento operativo. Al crear módulos: actualizar el diccionario (obligatorio). IA: leer este archivo al inicio de cada tarea.*

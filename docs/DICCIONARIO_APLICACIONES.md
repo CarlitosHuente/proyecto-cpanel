@@ -172,7 +172,8 @@ Blueprint `contab` — `routes/contab_routes.py`.
 
 ## 11. Configuración
 
-- Usuarios, roles/accesos, categorías, productos, anuncios, cargas.
+- Usuarios, roles/accesos, categorías, productos, anuncios, cargas, **notificaciones**.
+- **Notificaciones:** `/config/notificaciones` (permiso `config.notificaciones`). Destinatarios + envío automático (días/hora Chile) en `data/notificaciones_config.json` (por ahora solo `buk_alertas`). Cron: `GET|POST /config/notificaciones/cron` con `MAIL_SYNC_TOKEN` — **preferir 1×/día** a la hora configurada (no cada 15 min; ver resumen operativo §12). Envío vía `utils/mail_smtp.py` (`SMTP_*` o fallback `IMAP_*` de Arqueo).
 - **Import comercial:** `/config/comercial` (últimas 15 + upload); historial `/config/comercial/cargas`; revertir `POST …/revertir/<carga_id>` (CASCADE a `ventas_comercial`).
 - Carga agrícola y utilidades asociadas en el mismo blueprint (`routes/config_routes.py`).
 - Tras import: invalidar caché (`forzar_actualizacion`) / `/refresh` con sesión.
@@ -210,6 +211,7 @@ JSON UI (sin tabla): `instance/arqueo_canales_ui.json`, `instance/arqueo_tipos_p
 
 **Cuadratura:** terreno = Caja1+Caja2 por canal; sistema = total sucursal/día. Conciliado si diff 0 y hay datos.  
 **Cron sync PDF:** `POST …/correo-pdf/sync-token` + header `X-Mail-Sync-Token`.  
+La casilla `IMAP_*` también alimenta el envío SMTP compartido si no hay `SMTP_*` (ver Config → Notificaciones / `utils/mail_smtp.py`).  
 **Archivos:** `routes/arqueo_caja_routes.py`, `utils/arqueo_caja_*`, `utils/mail_imap_inbox.py`, `utils/correo_pdf_service.py`, `templates/arqueo_caja/*`.
 
 ---
@@ -295,15 +297,18 @@ Datos: `DATA_FABRICA_PAPAYA_IMPORT.sql` / `scripts/export_fabrica_papaya_sql.py`
 | `utils/buk_presencia.py` | Cruce nómina + marcaje día |
 | `utils/buk_calendario.py` | Mes: turnos + marcajes, horas netas |
 | `utils/buk_alertas.py` + `buk_alertas_revisadas.py` | Alertas + checkbox revisada (`data/buk_alertas_revisadas.json`) |
+| `utils/buk_alertas_correo.py` | Arma y envía resumen de alertas (destinos en Notificaciones) |
 | `utils/buk_colacion_config.py` | Colación por recinto JSON |
 | `utils/buk_ausencias.py` | Días sin marca en el mes |
 | Encuestas | PDF + subida docs (`buk_encuesta_pdf`, `buk_documentos`, `buk_notificacion`) |
+| Correo salida | `utils/mail_smtp.py` + `smtp_settings()` (SMTP_* o IMAP_*); From visible `SMTP_FROM_NAME` (default Huentelauquen) |
+| Plantilla reportes | `utils/mail_reporte_html.py` — HTML con tablas/colores reutilizable por módulo |
 
-**Rutas:** `/buk`, `/buk/asistencia`, `/buk/ausencias`, `/buk/calendario`, `/buk/alertas`, `/buk/encuestas`, APIs JSON. Overlay: `static/js/buk_loading.js`.
+**Rutas:** `/buk`, `/buk/asistencia`, `/buk/ausencias`, `/buk/calendario`, `/buk/alertas`, `POST /buk/alertas/enviar`, `/buk/encuestas`, APIs JSON. Overlay: `static/js/buk_loading.js`.
 
-**Env:** `BUK_TENANT`, `BUK_AUTH_TOKEN` (RRHH); `BUK_ASISTENCIA_TOKEN` (**distinto**); opcional `BUK_ASISTENCIA_API_BASE`, `BUK_ENCUESTA_CARPETA`, flags notificación / `SMTP_*`.
+**Env:** `BUK_TENANT`, `BUK_AUTH_TOKEN` (RRHH); `BUK_ASISTENCIA_TOKEN` (**distinto**); opcional `BUK_ASISTENCIA_API_BASE`, `BUK_ENCUESTA_CARPETA`, flags notificación / `SMTP_*` (o casilla `IMAP_*`).
 
-**Reglas:** consultas por id/código/RUT; horas UTC → `America/Santiago`. Horas netas = (salida − entrada) − colación (prioridad: turno Buk → grupo día → default sucursal). Alertas con corte **ayer**; sin turno mes = 0 jornadas laborales (`HH:MM-HH:MM`) en el mes.
+**Reglas:** consultas por id/código/RUT; horas UTC → `America/Santiago`. Horas netas = (salida − entrada) − colación (prioridad: turno Buk → grupo día → default sucursal). Alertas con corte **ayer**; sin turno mes = 0 jornadas laborales (`HH:MM-HH:MM`) en el mes. Envío de alertas: solo no revisadas; destinarios en Config → Notificaciones.
 
 **Turnos / descanso / rotación:** Buk marca días sin jornada con `horarioTurno: "-"` (Descanso, Turno Base en otro recinto). Solo horario válido genera «Sin marca» si falta entrada. Al filtrar recinto A: jornada en B → celda **↗ sucursal**; banner evaluación (días turno aquí, descansos, días en otras sucursales).
 

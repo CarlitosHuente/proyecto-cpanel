@@ -8,13 +8,12 @@ Aviso al colaborador tras subir documento firmable a Buk.
 from __future__ import annotations
 
 import os
-import smtplib
-from email.message import EmailMessage
 from typing import Any, Dict, List, Optional
 
 import requests
 
 from utils.env_config import buk_settings, load_env
+from utils.mail_smtp import enviar_correo, smtp_configurado
 
 DEFAULT_TIMEOUT = 30
 
@@ -55,10 +54,7 @@ def url_portal_buk() -> str:
 
 
 def _smtp_configurado() -> bool:
-    load_env()
-    host = (os.environ.get("SMTP_HOST") or "").strip()
-    from_addr = (os.environ.get("SMTP_FROM") or "").strip()
-    return bool(host and from_addr)
+    return smtp_configurado()
 
 
 def notificar_firmantes_documento(
@@ -131,7 +127,7 @@ def notificar_firmantes_documento(
         "canal": None,
         "error": (
             "Buk no expone API de notificación (campana) en este tenant. "
-            "Use Notificar en Documentos del colaborador en Buk, o configure SMTP_* en .env."
+            "Use Notificar en Documentos del colaborador en Buk, o configure SMTP_*/IMAP_* en .env."
         ),
         "detalle": {
             "portal_buk": url_portal_buk(),
@@ -150,23 +146,9 @@ def enviar_aviso_firma_correo(
 ) -> dict:
     """Correo de respaldo cuando la API Buk no notifica."""
     load_env()
-    host = (os.environ.get("SMTP_HOST") or "").strip()
-    port_raw = (os.environ.get("SMTP_PORT") or "587").strip()
-    user = (os.environ.get("SMTP_USER") or "").strip()
-    password = os.environ.get("SMTP_PASSWORD") or ""
-    from_addr = (os.environ.get("SMTP_FROM") or "").strip()
-    use_tls = _env_bool("SMTP_USE_TLS", True)
-
     destino = (empleado.get("email") or empleado.get("personal_email") or "").strip()
     if not destino:
         return {"ok": False, "error": "El colaborador no tiene email en Buk.", "destino": None}
-    if not host or not from_addr:
-        return {"ok": False, "error": "Falta SMTP_HOST o SMTP_FROM en .env.", "destino": destino}
-
-    try:
-        port = int(port_raw)
-    except ValueError:
-        port = 587
 
     nombre = (empleado.get("full_name") or "Colaborador").strip()
     portal = url_portal_buk()
@@ -182,22 +164,12 @@ def enviar_aviso_firma_correo(
         f"— Huente CPanel (aviso automático)\n"
     )
 
-    msg = EmailMessage()
-    msg["Subject"] = asunto
-    msg["From"] = from_addr
-    msg["To"] = destino
-    msg.set_content(cuerpo)
-
-    try:
-        with smtplib.SMTP(host, port, timeout=DEFAULT_TIMEOUT) as smtp:
-            if use_tls:
-                smtp.starttls()
-            if user:
-                smtp.login(user, password)
-            smtp.send_message(msg)
-    except smtplib.SMTPException as exc:
-        return {"ok": False, "error": f"Error SMTP: {exc}", "destino": destino}
-    except OSError as exc:
-        return {"ok": False, "error": f"Error de red SMTP: {exc}", "destino": destino}
-
-    return {"ok": True, "error": None, "destino": destino, "asunto": asunto}
+    envio = enviar_correo(destino, asunto, cuerpo)
+    return {
+        "ok": bool(envio.get("ok")),
+        "error": envio.get("error"),
+        "destino": destino,
+        "asunto": asunto,
+        "from_addr": envio.get("from_addr"),
+        "fuente": envio.get("fuente"),
+    }

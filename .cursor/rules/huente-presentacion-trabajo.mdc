@@ -25,13 +25,15 @@ alwaysApply: true
 
 | Archivo | Uso |
 |---------|-----|
-| [`docs/RESUMEN_OPERATIVO.md`](docs/RESUMEN_OPERATIVO.md) | Cómo trabajar, entornos, deploy, reglas UX transversales |
+| [`docs/RESUMEN_OPERATIVO.md`](docs/RESUMEN_OPERATIVO.md) | **Leer primero** en cada tarea: método, entornos, UX, **rendimiento/cron** |
 | [`docs/DICCIONARIO_APLICACIONES.md`](docs/DICCIONARIO_APLICACIONES.md) | Cómo funciona cada módulo (obligatorio al crear uno nuevo) |
 | [`docs/BITACORA.md`](docs/BITACORA.md) | Changelog (qué cambió y cuándo) |
 
 ## Flujo de trabajo (IA y equipo)
 
-1. **Alinear antes de implementar:** en cambios de negocio, alcance ambiguo o varias opciones válidas, proponer enfoque (archivos, riesgos, impacto en BD) y acordar **antes** de escribir código extenso.
-2. **Pruebas y comandos:** ejecutar pruebas locales, scripts, lint y lectura de archivos **sin pedir permiso ni esperar que el usuario pulse RUN** en cada paso; asumir entorno de desarrollo real. El usuario no debe autorizar comando por comando salvo acciones destructivas o despliegue a producción.
-3. Tras cambios de comportamiento visible: actualizar **`docs/DICCIONARIO_APLICACIONES.md`** si cambia el funcionamiento del módulo, añadir entrada en **`docs/BITACORA.md`**, y subir `?v=` en templates que enlazan JS tocado. Módulo **nuevo** → sección completa en el diccionario (ver resumen operativo §3).
-4. **Filtros de reportes:** no auto-aplicar al cambiar controles. Confirmar con botón («Aplicar filtros» / «Consultar») y mostrar overlay de carga; excepción solo carga inicial de página y limpiezas cruzadas de campos. Detalle en resumen operativo.
+1. **Leer** `docs/RESUMEN_OPERATIVO.md` (sobre todo §4 método y §12 rendimiento) antes de diseñar o codificar.
+2. **Alinear antes de implementar:** en cambios de negocio, alcance ambiguo o varias opciones válidas, proponer enfoque (archivos, riesgos, impacto en BD **y carga del hosting**) y acordar **antes** de escribir código extenso.
+3. **Pruebas y comandos:** ejecutar pruebas locales, scripts, lint y lectura de archivos **sin pedir permiso ni esperar que el usuario pulse RUN** en cada paso; asumir entorno de desarrollo real. El usuario no debe autorizar comando por comando salvo acciones destructivas o despliegue a producción.
+4. Tras cambios de comportamiento visible: actualizar **`docs/DICCIONARIO_APLICACIONES.md`** si cambia el funcionamiento del módulo, añadir entrada en **`docs/BITACORA.md`**, y subir `?v=` en templates que enlazan JS tocado. Módulo **nuevo** → sección completa en el diccionario (ver resumen operativo §3).
+5. **Filtros de reportes:** no auto-aplicar al cambiar controles. Confirmar con botón («Aplicar filtros» / «Consultar») y mostrar overlay de carga; excepción solo carga inicial de página y limpiezas cruzadas de campos. Detalle en resumen operativo.
+6. **Cron / jobs:** preferir 1×/día o bajo demanda; evitar polling frecuente (ver resumen §12).

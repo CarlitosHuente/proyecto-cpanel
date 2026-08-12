@@ -152,6 +152,7 @@ CATALOGO: List[dict] = [
             {"id": "config.productos", "label": "Productos", "desc": "Mantenedor de productos."},
             {"id": "config.categorias", "label": "Categorías", "desc": "Familias y rubros."},
             {"id": "config.anuncios", "label": "Anuncios Pop-Up", "desc": "Banners globales."},
+            {"id": "config.notificaciones", "label": "Notificaciones", "desc": "Correos destino (Alertas Buk y futuros reportes)."},
             {"id": "config.comercial", "label": "Import Comercial", "desc": "Carga Excel ventas comerciales."},
         ],
     },
@@ -201,6 +202,7 @@ PAGINAS_INICIO: List[dict] = [
     {"endpoint": "utilidades.calculadora_margen", "label": "Utilidades — Calculadoras"},
     {"endpoint": "config.usuarios", "label": "Config — Usuarios"},
     {"endpoint": "config.accesos", "label": "Config — Centro de Accesos"},
+    {"endpoint": "config.notificaciones", "label": "Config — Notificaciones"},
     {"endpoint": "config.gestion_agricola", "label": "Import Agrícola"},
 ]
 
@@ -246,6 +248,7 @@ PERMISO_RUTA_LEGACY: Dict[str, str] = {
     "config.productos": "productos",
     "config.categorias": "categorias",
     "config.anuncios": "config",
+    "config.notificaciones": "config",
     "config.comercial": "config",
     "dashboard.kpis": "dashboard",
     "dashboard.horario": "dashboard",

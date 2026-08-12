@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, abort, session, jsonify, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, abort, session, jsonify, current_app, flash
 from utils.auth import login_requerido, permiso_modulo, PERMISOS, guardar_permisos_json, recargar_permisos
 from utils.db import get_db_connection
 from utils.permisos_catalogo import catalogo_para_template, PAGINAS_INICIO
@@ -651,6 +651,77 @@ def toggle_mayorista():
 import os
 from werkzeug.utils import secure_filename
 from flask import Blueprint, request, jsonify, render_template, current_app
+
+@config_bp.route("/notificaciones", methods=["GET", "POST"])
+@login_requerido
+@permiso_modulo("config.notificaciones")
+def notificaciones():
+    from utils.env_config import smtp_settings
+    from utils.mail_smtp import smtp_configurado
+    from utils.notificaciones_config import (
+        DIAS_SEMANA,
+        SECCIONES,
+        emails_texto_para_form,
+        guardar_seccion,
+        leer,
+    )
+
+    if request.method == "POST":
+        seccion = (request.form.get("seccion") or "buk_alertas").strip()
+        emails_raw = request.form.get("emails") or ""
+        auto_activo = request.form.get("auto_activo") == "1"
+        auto_dias = request.form.getlist("auto_dias")
+        auto_hora = request.form.get("auto_hora") or "08:00"
+        ok, msg, _block = guardar_seccion(
+            seccion,
+            emails_raw,
+            auto_activo=auto_activo,
+            auto_dias=auto_dias,
+            auto_hora=auto_hora,
+        )
+        if ok:
+            flash(
+                f"Notificaciones «{SECCIONES.get(seccion, {}).get('label', seccion)}» guardadas "
+                f"({len((_block or {}).get('emails') or [])} correo(s)"
+                f"{', automático ON' if auto_activo else ', automático OFF'}).",
+                "success",
+            )
+        else:
+            flash(msg, "danger")
+        return redirect(url_for("config.notificaciones"))
+
+    smtp = smtp_settings()
+    return render_template(
+        "config/notificaciones.html",
+        secciones=SECCIONES,
+        config=leer(),
+        emails_buk_texto=emails_texto_para_form("buk_alertas"),
+        dias_semana=DIAS_SEMANA,
+        smtp_ok=smtp_configurado(),
+        smtp_fuente=smtp.get("fuente"),
+        smtp_from=smtp.get("from_addr") or "",
+        smtp_from_name=smtp.get("from_name") or "Huentelauquen",
+        url_cron_path=url_for("config.notificaciones_cron"),
+    )
+
+
+@config_bp.route("/notificaciones/cron", methods=["GET", "POST"])
+def notificaciones_cron():
+    """Endpoint para cron cPanel. Requiere MAIL_SYNC_TOKEN (header o ?token=)."""
+    import secrets
+
+    from utils.env_config import mail_sync_token
+    from utils.notificaciones_cron import procesar_notificaciones_auto
+
+    expected = mail_sync_token()
+    got = (request.headers.get("X-Mail-Sync-Token") or request.args.get("token") or "").strip()
+    if not expected or not got or not secrets.compare_digest(got, expected):
+        return jsonify({"ok": False, "error": "Unauthorized"}), 403
+
+    forzar = (request.args.get("forzar") or "").strip().lower() in ("1", "true", "si", "sí")
+    result = procesar_notificaciones_auto(forzar=forzar)
+    return jsonify(result)
+
 
 @config_bp.route("/anuncios")
 @login_requerido

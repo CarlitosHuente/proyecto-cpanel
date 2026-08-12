@@ -1,11 +1,12 @@
 from datetime import datetime
 
-from flask import Blueprint, jsonify, render_template, request, session
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, session, url_for
 
 from utils.auth import login_requerido, permiso_modulo
 from utils.buk_api import listar_trabajadores_vigentes, probar_conexion
 from utils.buk_asistencia_api import probar_conexion as probar_conexion_asistencia
 from utils.buk_alertas import contador_alertas_mes, reporte_alertas_mes
+from utils.buk_alertas_correo import enviar_alertas_buk
 from utils.buk_alertas_revisadas import marcar as marcar_alerta_revisada
 from utils.buk_ausencias import reporte_ausencias_mes
 from utils.buk_calendario import opciones_calendario, reporte_calendario_mes
@@ -18,6 +19,8 @@ from utils.buk_colacion_config import (
 from utils.buk_presencia import listar_presencia_dia
 from utils.buk_documentos import buscar_empleado_vigente_por_rut, subir_pdf_con_firma_empleado, carpeta_encuestas
 from utils.buk_encuesta_pdf import CAMPOS_ENCUESTA, generar_pdf_encuesta
+from utils.notificaciones_config import emails_seccion
+from utils.mail_smtp import smtp_configurado
 
 buk_bp = Blueprint("buk", __name__, url_prefix="/buk")
 
@@ -71,15 +74,15 @@ def _fecha_desde_request():
 
 
 def _mes_anio_desde_request():
-    raw = (request.args.get("mes") or "").strip()
+    raw = (request.values.get("mes") or "").strip()
     if raw and len(raw) >= 7 and "-" in raw:
         try:
             dt = datetime.strptime(raw[:7], "%Y-%m")
             return dt.year, dt.month
         except ValueError:
             pass
-    anio = request.args.get("anio", type=int)
-    mes = request.args.get("mes_num", type=int)
+    anio = request.values.get("anio", type=int)
+    mes = request.values.get("mes_num", type=int)
     if anio and mes:
         return anio, mes
     hoy = datetime.today()
@@ -306,6 +309,7 @@ def alertas():
     incluir = request.args.get("incluir_revisadas", "0") == "1"
     opciones = opciones_calendario()
     resultado = reporte_alertas_mes(anio, mes, obra_id, incluir_revisadas=incluir)
+    destinarios = emails_seccion("buk_alertas")
     return render_template(
         "buk/alertas.html",
         mes_input=mes_input,
@@ -313,7 +317,48 @@ def alertas():
         incluir_revisadas=incluir,
         opciones=opciones,
         resultado=resultado,
+        notif_emails=destinarios,
+        smtp_ok=smtp_configurado(),
     )
+
+
+@buk_bp.route("/alertas/enviar", methods=["POST"])
+@login_requerido
+@permiso_modulo("buk")
+def alertas_enviar():
+    anio, mes = _mes_anio_desde_request()
+    obra_id = (request.form.get("obra_id") or request.args.get("obra_id") or "").strip() or None
+    incluir = request.args.get("incluir_revisadas", "0") == "1"
+    if request.form.get("incluir_revisadas") == "1":
+        incluir = True
+    mes_input = f"{anio}-{mes:02d}"
+    redirect_kwargs = {"mes": mes_input}
+    if obra_id:
+        redirect_kwargs["obra_id"] = obra_id
+    if incluir:
+        redirect_kwargs["incluir_revisadas"] = "1"
+
+    destinarios = emails_seccion("buk_alertas")
+    if not destinarios:
+        flash(
+            "No hay correos configurados para Alertas Buk. "
+            "Configure destinatarios en Configuración → Notificaciones.",
+            "warning",
+        )
+        return redirect(url_for("buk.alertas", **redirect_kwargs))
+
+    resultado = enviar_alertas_buk(anio, mes, obra_id)
+    if resultado.get("ok"):
+        dest = ", ".join(resultado.get("destinos") or destinarios)
+        pendientes = resultado.get("total_pendientes")
+        flash(
+            f"Alertas Buk enviadas a: {dest}"
+            + (f" ({pendientes} pendiente(s))." if pendientes is not None else "."),
+            "success",
+        )
+    else:
+        flash(resultado.get("error") or "No se pudo enviar el correo.", "danger")
+    return redirect(url_for("buk.alertas", **redirect_kwargs))
 
 
 @buk_bp.route("/api/alertas-mes")

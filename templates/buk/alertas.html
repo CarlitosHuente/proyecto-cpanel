@@ -21,10 +21,32 @@
             </p>
         </div>
         <div class="d-flex gap-2 flex-wrap">
+            {% if resultado and resultado.ok %}
+            <form id="form-enviar-alertas" method="post" action="{{ url_for('buk.alertas_enviar') }}" class="d-inline">
+                <input type="hidden" name="mes" value="{{ mes_input }}">
+                {% if obra_id %}<input type="hidden" name="obra_id" value="{{ obra_id }}">{% endif %}
+                {% if incluir_revisadas %}<input type="hidden" name="incluir_revisadas" value="1">{% endif %}
+                <button type="submit" class="btn btn-warning btn-sm" id="btn-enviar-alertas-correo"
+                    {% if not notif_emails %}disabled title="Configure correos en Configuración → Notificaciones"{% endif %}>
+                    <i class="bi bi-envelope me-1"></i>Enviar por correo
+                </button>
+            </form>
+            {% endif %}
             <a href="{{ url_for('buk.calendario') }}" class="btn btn-outline-info btn-sm">Calendario</a>
             <a href="{{ url_for('buk.asistencia') }}" class="btn btn-outline-secondary btn-sm">Asistencia hoy</a>
         </div>
     </div>
+
+    {% if not notif_emails %}
+    <div class="alert alert-secondary py-2 small">
+        Sin destinatarios para Alertas Buk.
+        <a href="{{ url_for('config.notificaciones') }}" class="alert-link">Configuración → Notificaciones</a>
+    </div>
+    {% elif not smtp_ok %}
+    <div class="alert alert-warning py-2 small">
+        Destinatarios OK, pero falta configurar salida de correo (IMAP_* o SMTP_*).
+    </div>
+    {% endif %}
 
     <form method="get" action="{{ url_for('buk.alertas') }}" class="card bg-dark border-secondary mb-3"
         onsubmit="if(window.HuenteBukLoading)HuenteBukLoading.mostrar();">
@@ -174,6 +196,25 @@
 <script>
 (function () {
     const apiRevisar = {{ url_for('buk.api_alertas_revisar')|tojson }};
+    const notifEmails = {{ (notif_emails or [])|tojson }};
+
+    var formEnviar = document.getElementById('form-enviar-alertas');
+    if (formEnviar) {
+        formEnviar.addEventListener('submit', function (ev) {
+            if (!notifEmails.length) {
+                ev.preventDefault();
+                alert('No hay correos configurados. Vaya a Configuración → Notificaciones.');
+                return;
+            }
+            var lista = notifEmails.join(', ');
+            var ok = window.confirm('Vas a enviar Alertas Buk a:\n\n' + lista + '\n\n¿Continuar?');
+            if (!ok) {
+                ev.preventDefault();
+                return;
+            }
+            if (window.HuenteBukLoading) HuenteBukLoading.mostrar();
+        });
+    }
 
     function toggleGrupos(mostrar) {
         document.querySelectorAll('[id^="alertas-"][class*="collapse"]').forEach(function (el) {

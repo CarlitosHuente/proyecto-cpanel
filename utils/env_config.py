@@ -131,3 +131,56 @@ def mail_sync_token() -> str:
     """Token secreto para endpoint de sync por cron."""
     load_env()
     return (os.environ.get("MAIL_SYNC_TOKEN") or "").strip()
+
+
+def smtp_settings() -> Dict[str, Optional[str]]:
+    """
+    Credenciales SMTP para envío desde Huente.
+    Preferencia: SMTP_* explícitos.
+    Fallback: misma casilla IMAP (Arqueo / HostChile) — mínima config nueva.
+    """
+    load_env()
+    imap = imap_settings()
+
+    host = (os.environ.get("SMTP_HOST") or "").strip() or (imap.get("host") or "")
+    user = (os.environ.get("SMTP_USER") or "").strip() or (imap.get("user") or "")
+    password_env = os.environ.get("SMTP_PASSWORD")
+    if password_env is not None and str(password_env) != "":
+        password = password_env
+    else:
+        password = imap.get("password") or ""
+
+    from_addr = (os.environ.get("SMTP_FROM") or "").strip() or user
+    from_name = (os.environ.get("SMTP_FROM_NAME") or "").strip() or "Huentelauquen"
+
+    port_raw = (os.environ.get("SMTP_PORT") or "").strip()
+    if port_raw:
+        try:
+            port = int(port_raw)
+        except ValueError:
+            port = 587
+    else:
+        port = 587
+
+    use_ssl = _env_bool("SMTP_USE_SSL", False) or port == 465
+    if os.environ.get("SMTP_USE_TLS") is not None and str(os.environ.get("SMTP_USE_TLS")).strip() != "":
+        use_tls = _env_bool("SMTP_USE_TLS", True) and not use_ssl
+    else:
+        use_tls = not use_ssl
+
+    fuente = "smtp" if (os.environ.get("SMTP_HOST") or "").strip() else (
+        "imap_fallback" if imap.get("configurado") else "none"
+    )
+    configurado = bool(host and from_addr and user and password)
+    return {
+        "host": host,
+        "port": port,
+        "user": user,
+        "password": password,
+        "from_addr": from_addr,
+        "from_name": from_name,
+        "use_tls": use_tls,
+        "use_ssl": use_ssl,
+        "fuente": fuente if configurado else "none",
+        "configurado": configurado,
+    }

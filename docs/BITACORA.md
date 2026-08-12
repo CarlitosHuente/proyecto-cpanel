@@ -8,6 +8,17 @@ Al cerrar un cambio relevante: entrada breve aquí + actualizar diccionario si c
 
 ---
 
+## 2026-08-12 — Notificaciones + envío Alertas Buk
+
+- Config → **Notificaciones** (`/config/notificaciones`): destinarios en `data/notificaciones_config.json` (bloque Alertas Buk).
+- Envío automático: días + hora (Chile); cron `/config/notificaciones/cron` + `MAIL_SYNC_TOKEN` (**1×/día** recomendado, no cada 15 min).
+- Resumen operativo §12: reglas de rendimiento / crons livianos.
+- Mailer común `utils/mail_smtp.py` + `smtp_settings()`: `SMTP_*` o fallback a casilla `IMAP_*` (Arqueo); remitente visible **Huentelauquen** (`SMTP_FROM_NAME`).
+- Plantilla HTML reutilizable `utils/mail_reporte_html.py` (tablas/colores; RUT en una línea).
+- Buk Alertas: botón **Enviar por correo** con confirmación de destinarios; `POST /buk/alertas/enviar`.
+- Menú lateral: scroll interno (`.sidebar-nav`) para ver todos los módulos.
+- Aviso firma Buk reusa el mismo mailer.
+
 ## 2026-08-11 — Deploy FxR en producción + docs
 
 - Código FxR en rama `feature/comercial-ventas-dashboard` (commit con módulo + Drive Apps Script).

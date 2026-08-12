@@ -22,8 +22,23 @@
             padding-top: 20px;
             width: 220px;
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
             transition: width 0.2s ease, transform 0.3s ease;
             z-index: 1040;
+        }
+        .sidebar-nav {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 1.25rem;
+        }
+        .sidebar-nav::-webkit-scrollbar { width: 6px; }
+        .sidebar-nav::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 4px;
         }
         .sidebar a {
             color: white;
@@ -164,6 +179,7 @@
             </button>
         </div>
 
+        <div class="sidebar-nav">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 <div style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; width: auto; max-width: 90%;">
@@ -380,6 +396,13 @@
                         </a>
                     </li>
                     {% endif %}
+                    {% if tiene_permiso(rol_actual, 'config') or tiene_permiso(rol_actual, 'config.notificaciones') %}
+                    <li>
+                        <a href="{{ url_for('config.notificaciones') }}" class="text-white text-decoration-none rounded p-1 d-block">
+                            <i class="bi bi-envelope-paper me-2"></i> Notificaciones
+                        </a>
+                    </li>
+                    {% endif %}
                 </ul>
             </div>
         </li>
@@ -389,6 +412,7 @@
 
         
         <a href="{{ url_for('auth.logout') }}"><span class="texto-menu">Cerrar sesión</span></a>
+        </div>
     </div>
 
     <div class="main-content flex-grow-1">
