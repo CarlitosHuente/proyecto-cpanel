@@ -103,78 +103,16 @@ Variables habituales: ver `.env.example` (`DB_*`, `SECRET_KEY`, `BUK_*`, `IMAP_*
 - `SECRET_KEY`: opcional en env; si falta, se crea `instance/flask_secret_key` (gitignored). Tras rotar clave → re-login.
 - Latencia: tablas grandes (`ventas_comercial` ~550k filas) → CPU/I/O; hay endpoints livianos y caché (ver diccionario § Cachés).
 - Binarios pesados (`.xlsx`/PDF de prueba) en `docs/`: preferir no versionar si no son necesarios; sí versionar SQL y estos tres markdown.
-
-### 6.1 Terminal cPanel (HostChile)
-
-Prompt típico: `contaca3@certiweb ~]$` (usuario SSH del hosting).
-
-1. Ir al directorio de la app Flask (ajusta la ruta real; suele estar bajo `~/` o un dominio):
-
-```bash
-pwd
-ls
-# Ejemplo (cambiar por la carpeta real del proyecto):
-cd ~/proyecto-cpanel
-# o: cd ~/public_html/...   /   cd ~/huente_app
-pwd
-ls app.py requirements.txt
-```
-
-2. Traer código (rama de integración actual):
-
-```bash
-git status
-git fetch origin
-git checkout feature/comercial-ventas-dashboard
-git pull origin feature/comercial-ventas-dashboard
-```
-
-3. Activar venv del hosting e instalar deps (Pillow nuevo para FxR):
-
-```bash
-# Si el venv ya existe en la app:
-source venv/bin/activate
-# Si Passenger usa otro Python/venv (Setup Python App de cPanel), activa ese:
-# source ~/virtualenv/NOMBRE_APP/3.x/bin/activate
-
-python -V
-pip install -r requirements.txt
-python -c "from PIL import Image; import reportlab, pypdf; print('deps ok', Image.__version__)"
-```
-
-4. Carpeta de staging FxR (writable):
-
-```bash
-mkdir -p uploads/fxr
-chmod -R u+rwX uploads
-```
-
-5. Reiniciar Passenger (elige el que uses en el hosting):
-
-```bash
-mkdir -p tmp
-touch tmp/restart.txt
-# Si Setup Python App tiene botón Restart en cPanel, úsalo también.
-```
-
-6. Smoke rápido en terminal (opcional):
-
-```bash
-python -c "from routes.fxr_routes import fxr_bp; print('fxr ok')"
-```
-
-Luego en el navegador: login → menú Fondos por Rendir → subir foto → vista previa → (super) aprobar.
-
-**SQL:** los ALTER de FxR se ejecutan en phpMyAdmin (ya aplicados si la BD está al día). No hace falta repetirlos desde la terminal salvo rollback.
+- App en hosting: directorio del dominio `datoshuente.com` (código Flask + Passenger). SQL vía phpMyAdmin; deps/reinicio desde la app Python de cPanel cuando aplique.
 
 **Checklist deploy**
 
 1. Backup DB (sobre todo si hay SQL).
-2. Pull de rama aprobada (pasos §6.1).
-3. `pip install -r requirements.txt` si cambiaron deps + verificar import Pillow/reportlab/pypdf.
+2. Pull de rama aprobada.
+3. `pip install -r requirements.txt` si cambiaron deps (FxR añade `Pillow`; verificar que importen `PIL`, `reportlab`, `pypdf`).
 4. Ejecutar bloques nuevos de `QUERY_CAMBIOS_PRODUCCION.sql` si aplica (phpMyAdmin).
-5. Reiniciar app (`touch tmp/restart.txt`).
-6. Smoke test: login, módulo FxR, un flujo transversal; Contab mayor sigue OK.
+5. Reiniciar app.
+6. Smoke test: login, módulo tocado, un flujo transversal; Contab mayor sigue OK si se tocó Apps Script.
 
 **Rollback:** volver a commit/rama estable; no tocar BD salvo que el cambio hubiera incluido migraciones.
 

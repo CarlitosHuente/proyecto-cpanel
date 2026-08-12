@@ -8,30 +8,21 @@ Al cerrar un cambio relevante: entrada breve aquí + actualizar diccionario si c
 
 ---
 
+## 2026-08-11 — Deploy FxR en producción + docs
+
+- Código FxR en rama `feature/comercial-ventas-dashboard` (commit con módulo + Drive Apps Script).
+- SQL de FxR aplicado en prod (phpMyAdmin); sin guía SSH larga en resumen operativo (deploy vía cPanel / pull en `datoshuente.com`).
+- Checklist deploy: `Pillow` en requirements; permiso `fxr` en Config → Accesos (`roles_config` es local al hosting); perfiles Nombre + CC FxR en Usuarios.
+
 ## 2026-08-11 — Buk calendario: descanso y rotación
 
 - Días con `horarioTurno: "-"` → **Descanso** (no «Sin marca»). Placeholder `vacaciones: true` + «-» ignorado como vacaciones reales.
 - Filtro por recinto: si la jornada está en otra sucursal → celda **↗** + banner evaluación rápida (turnos aquí / descansos / rotación).
 - Alertas alineadas con la misma regla de jornada laboral.
 
-## 2026-08-11 — FxR: preview, firma y perfil usuario
-
-- Vista previa alineada al PDF (logo, Comercial SpA, tabla amarilla).
-- Campo `comentario_firma` bajo el TOTAL (PDF + preview + cabecera editable).
-- `usuarios_huente.nombre` y `fxr_centro_costo_id`: se asignan en Config → Usuarios; FxR usa el nombre en cabecera y el CC por defecto en líneas nuevas.
-
-## 2026-08-11 — FxR: PDF resumen estilo formato
-
-- Portada PDF alineada al formato Excel: logo, empresa Comercial SpA / RUT 77.332.804-8, caja celeste Nombre/Área/Fecha, encabezado amarillo, celdas con borde y anchos fijos (sin solapar Fecha/Tipo/etc.).
-
-## 2026-08-11 — FxR: listado de aprobadas (super)
-
-- Superusuario ve todas las rendiciones `aprobada` en `/fxr/aprobadas` y un resumen en el home FxR (N°, usuario, total, PDF Drive).
-
 ## 2026-08-11 — Módulo Fondos por Rendir (FxR)
 
-- Nuevo módulo `/fxr`: inbox foto/PDF (staging hosting), tipos de gasto y centros de costo globales, líneas con alerta/autorización de `n_doc` duplicado, estados borrador→preparada→aprobada/rechazada, revisión superusuario en paralelo, PDF a Drive con referencia de duplicados y limpieza de staging.
-- Permiso `fxr`; DDL en `QUERY_CAMBIOS_PRODUCCION.sql` + ensure al entrar. Ver diccionario §20.
+- Nuevo módulo `/fxr`: inbox foto/PDF (staging hosting), tipos de gasto y centros de costo globales, líneas con alerta/autorización de `n_doc` duplicado, estados borrador→preparada→aprobada/rechazada, revisión superusuario, PDF estilo formato (logo, Comercial SpA / 77.332.804-8, comentario/firma), listado aprobadas para super, perfil usuario (nombre + CC). Ver diccionario §20.
 
 ## 2026-08-10 — Prueba Drive (imágenes / Apps Script)
 
