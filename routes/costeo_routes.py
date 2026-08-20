@@ -54,13 +54,13 @@ def _periodos_mayor(df_mayor=None):
 
 
 def periodo_costeo(df_mayor=None):
-    """Predeterminado: mes más antiguo del mayor. Si el usuario elige otro mes, se respeta."""
+    """Predeterminado: mes más reciente del mayor. Si el usuario elige otro mes, se respeta."""
     pedido = (request.args.get("periodo") or "").strip()
     if pedido:
         return pedido
     periodos = _periodos_mayor(df_mayor)
     if periodos:
-        return periodos[0]
+        return periodos[-1]
     return datetime.now().strftime("%Y-%m")
 
 @costeo_bp.route("/mapeo")

@@ -8,9 +8,9 @@ Al cerrar un cambio relevante: entrada breve aquí + actualizar diccionario si c
 
 ---
 
-## 2026-08-19 — Costeo: periodo = mes más antiguo del mayor
+## 2026-08-19 — Costeo: periodo = mes más reciente del mayor
 
-- Directos, GAV, simulador y rentabilidad abren en el YYYY-MM más antiguo del mayor; el usuario puede cambiar el mes a cualquiera.
+- Directos, GAV, simulador y rentabilidad abren en el YYYY-MM más reciente del mayor; el usuario puede cambiar el mes a cualquiera.
 
 ## 2026-08-19 — Costeo: 500 en producción
 
