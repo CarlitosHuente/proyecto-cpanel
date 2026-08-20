@@ -59,37 +59,38 @@
 
           <h6 class="text-light">Inbox ({{ inbox|length }})</h6>
           {% if inbox %}
-          <form method="post" action="{{ url_for('fxr.nueva_rendicion') }}">
+          {# Formularios NO anidados: checkboxes usan form=; Eliminar es form aparte #}
+          <form id="fxr-form-rendir" method="post" action="{{ url_for('fxr.nueva_rendicion') }}">
             <div class="mb-2 fxr-pc-only">
               <input type="text" name="area" class="form-control form-control-sm bg-black text-white border-secondary" placeholder="Área (opcional)">
             </div>
-            <div class="list-group list-group-flush mb-2">
-              {% for c in inbox %}
-              <div class="list-group-item bg-black text-white border-secondary d-flex gap-2 align-items-center flex-wrap">
-                <label class="d-flex gap-2 align-items-center flex-grow-1 mb-0" style="cursor:pointer">
-                  <input type="checkbox" name="comp_ids" value="{{ c.id }}">
-                  {% if 'pdf' not in (c.mime or '') %}
-                  <img class="fxr-inbox-thumb" src="{{ url_for('fxr.servir_archivo', cid=c.id) }}" alt="">
-                  {% else %}
-                  <span class="badge bg-secondary">PDF</span>
-                  {% endif %}
-                  <span class="small">#{{ c.id }} · {{ c.created_at }}</span>
-                </label>
-                <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('fxr.servir_archivo', cid=c.id) }}" target="_blank">Ver</a>
-                {% if 'pdf' in (c.mime or '') %}
-                <a class="btn btn-sm btn-outline-warning" href="{{ url_for('fxr.paginas_pdf', cid=c.id) }}">Páginas</a>
-                {% else %}
-                <a class="btn btn-sm btn-outline-info" href="{{ url_for('fxr.pulir_comprobante', cid=c.id) }}">Pulir</a>
-                {% endif %}
-                <form method="post" action="{{ url_for('fxr.eliminar_comprobante_inbox', cid=c.id) }}" class="d-inline"
-                      onsubmit="return confirm('¿Eliminar este archivo del inbox? No se puede deshacer.');">
-                  <button type="submit" class="btn btn-sm btn-outline-danger">Eliminar</button>
-                </form>
-              </div>
-              {% endfor %}
-            </div>
-            <button class="btn btn-primary btn-sm" type="submit">Rendir seleccionados</button>
           </form>
+          <div class="list-group list-group-flush mb-2">
+            {% for c in inbox %}
+            <div class="list-group-item bg-black text-white border-secondary d-flex gap-2 align-items-center flex-wrap">
+              <label class="d-flex gap-2 align-items-center flex-grow-1 mb-0" style="cursor:pointer">
+                <input form="fxr-form-rendir" type="checkbox" name="comp_ids" value="{{ c.id }}">
+                {% if 'pdf' not in (c.mime or '') %}
+                <img class="fxr-inbox-thumb" src="{{ url_for('fxr.servir_archivo', cid=c.id) }}" alt="">
+                {% else %}
+                <span class="badge bg-secondary">PDF</span>
+                {% endif %}
+                <span class="small">#{{ c.id }} · {{ c.created_at }}</span>
+              </label>
+              <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('fxr.servir_archivo', cid=c.id) }}" target="_blank">Ver</a>
+              {% if 'pdf' in (c.mime or '') %}
+              <a class="btn btn-sm btn-outline-warning" href="{{ url_for('fxr.paginas_pdf', cid=c.id) }}">Páginas</a>
+              {% else %}
+              <a class="btn btn-sm btn-outline-info" href="{{ url_for('fxr.pulir_comprobante', cid=c.id) }}">Pulir</a>
+              {% endif %}
+              <form method="post" action="{{ url_for('fxr.eliminar_comprobante_inbox', cid=c.id) }}" class="d-inline"
+                    onsubmit="return confirm('¿Eliminar este archivo del inbox? No se puede deshacer.');">
+                <button type="submit" class="btn btn-sm btn-outline-danger">Eliminar</button>
+              </form>
+            </div>
+            {% endfor %}
+          </div>
+          <button class="btn btn-primary btn-sm" type="submit" form="fxr-form-rendir">Rendir seleccionados</button>
           {% else %}
           <p class="text-muted small">Sin comprobantes en inbox.</p>
           {% endif %}

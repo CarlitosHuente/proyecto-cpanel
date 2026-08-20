@@ -337,67 +337,184 @@
     );
   });
 
-  // Simple auto-detect: edge density scan for largest rectangle-ish bounds
+  // Detección mejorada: bordes Sobel + escaneo desde el marco + blob claro
   function autoDetectSimple() {
     const w = img.naturalWidth;
     const h = img.naturalHeight;
     const c = document.createElement("canvas");
-    const maxSide = 400;
+    const maxSide = 480;
     const s = Math.min(1, maxSide / Math.max(w, h));
     const sw = Math.round(w * s);
     const sh = Math.round(h * s);
     c.width = sw;
     c.height = sh;
-    const cx = c.getContext("2d");
+    const cx = c.getContext("2d", { willReadFrequently: true });
     cx.drawImage(img, 0, 0, sw, sh);
     const data = cx.getImageData(0, 0, sw, sh).data;
-    // brightness map
     const gray = new Float32Array(sw * sh);
     for (let i = 0; i < sw * sh; i++) {
       const o = i * 4;
       gray[i] = 0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2];
     }
-    // Find bright paper vs dark bg via percentile threshold
-    const sorted = Array.from(gray).sort((a, b) => a - b);
-    const thr = sorted[Math.floor(sorted.length * 0.55)];
-    let minX = sw,
-      minY = sh,
-      maxX = 0,
-      maxY = 0,
-      count = 0;
-    for (let y = 0; y < sh; y++) {
-      for (let x = 0; x < sw; x++) {
-        if (gray[y * sw + x] >= thr) {
-          count++;
-          if (x < minX) minX = x;
-          if (y < minY) minY = y;
-          if (x > maxX) maxX = x;
-          if (y > maxY) maxY = y;
+
+    // Soft blur 3x3
+    const blur = new Float32Array(sw * sh);
+    for (let y = 1; y < sh - 1; y++) {
+      for (let x = 1; x < sw - 1; x++) {
+        let sum = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) sum += gray[(y + dy) * sw + (x + dx)];
         }
+        blur[y * sw + x] = sum / 9;
       }
     }
-    if (count < sw * sh * 0.05) {
+
+    // Sobel magnitude
+    const mag = new Float32Array(sw * sh);
+    let magMax = 1;
+    for (let y = 1; y < sh - 1; y++) {
+      for (let x = 1; x < sw - 1; x++) {
+        const gx =
+          -blur[(y - 1) * sw + (x - 1)] +
+          blur[(y - 1) * sw + (x + 1)] -
+          2 * blur[y * sw + (x - 1)] +
+          2 * blur[y * sw + (x + 1)] -
+          blur[(y + 1) * sw + (x - 1)] +
+          blur[(y + 1) * sw + (x + 1)];
+        const gy =
+          -blur[(y - 1) * sw + (x - 1)] -
+          2 * blur[(y - 1) * sw + x] -
+          blur[(y - 1) * sw + (x + 1)] +
+          blur[(y + 1) * sw + (x - 1)] +
+          2 * blur[(y + 1) * sw + x] +
+          blur[(y + 1) * sw + (x + 1)];
+        const m = Math.sqrt(gx * gx + gy * gy);
+        mag[y * sw + x] = m;
+        if (m > magMax) magMax = m;
+      }
+    }
+    const edgeThr = magMax * 0.18;
+
+    // Desde cada borde, encontrar la primera línea con muchos bordes (marco del papel)
+    function scanEdge(horizontal, fromStart) {
+      const limit = horizontal ? sh : sw;
+      const other = horizontal ? sw : sh;
+      const start = fromStart ? 2 : limit - 3;
+      const end = fromStart ? Math.floor(limit * 0.45) : Math.floor(limit * 0.55);
+      const step = fromStart ? 1 : -1;
+      let best = fromStart ? Math.floor(limit * 0.08) : Math.floor(limit * 0.92);
+      let bestScore = -1;
+      for (let i = start; fromStart ? i < end : i > end; i += step) {
+        let score = 0;
+        for (let j = Math.floor(other * 0.1); j < Math.floor(other * 0.9); j++) {
+          const x = horizontal ? j : i;
+          const y = horizontal ? i : j;
+          if (mag[y * sw + x] >= edgeThr) score++;
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          best = i;
+        }
+        // early stop if strong continuous edge after leaving border noise
+        if (score > other * 0.25 && (fromStart ? i > 8 : i < limit - 8)) break;
+      }
+      return best;
+    }
+
+    let top = scanEdge(true, true);
+    let bottom = scanEdge(true, false);
+    let left = scanEdge(false, true);
+    let right = scanEdge(false, false);
+
+    // Refinar con blob claro (papel) si el marco es dudoso
+    const sorted = Array.from(blur).filter((_, i) => {
+      const x = i % sw;
+      const y = (i / sw) | 0;
+      return x > 2 && y > 2 && x < sw - 2 && y < sh - 2;
+    });
+    sorted.sort((a, b) => a - b);
+    const candidates = [];
+    for (const pct of [0.45, 0.55, 0.65]) {
+      const thr = sorted[Math.floor(sorted.length * pct)] || 128;
+      let minX = sw,
+        minY = sh,
+        maxX = 0,
+        maxY = 0,
+        count = 0;
+      for (let y = 0; y < sh; y++) {
+        for (let x = 0; x < sw; x++) {
+          if (blur[y * sw + x] >= thr) {
+            count++;
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+      const area = (maxX - minX) * (maxY - minY);
+      if (count > sw * sh * 0.08 && area > sw * sh * 0.12) {
+        candidates.push({ minX, minY, maxX, maxY, area, count });
+      }
+    }
+    if (candidates.length) {
+      candidates.sort((a, b) => b.area - a.area);
+      const best = candidates[0];
+      // Mezcla: preferir blob si el scan de bordes quedó muy al margen
+      const frameArea = Math.max(1, (right - left) * (bottom - top));
+      if (best.area > frameArea * 0.7 || frameArea > sw * sh * 0.95) {
+        left = best.minX;
+        top = best.minY;
+        right = best.maxX;
+        bottom = best.maxY;
+      }
+    }
+
+    // Asegurar orden y margen mínimo
+    if (right - left < sw * 0.25 || bottom - top < sh * 0.25) {
       corners = defaultCorners(w, h);
       draw();
       return;
     }
-    const pad = 2;
-    minX = Math.max(0, minX - pad) / s;
-    minY = Math.max(0, minY - pad) / s;
-    maxX = Math.min(w, (maxX + pad) / s);
-    maxY = Math.min(h, (maxY + pad) / s);
+    const pad = 3;
+    left = Math.max(0, left - pad);
+    top = Math.max(0, top - pad);
+    right = Math.min(sw - 1, right + pad);
+    bottom = Math.min(sh - 1, bottom + pad);
+
+    // Esquinas: extremos del rectángulo (usuario puede arrastrar si hay perspectiva)
+    // Intento de esquinas “reales” buscando máximo borde cerca de cada esquina del bbox
+    function refineCorner(cx0, cy0, dx, dy) {
+      let bestX = cx0,
+        bestY = cy0,
+        best = -1;
+      for (let t = 0; t < 18; t++) {
+        for (let u = 0; u < 18; u++) {
+          const x = Math.round(cx0 + dx * t);
+          const y = Math.round(cy0 + dy * u);
+          if (x < 1 || y < 1 || x >= sw - 1 || y >= sh - 1) continue;
+          const m = mag[y * sw + x];
+          if (m > best) {
+            best = m;
+            bestX = x;
+            bestY = y;
+          }
+        }
+      }
+      return { x: bestX / s, y: bestY / s };
+    }
+
     corners = [
-      { x: minX, y: minY },
-      { x: maxX, y: minY },
-      { x: maxX, y: maxY },
-      { x: minX, y: maxY },
+      refineCorner(left, top, 1, 1),
+      refineCorner(right, top, -1, 1),
+      refineCorner(right, bottom, -1, -1),
+      refineCorner(left, bottom, 1, -1),
     ];
     draw();
   }
 
   document.getElementById("fxr-detect").addEventListener("click", () => {
-    // Try OpenCV if loaded
-    if (window.cv && cv.Mat) {
+    if (window.cv && typeof cv.Mat === "function" && cv.Mat) {
       try {
         detectOpenCV();
         return;
@@ -411,63 +528,67 @@
   function detectOpenCV() {
     const src = cv.imread(img);
     const gray = new cv.Mat();
-    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
     const blur = new cv.Mat();
-    cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
     const edges = new cv.Mat();
-    cv.Canny(blur, edges, 50, 150);
     const contours = new cv.MatVector();
     const hierarchy = new cv.Mat();
-    cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
-    let best = null;
-    let bestArea = 0;
-    for (let i = 0; i < contours.size(); i++) {
-      const c = contours.get(i);
-      const peri = cv.arcLength(c, true);
-      const approx = new cv.Mat();
-      cv.approxPolyDP(c, approx, 0.02 * peri, true);
-      if (approx.rows === 4) {
-        const area = cv.contourArea(approx);
-        if (area > bestArea && area > img.naturalWidth * img.naturalHeight * 0.1) {
-          bestArea = area;
-          best = approx;
-        } else {
+    try {
+      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
+      cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
+      cv.Canny(blur, edges, 40, 120);
+      cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+      let bestPts = null;
+      let bestArea = 0;
+      const minArea = img.naturalWidth * img.naturalHeight * 0.08;
+      for (let i = 0; i < contours.size(); i++) {
+        const cnt = contours.get(i);
+        const peri = cv.arcLength(cnt, true);
+        for (const eps of [0.02, 0.03, 0.04, 0.015]) {
+          const approx = new cv.Mat();
+          cv.approxPolyDP(cnt, approx, eps * peri, true);
+          if (approx.rows === 4 && cv.isContourConvex(approx)) {
+            const area = Math.abs(cv.contourArea(approx));
+            if (area > bestArea && area > minArea) {
+              bestArea = area;
+              const pts = [];
+              for (let k = 0; k < 4; k++) {
+                pts.push({ x: approx.intPtr(k, 0)[0], y: approx.intPtr(k, 0)[1] });
+              }
+              bestPts = pts;
+            }
+          }
           approx.delete();
         }
+      }
+      if (bestPts) {
+        corners = orderCorners(bestPts);
+        draw();
       } else {
-        approx.delete();
+        autoDetectSimple();
       }
+    } finally {
+      src.delete();
+      gray.delete();
+      blur.delete();
+      edges.delete();
+      contours.delete();
+      hierarchy.delete();
     }
-    if (best) {
-      const pts = [];
-      for (let i = 0; i < 4; i++) {
-        pts.push({ x: best.data32S[i * 2], y: best.data32S[i * 2 + 1] });
-      }
-      corners = orderCorners(pts);
-      best.delete();
-      draw();
-    } else {
-      autoDetectSimple();
-    }
-    src.delete();
-    gray.delete();
-    blur.delete();
-    edges.delete();
-    contours.delete();
-    hierarchy.delete();
   }
 
   function tryLoadOpenCV() {
-    if (window.cv && cv.Mat) {
-      autoDetectSimple();
-      return;
-    }
+    if (window.cv && cv.Mat) return;
     const s = document.createElement("script");
     s.src = "https://docs.opencv.org/4.8.0/opencv.js";
     s.async = true;
     s.onload = () => {
-      if (cv["onRuntimeInitialized"]) {
-        cv["onRuntimeInitialized"] = () => {};
+      const boot = () => {
+        /* listo para botón Auto detectar */
+      };
+      if (typeof cv !== "undefined" && cv["onRuntimeInitialized"]) {
+        cv["onRuntimeInitialized"] = boot;
+      } else {
+        setTimeout(boot, 800);
       }
     };
     document.head.appendChild(s);
