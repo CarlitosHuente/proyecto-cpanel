@@ -1,6 +1,21 @@
 {% extends "base.html" %}
 {% block title %}Fondos por Rendir{% endblock %}
 {% block content %}
+<style>
+  .fxr-capture-mobile .btn-foto {
+    min-height: 3.2rem; font-size: 1.15rem; font-weight: 600;
+  }
+  .fxr-inbox-thumb {
+    width: 48px; height: 48px; object-fit: cover; border-radius: .25rem;
+    background: #111; border: 1px solid #444;
+  }
+  @media (max-width: 767.98px) {
+    .fxr-pc-only { display: none !important; }
+  }
+  @media (min-width: 768px) {
+    .fxr-mobile-only { display: none !important; }
+  }
+</style>
 <div class="container-fluid mt-3">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
     <h2 class="text-info mb-0"><i class="bi bi-receipt"></i> Fondos por Rendir</h2>
@@ -19,32 +34,58 @@
       <div class="card bg-dark border-secondary">
         <div class="card-header border-secondary text-warning">Capturar / cargar</div>
         <div class="card-body">
-          <form method="post" action="{{ url_for('fxr.subir') }}" enctype="multipart/form-data" class="mb-3">
+          {# Móvil: un toque → cámara → auto-guarda en inbox #}
+          <form id="fxr-form-foto" method="post" action="{{ url_for('fxr.subir') }}" enctype="multipart/form-data"
+                class="fxr-capture-mobile fxr-mobile-only mb-3">
+            <input type="hidden" name="modo" value="guardar">
+            <input type="file" id="fxr-cam-input" name="archivo" class="d-none"
+                   accept="image/*" capture="environment" required>
+            <button type="button" class="btn btn-success w-100 btn-foto" id="fxr-btn-foto">
+              <i class="bi bi-camera"></i> Fotografiar (guardar en inbox)
+            </button>
+            <p class="small text-muted mt-2 mb-0">La foto se guarda sola en el inbox. Completa y pule en el computador.</p>
+          </form>
+
+          {# PC: file picker + guardar; registrar secundario #}
+          <form method="post" action="{{ url_for('fxr.subir') }}" enctype="multipart/form-data" class="fxr-pc-only mb-3">
             <input type="file" name="archivo" class="form-control bg-black text-white border-secondary mb-2"
-                   accept="image/*,application/pdf,capture=environment" capture="environment" required>
+                   accept="image/*,application/pdf" required>
             <div class="d-flex gap-2 flex-wrap">
               <button class="btn btn-success" name="modo" value="guardar" type="submit">Guardar (inbox)</button>
-              <button class="btn btn-outline-info" name="modo" value="registrar" type="submit">Registrar (completar ahora)</button>
+              <button class="btn btn-outline-secondary btn-sm" name="modo" value="registrar" type="submit">Registrar ahora</button>
             </div>
-            <p class="small text-muted mt-2 mb-0">Fotos se procesan tipo escáner (livianas). PDF: puedes eliminar hojas después.</p>
+            <p class="small text-muted mt-2 mb-0">Luego pulir en PC y armar la rendición. PDF: puedes eliminar hojas después.</p>
           </form>
 
           <h6 class="text-light">Inbox ({{ inbox|length }})</h6>
           {% if inbox %}
           <form method="post" action="{{ url_for('fxr.nueva_rendicion') }}">
-            <div class="mb-2">
+            <div class="mb-2 fxr-pc-only">
               <input type="text" name="area" class="form-control form-control-sm bg-black text-white border-secondary" placeholder="Área (opcional)">
             </div>
             <div class="list-group list-group-flush mb-2">
               {% for c in inbox %}
-              <label class="list-group-item bg-black text-white border-secondary d-flex gap-2 align-items-center">
-                <input type="checkbox" name="comp_ids" value="{{ c.id }}">
-                <span class="small flex-grow-1">#{{ c.id }} · {{ c.mime }} · {{ c.num_paginas }} pág · {{ c.created_at }}</span>
+              <div class="list-group-item bg-black text-white border-secondary d-flex gap-2 align-items-center flex-wrap">
+                <label class="d-flex gap-2 align-items-center flex-grow-1 mb-0" style="cursor:pointer">
+                  <input type="checkbox" name="comp_ids" value="{{ c.id }}">
+                  {% if 'pdf' not in (c.mime or '') %}
+                  <img class="fxr-inbox-thumb" src="{{ url_for('fxr.servir_archivo', cid=c.id) }}" alt="">
+                  {% else %}
+                  <span class="badge bg-secondary">PDF</span>
+                  {% endif %}
+                  <span class="small">#{{ c.id }} · {{ c.created_at }}</span>
+                </label>
                 <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('fxr.servir_archivo', cid=c.id) }}" target="_blank">Ver</a>
                 {% if 'pdf' in (c.mime or '') %}
                 <a class="btn btn-sm btn-outline-warning" href="{{ url_for('fxr.paginas_pdf', cid=c.id) }}">Páginas</a>
+                {% else %}
+                <a class="btn btn-sm btn-outline-info" href="{{ url_for('fxr.pulir_comprobante', cid=c.id) }}">Pulir</a>
                 {% endif %}
-              </label>
+                <form method="post" action="{{ url_for('fxr.eliminar_comprobante_inbox', cid=c.id) }}" class="d-inline"
+                      onsubmit="return confirm('¿Eliminar este archivo del inbox? No se puede deshacer.');">
+                  <button type="submit" class="btn btn-sm btn-outline-danger">Eliminar</button>
+                </form>
+              </div>
               {% endfor %}
             </div>
             <button class="btn btn-primary btn-sm" type="submit">Rendir seleccionados</button>
@@ -115,4 +156,20 @@
   </div>
   {% endif %}
 </div>
+<script>
+(function () {
+  var btn = document.getElementById('fxr-btn-foto');
+  var input = document.getElementById('fxr-cam-input');
+  var form = document.getElementById('fxr-form-foto');
+  if (!btn || !input || !form) return;
+  btn.addEventListener('click', function () { input.click(); });
+  input.addEventListener('change', function () {
+    if (input.files && input.files.length) {
+      btn.disabled = true;
+      btn.textContent = 'Guardando…';
+      form.submit();
+    }
+  });
+})();
+</script>
 {% endblock %}

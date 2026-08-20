@@ -23,6 +23,7 @@ from utils import fxr_db as db
 from utils.fxr_files import (
     abs_path,
     borrar_archivo_local,
+    guardar_jpeg_pulido,
     guardar_upload,
     pdf_eliminar_paginas,
 )
@@ -194,6 +195,70 @@ def servir_archivo(cid):
     if not os.path.isfile(path):
         abort(404)
     return send_file(path, mimetype=comp.get("mime") or "application/octet-stream")
+
+
+@fxr_bp.route("/comprobante/<int:cid>/eliminar", methods=["POST"])
+@login_requerido
+@permiso_modulo("fxr")
+def eliminar_comprobante_inbox(cid):
+    """Borra del inbox (archivo + fila). Dueño o superusuario."""
+    ok, msg, rel = db.eliminar_comprobante_inbox(cid, _email(), es_super=_es_super())
+    if ok and rel:
+        borrar_archivo_local(rel)
+    flash(msg, "success" if ok else "danger")
+    return redirect(url_for("fxr.index"))
+
+
+def _puede_editar_comprobante(comp: dict) -> bool:
+    if not comp or comp["usuario_email"] != _email():
+        return False
+    if not comp.get("rendicion_id"):
+        return True
+    r = db.obtener_rendicion(comp["rendicion_id"])
+    return bool(r and r["estado"] in ("borrador", "rechazada"))
+
+
+@fxr_bp.route("/comprobante/<int:cid>/pulir", methods=["GET", "POST"])
+@login_requerido
+@permiso_modulo("fxr")
+def pulir_comprobante(cid):
+    comp = db.obtener_comprobante(cid)
+    if not comp or not _puede_editar_comprobante(comp):
+        abort(403)
+    mime = (comp.get("mime") or "").lower()
+    rel = str(comp.get("archivo_local") or "")
+    if "pdf" in mime or rel.lower().endswith(".pdf"):
+        flash("Pulir solo aplica a imágenes.", "warning")
+        return redirect(url_for("fxr.index"))
+    next_linea = request.args.get("next_linea") or request.form.get("next_linea")
+    if request.method == "POST":
+        archivo = request.files.get("archivo")
+        if not archivo or not archivo.filename:
+            flash("No se recibió la imagen pulida.", "danger")
+            return redirect(url_for("fxr.pulir_comprobante", cid=cid, next_linea=next_linea or None))
+        try:
+            data = archivo.read()
+            nuevo = guardar_jpeg_pulido(data, _email().split("@")[0])
+        except ValueError as e:
+            flash(str(e), "danger")
+            return redirect(url_for("fxr.pulir_comprobante", cid=cid, next_linea=next_linea or None))
+        anterior = comp.get("archivo_local")
+        db.actualizar_comprobante_archivo(cid, nuevo, "image/jpeg", 1)
+        if anterior and anterior != nuevo:
+            borrar_archivo_local(anterior)
+        flash("Imagen pulida guardada.", "success")
+        if next_linea and str(next_linea).isdigit():
+            return redirect(url_for("fxr.editar_linea", linea_id=int(next_linea)))
+        if comp.get("rendicion_id"):
+            return redirect(url_for("fxr.rendicion", rid=comp["rendicion_id"]))
+        return redirect(url_for("fxr.index"))
+    return render_template(
+        "fxr/pulir.html",
+        comp=comp,
+        next_linea=next_linea,
+        img_url=url_for("fxr.servir_archivo", cid=cid),
+        post_url=url_for("fxr.pulir_comprobante", cid=cid),
+    )
 
 
 # ---------- Armar rendición ----------
@@ -393,24 +458,13 @@ def revision_detalle(rid):
         return redirect(url_for("fxr.revision_cola"))
     lineas = db.listar_lineas(rid)
     dups_info = db.info_duplicados_para_pdf(lineas)
-    # Agrupar por tipo de gasto para revisión con carrusel
-    from collections import OrderedDict
-
-    grupos_map = OrderedDict()
-    for l in lineas:
-        key = l.get("tipo_gasto_id") or 0
-        label = l.get("tipo_gasto_nombre") or "Sin tipo de gasto"
-        if key not in grupos_map:
-            grupos_map[key] = {"tipo_gasto_id": key, "nombre": label, "lineas": [], "total": 0}
-        grupos_map[key]["lineas"].append(l)
-        grupos_map[key]["total"] += int(l.get("monto") or 0)
     return render_template(
         "fxr/revision_detalle.html",
         r=r,
         lineas=lineas,
-        grupos=list(grupos_map.values()),
         dups_info=dups_info,
         dups_bloquean=db.hay_duplicados_sin_autorizar(rid),
+        idx=max(0, min(int(request.args.get("i") or 0), max(0, len(lineas) - 1))),
     )
 
 
@@ -422,7 +476,8 @@ def autorizar_dup(linea_id):
     ok, msg = db.autorizar_duplicado(linea_id, _email())
     flash(msg, "success" if ok else "danger")
     linea = db.obtener_linea(linea_id)
-    return redirect(url_for("fxr.revision_detalle", rid=linea["rendicion_id"]))
+    idx = request.form.get("i") or request.args.get("i") or "0"
+    return redirect(url_for("fxr.revision_detalle", rid=linea["rendicion_id"], i=idx))
 
 
 @fxr_bp.route("/rendicion/<int:rid>/rechazar", methods=["POST"])

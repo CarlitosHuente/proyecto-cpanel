@@ -79,6 +79,33 @@ def _guardar_imagen_escaner(data: bytes, carpeta_abs: str, carpeta_rel: str, tok
     return os.path.join(carpeta_rel, fname).replace("\\", "/")
 
 
+def guardar_jpeg_pulido(data: bytes, usuario_slug: str) -> str:
+    """Guarda JPEG ya pulido (cliente). Retorna ruta relativa. No aplica filtro escáner de nuevo."""
+    if not data:
+        raise ValueError("Sin datos")
+    if len(data) > 12 * 1024 * 1024:
+        raise ValueError("Archivo supera 12 MB")
+    carpeta_rel = os.path.join("uploads", "fxr", "staging", secure_filename(usuario_slug) or "user")
+    carpeta_abs = os.path.join(current_app.root_path, carpeta_rel)
+    os.makedirs(carpeta_abs, exist_ok=True)
+    token = uuid.uuid4().hex[:12]
+    img = Image.open(io.BytesIO(data))
+    img = ImageOps.exif_transpose(img)
+    if img.mode not in ("RGB", "L"):
+        img = img.convert("RGB")
+    else:
+        img = img.convert("RGB")
+    max_side = 2000
+    w, h = img.size
+    scale = min(1.0, max_side / max(w, h))
+    if scale < 1:
+        img = img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
+    fname = f"{token}_pulido.jpg"
+    abs_f = os.path.join(carpeta_abs, fname)
+    img.save(abs_f, format="JPEG", quality=78, optimize=True)
+    return os.path.join(carpeta_rel, fname).replace("\\", "/")
+
+
 def _guardar_pdf(data: bytes, carpeta_abs: str, carpeta_rel: str, token: str) -> Tuple[str, int]:
     reader = PdfReader(io.BytesIO(data))
     writer = PdfWriter()

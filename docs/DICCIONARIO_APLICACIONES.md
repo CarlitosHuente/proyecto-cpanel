@@ -426,7 +426,7 @@ Contab Archivos sigue siendo el dueño del mayor; el camino `imagen` es independ
 
 ## 20. Fondos por Rendir (FxR)
 
-**Objetivo:** capturar comprobantes (foto/PDF) en el hosting, completar datos (móvil overlay o PC paralelo), marcar **Preparada**, revisión por **superusuario**, **Aprobar** → un PDF (resumen + anexos + detalle de duplicados) a Drive y borrar staging local. Sin OCR.
+**Objetivo:** capturar comprobantes (foto/PDF) en el hosting, completar datos (prioriza PC), marcar **Preparada**, revisión por **superusuario** en pantalla completa, **Aprobar** → un PDF a Drive y borrar staging. Sin OCR.
 
 **Permiso:** `fxr` (menú «Fondos por Rendir»). Catálogos y aprobación: rol `superusuario`.
 
@@ -434,17 +434,17 @@ Contab Archivos sigue siendo el dueño del mayor; el camino `imagen` es independ
 
 **Perfil usuario (Config → Usuarios):** `nombre` (aparece en la rendición en vez del email) y `fxr_centro_costo_id` (CC por defecto en líneas nuevas + área sugerida). En la rendición: `comentario_firma` bajo el total (ej. «Depositar en cuenta…»).
 
-**Rutas:** `/fxr/` — [`routes/fxr_routes.py`](../routes/fxr_routes.py). Utils: `utils/fxr_db.py`, `fxr_files.py`, `fxr_pdf.py`, `fxr_drive.py`. Templates: `templates/fxr/*`. Staging: `uploads/fxr/` (gitignored).
+**Rutas:** `/fxr/` — [`routes/fxr_routes.py`](../routes/fxr_routes.py). Utils: `utils/fxr_db.py`, `fxr_files.py`, `fxr_pdf.py`, `fxr_drive.py`. Templates: `templates/fxr/*`. JS: `static/js/fxr_pulir.js`. Staging: `uploads/fxr/` (gitignored).
 
-**Tablas:** `fxr_centro_costo`, `fxr_tipo_gasto`, `fxr_comprobante`, `fxr_rendicion`, `fxr_linea`, `fxr_estado_hist` (DDL en `QUERY_CAMBIOS_PRODUCCION.sql` + auto-ensure al entrar).
+**Flujo captura:** móvil → **Fotografiar** guarda solo en inbox; completar/pulir en PC (misma UI si se usa el celu). Inbox → seleccionar → rendir. **Pulir imagen** (`/fxr/comprobante/<id>/pulir`): 4 esquinas + perspectiva + contraste documento → JPEG Letter (cliente; OpenCV.js opcional). **Eliminar** del inbox: dueño o superusuario (`POST …/comprobante/<id>/eliminar`); borra archivo y registro.
 
-**Flujo estados:** `borrador` → `preparada` → `aprobada` | `rechazada` (vuelve editable). Correlativo se asigna solo al aprobar.
+**Edición línea:** split imagen | formulario con fondos **opacos** (sin overlay transparente).
 
-**Líneas (tabla global):** `tipo_doc` (boleta/factura/bh/otro), `n_doc` (obligatorio factura/BH), `tipo_gasto_id`, `centro_costo_id`, monto CLP entero, etc. Duplicado `tipo_doc`+`n_doc_norm` entre usuarios: alerta; se guarda; **bloquea Aprobar** hasta autorizar. El PDF lista quién/cuándo/cuánto/rendición del otro.
+**Revisión:** `/fxr/revision/<id>` pantalla completa; un comprobante grande a la vez; flechas / teclado ←→; panel lateral opaco con datos y chips de navegación.
 
-**Captura:** JPEG escáner liviano (Pillow); PDF con eliminación de páginas (`pypdf`). Inbox → seleccionar → rendir. Guardar vs Registrar (overlay).
+**Vista previa:** hoja blanca aislada del tema oscuro; encabezados amarillos con texto negro; concepto con wrap.
 
-**PDF (Carta):** portada estilo formato Excel (logo `static/img/logo.png`, emisor Comercial SpA RUT 77.332.804-8, caja celeste, tabla amarilla con columnas acotadas). Sin hojas «Anexo» vacías. Tipos de gasto con `permite_agrupar` se suman en una fila; imágenes en grilla o editor `/fxr/rendicion/<id>/collage`. PDFs de comprobante se fusionan al final. Al aprobar: Apps Script → limpia staging.
+**Tablas / estados / PDF:** sin cambio de modelo; correlativo al aprobar; PDF Carta a Drive vía Apps Script (`accion=imagen`).
 
 ---
 

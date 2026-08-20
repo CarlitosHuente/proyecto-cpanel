@@ -89,6 +89,9 @@
             <a class="btn btn-sm btn-outline-info" href="{{ url_for('fxr.editar_linea', linea_id=l.id) }}">
               {% if editable %}Editar{% else %}Ver{% endif %}
             </a>
+            {% if editable and 'pdf' not in (l.mime or '') %}
+            <a class="btn btn-sm btn-outline-info" href="{{ url_for('fxr.pulir_comprobante', cid=l.comprobante_id, next_linea=l.id) }}">Pulir</a>
+            {% endif %}
             {% if editable %}
             <form method="post" action="{{ url_for('fxr.eliminar_linea', linea_id=l.id) }}" class="d-inline"
                   onsubmit="return confirm('¿Quitar de esta rendición? El documento vuelve al inbox.');">

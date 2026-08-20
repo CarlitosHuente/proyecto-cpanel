@@ -8,6 +8,17 @@ Al cerrar un cambio relevante: entrada breve aquí + actualizar diccionario si c
 
 ---
 
+## 2026-08-19 — FxR: eliminar del inbox
+
+- Botón Eliminar en inbox: dueño o superusuario borra comprobante staging (archivo + fila).
+
+## 2026-08-19 — FxR: pulir, flujo captura y revisión fullscreen
+
+- Móvil: fotografiar → inbox automático; completar/pulir prioriza PC.
+- Pulir imagen (4 esquinas + perspectiva + contraste Letter) en `/fxr/comprobante/<id>/pulir`.
+- Edición línea sin overlay transparente; vista previa con contraste forzado (texto negro / amarillo).
+- Revisión super a pantalla completa: un respaldo grande + navegación global (flechas/teclado).
+
 ## 2026-08-12 — Notificaciones + envío Alertas Buk
 
 - Config → **Notificaciones** (`/config/notificaciones`): destinarios en `data/notificaciones_config.json` (bloque Alertas Buk).

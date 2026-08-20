@@ -2,34 +2,85 @@
 {% block title %}Vista previa rendición #{{ r.id }}{% endblock %}
 {% block content %}
 <style>
+  /* Aislado del tema oscuro: todo opaco y texto negro sobre hoja clara */
+  .fxr-preview-page { background: #2a2a2a; padding: 1rem 0 2rem; }
   .fxr-preview-sheet {
-    background: #fff; color: #111; max-width: 920px; margin: 0 auto;
-    padding: 1.75rem 2rem 2rem; border-radius: .25rem;
+    background: #ffffff !important;
+    color: #111111 !important;
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 1.75rem 2rem 2rem;
+    border-radius: .25rem;
+    border: 1px solid #ccc;
+  }
+  .fxr-preview-sheet,
+  .fxr-preview-sheet * {
+    color: #111111 !important;
+    opacity: 1 !important;
   }
   .fxr-preview-sheet table { width: 100%; border-collapse: collapse; font-size: .88rem; table-layout: fixed; }
-  .fxr-preview-sheet th, .fxr-preview-sheet td {
-    border: 1px solid #222; padding: .35rem .4rem; vertical-align: middle;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  .fxr-preview-sheet th,
+  .fxr-preview-sheet td {
+    border: 1px solid #222 !important;
+    padding: .4rem .45rem;
+    vertical-align: top;
+    background: #fff !important;
+    color: #111 !important;
   }
-  .fxr-preview-sheet td.wrap { white-space: normal; overflow: visible; }
-  .fxr-preview-sheet thead th { background: #ffe566; color: #111; text-align: center; font-size: .78rem; }
-  .fxr-preview-sheet tfoot th { background: #ffe566; }
-  .fxr-caja { background: #b8e0f8; border: 1px solid #222; padding: .55rem .75rem; display: inline-block; min-width: 260px; }
+  .fxr-preview-sheet thead th {
+    background: #ffe566 !important;
+    color: #111111 !important;
+    text-align: center;
+    font-size: .78rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .fxr-preview-sheet tfoot th {
+    background: #ffe566 !important;
+    color: #111 !important;
+  }
+  .fxr-preview-sheet td.concepto {
+    white-space: normal !important;
+    word-break: break-word;
+    overflow: visible !important;
+    text-overflow: clip !important;
+  }
+  .fxr-caja {
+    background: #b8e0f8 !important;
+    border: 1px solid #222;
+    padding: .55rem .75rem;
+    display: inline-block;
+    min-width: 260px;
+    color: #111 !important;
+  }
   .fxr-firma {
-    border: 1px solid #222; margin: 1.25rem auto 0; max-width: 640px;
-    padding: 1rem 1.25rem; text-align: center; background: #fafafa;
+    border: 1px solid #222;
+    margin: 1.25rem auto 0;
+    max-width: 640px;
+    padding: 1rem 1.25rem;
+    text-align: center;
+    background: #fafafa !important;
+    color: #111 !important;
   }
-  .fxr-dup { color: #a00; font-size: .85rem; }
+  .fxr-dup { color: #a00 !important; font-size: .85rem; }
   .fxr-logo { max-height: 72px; width: auto; }
+  .fxr-anexo {
+    background: #fff !important;
+    border: 1px solid #333;
+    color: #111 !important;
+    min-height: 120px;
+  }
+  .fxr-anexo .small { color: #333 !important; }
 </style>
-<div class="container-fluid mt-3 mb-4">
+<div class="fxr-preview-page">
+<div class="container-fluid mb-2">
   <div class="d-flex flex-wrap gap-2 mb-3">
-    <a href="{{ url_for('fxr.rendicion', rid=r.id) }}" class="btn btn-sm btn-outline-secondary">← Rendición</a>
+    <a href="{{ url_for('fxr.rendicion', rid=r.id) }}" class="btn btn-sm btn-outline-light">← Rendición</a>
     <span class="badge bg-secondary align-self-center">Vista previa (misma portada que el PDF final)</span>
   </div>
 
   <div class="fxr-preview-sheet shadow">
-    <div class="d-flex justify-content-between align-items-start gap-3">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
       <div class="fxr-caja small">
         <div><strong>NOMBRE :</strong> {{ r.nombre_snapshot }}</div>
         <div><strong>AREA :</strong> {{ r.area or '—' }}</div>
@@ -69,7 +120,7 @@
           <td class="text-center">{{ l.fecha_comprobante or '—' }}</td>
           <td class="text-center">{{ l.tipo_doc }}</td>
           <td>{{ l.n_doc or '—' }}{% if l.duplicado_n_doc %} <span class="fxr-dup">DUP</span>{% endif %}</td>
-          <td class="wrap">{{ l.concepto or '—' }}</td>
+          <td class="concepto">{{ l.concepto or '—' }}{% if l.observaciones %}<br><span class="small">{{ l.observaciones }}</span>{% endif %}</td>
           <td>{{ l.tipo_gasto_nombre or '—' }}</td>
           <td>{{ l.centro_costo_codigo or l.centro_costo_nombre or '—' }}</td>
           <td class="text-end">{{ l.monto|dinero }}</td>
@@ -91,7 +142,7 @@
       {% if r.comentario_firma %}
       <div style="white-space:pre-wrap">{{ r.comentario_firma }}</div>
       {% else %}
-      <div class="text-muted fst-italic small">Ej.: Depositar en cuenta …… / Firma ……………………</div>
+      <div class="fst-italic small">Ej.: Depositar en cuenta …… / Firma ……………………</div>
       {% endif %}
     </div>
 
@@ -114,12 +165,12 @@
     </div>
     {% endif %}
 
-    <hr>
-    <p class="small text-muted mb-2">Anexos ({{ lineas|length }}): al aprobar se incluyen imágenes/PDF en el archivo final de Drive.</p>
+    <hr style="border-color:#ccc">
+    <p class="small mb-2">Anexos ({{ lineas|length }}): al aprobar se incluyen imágenes/PDF en el archivo final de Drive.</p>
     <div class="row g-2">
       {% for l in lineas %}
       <div class="col-md-4">
-        <div class="border bg-white p-1 text-center" style="min-height:120px">
+        <div class="fxr-anexo p-2 text-center">
           <div class="small mb-1">#{{ loop.index }} {{ l.concepto or l.tipo_doc }}</div>
           {% if l.archivo_local %}
             {% if 'pdf' in (l.mime or '') %}
@@ -128,12 +179,13 @@
             <img src="{{ url_for('fxr.servir_archivo', cid=l.comprobante_id) }}" alt="" style="max-width:100%;max-height:140px;object-fit:contain">
             {% endif %}
           {% else %}
-            <span class="text-muted small">Sin archivo</span>
+            <span class="small">Sin archivo</span>
           {% endif %}
         </div>
       </div>
       {% endfor %}
     </div>
   </div>
+</div>
 </div>
 {% endblock %}

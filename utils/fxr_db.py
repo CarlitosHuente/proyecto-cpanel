@@ -360,6 +360,25 @@ def actualizar_comprobante_archivo(comp_id: int, archivo_local: str, mime: str, 
     )
 
 
+def eliminar_comprobante_inbox(comp_id: int, usuario_email: str, *, es_super: bool = False) -> Tuple[bool, str, Optional[str]]:
+    """
+    Borra un comprobante que está solo en inbox (sin rendición).
+    Dueño o superusuario. Retorna (ok, mensaje, archivo_local_a_borrar|None).
+    """
+    comp = obtener_comprobante(comp_id)
+    if not comp:
+        return False, "Comprobante no encontrado", None
+    if comp.get("rendicion_id"):
+        return False, "Está en una rendición; quítalo desde allí primero", None
+    if (comp.get("estado_archivo") or "") != "staging":
+        return False, "Solo se pueden eliminar archivos del inbox", None
+    if not es_super and comp.get("usuario_email") != usuario_email:
+        return False, "No puedes eliminar el inbox de otro usuario", None
+    rel = comp.get("archivo_local") or ""
+    _execute("DELETE FROM fxr_comprobante WHERE id=%s", (comp_id,))
+    return True, "Comprobante eliminado del inbox", rel or None
+
+
 # --- rendiciones ---
 
 def crear_rendicion(usuario_email: str, nombre: str, area: str = "") -> int:

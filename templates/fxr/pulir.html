@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Pulir imagen #{{ comp.id }}{% endblock %}
+{% block content %}
+<style>
+  .fxr-pulir-wrap { background: #111; color: #eee; min-height: calc(100vh - 120px); }
+  .fxr-pulir-toolbar {
+    background: #1a1a1a; border: 1px solid #444; padding: .75rem 1rem;
+    display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
+  }
+  .fxr-pulir-stage {
+    position: relative; background: #000; border: 1px solid #333;
+    min-height: 55vh; display: flex; align-items: center; justify-content: center;
+    overflow: hidden; touch-action: none;
+  }
+  #fxr-pulir-canvas { max-width: 100%; max-height: 70vh; display: block; cursor: crosshair; }
+  .fxr-pulir-hint { color: #bbb; font-size: .85rem; }
+  .fxr-pulir-preview-box {
+    background: #fff; color: #111; border: 1px solid #222; padding: .5rem;
+    text-align: center; min-height: 120px;
+  }
+  .fxr-pulir-preview-box img { max-width: 100%; max-height: 280px; }
+</style>
+<div class="container-fluid mt-2 fxr-pulir-wrap pb-4">
+  <div class="fxr-pulir-toolbar mb-2">
+    <a href="{% if next_linea %}{{ url_for('fxr.editar_linea', linea_id=next_linea) }}{% elif comp.rendicion_id %}{{ url_for('fxr.rendicion', rid=comp.rendicion_id) }}{% else %}{{ url_for('fxr.index') }}{% endif %}"
+       class="btn btn-sm btn-outline-secondary">← Volver</a>
+    <strong class="text-info">Pulir imagen #{{ comp.id }}</strong>
+    <span class="fxr-pulir-hint">Arrastra las 4 esquinas del papel. Auto-detecta si puede.</span>
+    <button type="button" class="btn btn-sm btn-outline-warning" id="fxr-detect">Auto detectar</button>
+    <button type="button" class="btn btn-sm btn-outline-light" id="fxr-reset">Reset esquinas</button>
+    <button type="button" class="btn btn-sm btn-outline-info" id="fxr-preview-btn">Vista previa</button>
+    <button type="button" class="btn btn-sm btn-success" id="fxr-aplicar">Aplicar y guardar</button>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-8">
+      <div class="fxr-pulir-stage">
+        <canvas id="fxr-pulir-canvas"></canvas>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="fxr-pulir-preview-box mb-2">
+        <div class="small fw-bold mb-1" style="color:#111">Resultado (Carta)</div>
+        <img id="fxr-out-preview" alt="preview" style="display:none">
+        <div id="fxr-out-placeholder" class="small" style="color:#555">Pulsa «Vista previa» o «Aplicar»</div>
+      </div>
+      <p class="small text-muted mb-0">El pulido endereza el documento, recorta el fondo y mejora contraste. Luego completa los datos en la rendición.</p>
+    </div>
+  </div>
+</div>
+
+<form id="fxr-pulir-form" method="post" action="{{ post_url }}" enctype="multipart/form-data" class="d-none">
+  {% if next_linea %}<input type="hidden" name="next_linea" value="{{ next_linea }}">{% endif %}
+  <input type="file" name="archivo" id="fxr-pulir-file">
+</form>
+
+<script>
+  window.FXR_PULIR = {
+    imgUrl: {{ img_url|tojson }},
+    postUrl: {{ post_url|tojson }}
+  };
+</script>
+<script src="{{ url_for('static', filename='js/fxr_pulir.js') }}?v=1"></script>
+{% endblock %}
