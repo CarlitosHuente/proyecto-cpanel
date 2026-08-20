@@ -8,6 +8,15 @@ Al cerrar un cambio relevante: entrada breve aquí + actualizar diccionario si c
 
 ---
 
+## 2026-08-19 — Prorrateos: comisiones según mix de Arqueo
+
+- Cuentas Comisión Uber / Rappi / Pedidos Ya / Mercado Pago / Mesa Chilena se reparte con el `% de este tipo` del reporte mensual de tipos de pago. Mercado Pago usa el mix de Redelcom. Se puede editar % a mano en el mes o volver al mix.
+
+## 2026-08-19 — Prorrateos: mes reciente del mayor + heredar SG
+
+- Periodo predeterminado igual que Costeo (último YYYY-MM del mayor; el filtro se puede cambiar).
+- Serv. Generales: botón para copiar la distribución del mes anterior; la matriz de 12 meses pasa a opción avanzada.
+
 ## 2026-08-19 — Costeo: periodo = mes más reciente del mayor
 
 - Directos, GAV, simulador y rentabilidad abren en el YYYY-MM más reciente del mayor; el usuario puede cambiar el mes a cualquiera.

@@ -1,10 +1,12 @@
 import os
 import base64
-import requests
-import pandas as pd
+import copy
 import json
 import tempfile
 from datetime import datetime
+
+import pandas as pd
+import requests
 from flask import Blueprint, render_template, request, redirect, url_for, send_from_directory, flash, current_app, send_file, jsonify
 from utils.auth import login_requerido, permiso_modulo
 from utils.gestion_estructura import (
@@ -28,6 +30,8 @@ from utils.macros_gestion_config import (
     resolver_estructura_reporte,
 )
 from utils.sheet_cache import obtener_datos
+from utils.periodo_mayor import periodo_predeterminado_mayor
+from utils.prorrateo_arqueo import TIPO_ARQUEO, distribucion_arqueo, usa_mix_arqueo
 
 contab_bp = Blueprint("contab", __name__, url_prefix="/contab")
 
@@ -43,11 +47,11 @@ DEFAULT_CONFIG_CUENTAS = {
     "Costo Venta": "VENTAS_SUCURSAL",
     "Gastos Venta Empanadas": "VENTAS_SUCURSAL",
     "Gasto de Envases": "VENTAS_SUCURSAL",
-    "Comision Uber Eats": "MANUAL_SUCURSAL",
-    "Comision Mesa Chilena": "MANUAL_SUCURSAL",
-    "Comision Mercado Pago": "MANUAL_SUCURSAL",
-    "Comision Rappi": "MANUAL_SUCURSAL",
-    "Comision Pedidos Ya": "MANUAL_SUCURSAL",
+    "Comision Uber Eats": TIPO_ARQUEO,
+    "Comision Mesa Chilena": TIPO_ARQUEO,
+    "Comision Mercado Pago": TIPO_ARQUEO,
+    "Comision Rappi": TIPO_ARQUEO,
+    "Comision Pedidos Ya": TIPO_ARQUEO,
 }
 
 URL_WEBHOOK_SCRIPT = "https://script.google.com/macros/s/AKfycbxUK2SQ_fDaX1wEcTDLfnefcZPCZDp3A5rrqd2gZ6KBHV7qbBuysYTXltBBLXraNGj7/exec"
@@ -220,19 +224,38 @@ def descargar_detalle():
 # 4. RUTAS DE CONFIGURACIÓN (PRORRATEOS Y CLASIFICACIÓN)
 # ==============================================================================
 
+def _mes_sg_anterior(reglas_mensuales, periodo):
+    """Último mes < periodo que ya tiene distribución de Serv. Generales."""
+    ants = [
+        str(p)
+        for p, d in (reglas_mensuales or {}).items()
+        if str(p) < str(periodo) and isinstance(d, dict) and d.get("serv_generales")
+    ]
+    return max(ants) if ants else None
+
+
 @contab_bp.route("/prorrateos")
 @login_requerido
 @permiso_modulo("contab")
 def prorrateos():
-    periodo = request.args.get("periodo") or datetime.now().strftime("%Y-%m")
+    df = obtener_datos("mayor")
+    periodo = periodo_predeterminado_mayor(request.args.get("periodo"), df)
     pestaña = request.args.get("tab", "cc")
 
     data = cargar_prorrateos()
     config_cuentas = data.setdefault("config_cuentas", {})
     reglas_mensuales = data.setdefault("reglas_mensuales", {})
 
+    dirty_cfg = False
     for nombre, tipo in DEFAULT_CONFIG_CUENTAS.items():
-        if nombre not in config_cuentas: config_cuentas[nombre] = {"tipo": tipo, "activo": True}
+        if nombre not in config_cuentas:
+            config_cuentas[nombre] = {"tipo": tipo, "activo": True}
+            dirty_cfg = True
+        elif usa_mix_arqueo(nombre) and config_cuentas[nombre].get("tipo") != TIPO_ARQUEO:
+            config_cuentas[nombre]["tipo"] = TIPO_ARQUEO
+            dirty_cfg = True
+    if dirty_cfg:
+        guardar_prorrateos(data)
 
     cuentas_serv_generales = []
     centros_disponibles = []
@@ -250,6 +273,12 @@ def prorrateos():
     costo_unitario_empanada_estimado = 0.0
 
     reglas_periodo = reglas_mensuales.get(periodo, {})
+    mes_sg_origen = _mes_sg_anterior(reglas_mensuales, periodo)
+    sg_propia = reglas_periodo.get("serv_generales") or {}
+    sg_heredada = {}
+    if mes_sg_origen:
+        sg_heredada = (reglas_mensuales.get(mes_sg_origen) or {}).get("serv_generales") or {}
+    hay_sg_propia = bool(sg_propia)
     fabrica_cfg = data.get("fabrica_empanadas", {})
     costeo_periodo = fabrica_cfg.get("costeo_periodos", {}).get(periodo, {})
     prorrateo_costanera_periodo = fabrica_cfg.get("costanera_prorrateos", {}).get(periodo, {})
@@ -263,7 +292,6 @@ def prorrateos():
             "nombre": nombre, "tipo": cfg.get("tipo", ""), "activo": bool(cfg.get("activo", True))
         })
 
-    df = obtener_datos("mayor")
     if not df.empty:
         df["CUENTA_STR"] = df["CUENTA"].astype(str)
         todas_las_cuentas = sorted(df[df["CUENTA_STR"].str.startswith("3")]["NOMBRE"].dropna().unique().tolist())
@@ -288,18 +316,37 @@ def prorrateos():
             df_sg = df_mes[df_mes["CENTRO COSTO"].str.lower().str.strip() == "servicios generales"]
             if not df_sg.empty:
                 for _, r in df_sg.groupby("NOMBRE")["SALDO"].sum().reset_index().iterrows():
+                    nom = r["NOMBRE"]
                     cuentas_serv_generales.append({
-                        "nombre": r["NOMBRE"], "monto": float(r["SALDO"]), 
-                        "tiene_regla": r["NOMBRE"] in reglas_periodo.get("serv_generales", {})
+                        "nombre": nom,
+                        "monto": float(r["SALDO"]),
+                        "tiene_regla": nom in sg_propia,
+                        "hereda": nom not in sg_propia and nom in sg_heredada,
                     })
 
             saldos_cta = df_mes.groupby("NOMBRE")["SALDO"].sum().astype(float).to_dict()
             for nom, cfg in config_cuentas.items():
-                if cfg.get("activo"):
-                    cuentas_prorrateo.append({
-                        "nombre": nom, "tipo": cfg.get("tipo"), "monto": saldos_cta.get(nom, 0),
-                        "tiene_regla": bool(reglas_periodo.get("cuentas_globales", {}).get(nom))
-                    })
+                if not cfg.get("activo"):
+                    continue
+                tipo_c = cfg.get("tipo")
+                item = {
+                    "nombre": nom,
+                    "tipo": tipo_c,
+                    "monto": saldos_cta.get(nom, 0),
+                    "tiene_regla": bool(reglas_periodo.get("cuentas_globales", {}).get(nom)),
+                    "arqueo_ok": False,
+                    "arqueo_label": "",
+                    "arqueo_motivo": "",
+                    "arqueo_dist": {},
+                }
+                if usa_mix_arqueo(nom, tipo_c):
+                    item["tipo"] = TIPO_ARQUEO
+                    dist_aq, meta_aq = distribucion_arqueo(nom, periodo, centros_disponibles)
+                    item["arqueo_ok"] = bool(meta_aq.get("ok"))
+                    item["arqueo_label"] = meta_aq.get("tipo_label") or ""
+                    item["arqueo_motivo"] = meta_aq.get("motivo") or ""
+                    item["arqueo_dist"] = dist_aq
+                cuentas_prorrateo.append(item)
 
             aliases_fab = ["fca empanadas", "fca de empanadas", "fabrica empanadas"]
             df_fab = df_mes[df_mes["CENTRO COSTO"].str.lower().str.strip().isin(aliases_fab)]
@@ -326,11 +373,20 @@ def prorrateos():
                 if empanadas_elaboradas:
                     costo_unitario_empanada_estimado = (total_gastos_fabrica + total_costanera_a_fabrica) / empanadas_elaboradas
 
+    dist_arqueo_cuentas = {
+        c["nombre"]: c.get("arqueo_dist") or {}
+        for c in cuentas_prorrateo
+        if c.get("tipo") == TIPO_ARQUEO
+    }
+
     return render_template("contab/prorrateos.html", 
                            periodo=periodo, pestaña=pestaña, 
                            cuentas_serv_generales=cuentas_serv_generales, centros_disponibles=centros_disponibles,
                            config_cuentas=lista_config_cuentas, cuentas_prorrateo=cuentas_prorrateo, reglas_cuentas=reglas_periodo.get("cuentas_globales", {}),
                            reglas_sg=reglas_periodo.get("serv_generales", {}),
+                           reglas_sg_heredadas=sg_heredada,
+                           mes_sg_origen=mes_sg_origen,
+                           hay_sg_propia=hay_sg_propia,
                            gastos_fabrica=gastos_fabrica, total_gastos_fabrica=total_gastos_fabrica,
                            empanadas_elaboradas=empanadas_elaboradas, empanadas_compradas=empanadas_compradas,
                            costo_unitario_empanada=costo_unitario_empanada,
@@ -338,6 +394,7 @@ def prorrateos():
                            total_costanera_origen=total_costanera_origen, total_costanera_a_fabrica=total_costanera_a_fabrica,
                            costo_unitario_empanada_estimado=costo_unitario_empanada_estimado,
                            ventas_totales=ventas_totales, ventas_por_cc=ventas_por_cc,
+                           dist_arqueo_cuentas=dist_arqueo_cuentas,
                            todas_las_cuentas=todas_las_cuentas)
 
 @contab_bp.route("/clasificacion_cuentas")
@@ -454,6 +511,28 @@ def api_guardar_prorrateo_serv_generales():
     guardar_prorrateos(data)
     return {"ok": True}
 
+
+@contab_bp.route("/api/prorrateos/serv_generales/heredar", methods=["POST"])
+@login_requerido
+@permiso_modulo("contab")
+def api_heredar_prorrateo_serv_generales():
+    payload = request.get_json(force=True) or {}
+    periodo = str(payload.get("periodo") or "").strip()
+    if not periodo:
+        return jsonify({"ok": False, "error": "Falta periodo"}), 400
+    data = cargar_prorrateos()
+    reglas = data.setdefault("reglas_mensuales", {})
+    origen = _mes_sg_anterior(reglas, periodo)
+    if not origen:
+        return jsonify({"ok": False, "error": "No hay un mes anterior con distribución de Serv. Generales."}), 400
+    dist = copy.deepcopy((reglas.get(origen) or {}).get("serv_generales") or {})
+    if not dist:
+        return jsonify({"ok": False, "error": "El mes origen no tiene reglas para copiar."}), 400
+    reglas.setdefault(periodo, {})["serv_generales"] = dist
+    guardar_prorrateos(data)
+    return jsonify({"ok": True, "origen": origen})
+
+
 @contab_bp.route("/api/prorrateos/cuenta_manual", methods=["POST"])
 @login_requerido
 @permiso_modulo("contab")
@@ -462,7 +541,11 @@ def api_guardar_prorrateo_cuenta_manual():
     periodo, cuenta, dist = payload.get("periodo"), payload.get("cuenta"), payload.get("distribucion")
     if not periodo or not cuenta: return {"ok": False}, 400
     data = cargar_prorrateos()
-    data.setdefault("reglas_mensuales", {}).setdefault(periodo, {}).setdefault("cuentas_globales", {})[cuenta] = dist
+    glob = data.setdefault("reglas_mensuales", {}).setdefault(periodo, {}).setdefault("cuentas_globales", {})
+    if payload.get("borrar"):
+        glob.pop(cuenta, None)
+    else:
+        glob[cuenta] = dist
     guardar_prorrateos(data)
     return {"ok": True}
 
@@ -619,6 +702,15 @@ def calcular_matriz_gestion(df, periodo, switch_sg, switch_fab, data_config):
     filas_trabajo = df.to_dict("records")
     cache_sg = {}
     cache_fab = {}
+    cache_arqueo_dist = {}
+    centros_por_mes = {}
+    if "PERIODO_STR" in df.columns and "CENTRO COSTO" in df.columns:
+        for per_k, grp in df.groupby("PERIODO_STR"):
+            centros_por_mes[per_k] = [
+                str(c).strip()
+                for c in grp["CENTRO COSTO"].dropna().unique()
+                if str(c).strip() and str(c).strip().lower() not in ("servicios generales", "nan")
+            ]
 
     for row in filas_trabajo:
         per = row["PERIODO_STR"]
@@ -633,9 +725,38 @@ def calcular_matriz_gestion(df, periodo, switch_sg, switch_fab, data_config):
         if cfg and cfg.get("activo"):
             tipo = cfg["tipo"]
             es_global_procesada = True
-            
-            # Caso Ventas (Automático)
-            if tipo == "VENTAS_SUCURSAL":
+
+            if usa_mix_arqueo(nom, tipo) or tipo == TIPO_ARQUEO:
+                reglas_glob_mes = reglas_mensuales.get(per, {}).get("cuentas_globales", {})
+                dist_manual = reglas_glob_mes.get(nom) if isinstance(reglas_glob_mes.get(nom), dict) else None
+                if dist_manual:
+                    for dst, pct in dist_manual.items():
+                        asig = monto * float(pct or 0)
+                        if asig != 0:
+                            r = row.copy()
+                            r["CENTRO COSTO"] = dst
+                            r["SALDO_REAL"] = asig
+                            filas_finales.append(r)
+                else:
+                    key_aq = (per, nom)
+                    if key_aq not in cache_arqueo_dist:
+                        dist_aq, _meta_aq = distribucion_arqueo(
+                            nom, per, centros_por_mes.get(per, [])
+                        )
+                        cache_arqueo_dist[key_aq] = dist_aq
+                    dist_aq = cache_arqueo_dist[key_aq]
+                    if dist_aq:
+                        for dst, pct in dist_aq.items():
+                            asig = monto * pct
+                            if asig != 0:
+                                r = row.copy()
+                                r["CENTRO COSTO"] = dst
+                                r["SALDO_REAL"] = asig
+                                filas_finales.append(r)
+                    else:
+                        es_global_procesada = False
+
+            elif tipo == "VENTAS_SUCURSAL":
                 tot = vtas_tot_mes.get(per, 0)
                 if tot > 0:
                     keys_periodo = [k for k in vtas_suc_mes.keys() if k[0] == per]
@@ -651,7 +772,6 @@ def calcular_matriz_gestion(df, periodo, switch_sg, switch_fab, data_config):
                 else:
                     filas_finales.append(row)
 
-            # Caso Manual
             elif tipo == "MANUAL_SUCURSAL":
                 reglas_glob_mes = reglas_mensuales.get(per, {}).get("cuentas_globales", {})
                 if nom in reglas_glob_mes:
@@ -664,7 +784,7 @@ def calcular_matriz_gestion(df, periodo, switch_sg, switch_fab, data_config):
                             r["SALDO_REAL"] = asig
                             filas_finales.append(r)
                 else:
-                    es_global_procesada = False # Si no tiene regla, pasa normal
+                    es_global_procesada = False
 
         if es_global_procesada: continue
 

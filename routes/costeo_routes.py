@@ -2,8 +2,8 @@ from flask import Blueprint, render_template, request, jsonify
 from utils.auth import login_requerido, permiso_modulo
 from utils.sheet_cache import obtener_datos
 from utils.costeo_manager import cargar_reglas, guardar_mapeo, guardar_costo_directo, guardar_regla_gasto, obtener_costos_efectivos, guardar_prorrateo_adm, obtener_prorrateo_adm, copiar_reglas_gastos
+from utils.periodo_mayor import periodo_predeterminado_mayor
 import pandas as pd
-from datetime import datetime
 from routes.contab_routes import calcular_matriz_gestion, cargar_prorrateos
 import io
 from flask import send_file
@@ -41,27 +41,9 @@ def _asegurar_col(df, nombre, default=""):
     return df
 
 
-def _periodos_mayor(df_mayor=None):
-    """YYYY-MM con movimiento en el mayor, ordenados de más antiguo a más reciente."""
-    if df_mayor is None:
-        df_mayor = obtener_datos("mayor")
-    if df_mayor is None or getattr(df_mayor, "empty", True) or "FECHA" not in df_mayor.columns:
-        return []
-    fechas = pd.to_datetime(df_mayor["FECHA"], errors="coerce").dropna()
-    if fechas.empty:
-        return []
-    return sorted(fechas.dt.strftime("%Y-%m").unique().tolist())
-
-
 def periodo_costeo(df_mayor=None):
     """Predeterminado: mes más reciente del mayor. Si el usuario elige otro mes, se respeta."""
-    pedido = (request.args.get("periodo") or "").strip()
-    if pedido:
-        return pedido
-    periodos = _periodos_mayor(df_mayor)
-    if periodos:
-        return periodos[-1]
-    return datetime.now().strftime("%Y-%m")
+    return periodo_predeterminado_mayor(request.args.get("periodo"), df_mayor)
 
 @costeo_bp.route("/mapeo")
 @login_requerido

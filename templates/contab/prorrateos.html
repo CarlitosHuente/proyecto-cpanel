@@ -36,12 +36,29 @@
 
 <div class="tab-content">
   <div class="tab-pane fade {% if pestaña == 'cc' %}show active{% endif %}" id="tab-cc">
-    <div class="d-flex justify-content-between align-items-center mb-3 mt-1">
+    <div class="d-flex justify-content-between align-items-center mb-3 mt-1 gap-2 flex-wrap">
         <h5 class="mb-0 text-warning">Cuentas de Servicios Generales</h5>
-        <button type="button" class="btn btn-sm btn-outline-info fw-bold" onclick="abrirMatrizSG()">
-            <i class="bi bi-grid-3x3-gap"></i> Edición Masiva (Últimos 12 Meses)
-        </button>
+        <div class="d-flex gap-2 flex-wrap">
+            {% if mes_sg_origen %}
+            <button type="button" class="btn btn-sm btn-info fw-bold" id="btn-heredar-sg">
+                <i class="bi bi-copy"></i> Copiar distribución de {{ mes_sg_origen }}
+            </button>
+            {% endif %}
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="abrirMatrizSG()" title="Vista avanzada de 12 meses">
+                Matriz 12 meses
+            </button>
+        </div>
     </div>
+    {% if mes_sg_origen and not hay_sg_propia %}
+      <div class="alert alert-info py-2">
+        Este mes aún no tiene distribución propia. Los informes ya usan la de <strong>{{ mes_sg_origen }}</strong>.
+        Cópiala aquí solo si este mes cambia y quieres editarla.
+      </div>
+    {% elif mes_sg_origen and hay_sg_propia %}
+      <div class="alert alert-secondary py-2">
+        Este mes ya tiene distribución propia. Copiar de <strong>{{ mes_sg_origen }}</strong> reemplaza lo guardado aquí.
+      </div>
+    {% endif %}
     {% if not cuentas_serv_generales %}
       <div class="alert alert-warning">
         No se encontraron movimientos en el centro de costo
@@ -67,6 +84,8 @@
                 <td class="text-center">
                   {% if c.tiene_regla %}
                     <span class="badge bg-success me-2">Definido</span>
+                  {% elif c.hereda %}
+                    <span class="badge bg-info text-dark me-2" title="Los informes usan la distribución de {{ mes_sg_origen }}">Hereda {{ mes_sg_origen }}</span>
                   {% else %}
                     <span class="badge bg-secondary me-2">Sin definir</span>
                   {% endif %}
@@ -96,6 +115,9 @@
         </button>
       </div>
     </div>
+    <p class="small text-white-50 mb-2">
+      Comisiones se reparte con el <strong>% de este tipo</strong> de Arqueo; podés <strong>Configurar</strong> un mix manual del mes (manda sobre Arqueo). Mercado Pago = Redelcom.
+    </p>
 
     <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
       <table class="table table-dark table-bordered table-hover align-middle">
@@ -120,6 +142,19 @@
                 {% if c.tipo == "VENTAS_SUCURSAL" %}
                     <span class="badge bg-info">Automático (ventas)</span>
                     <button class="btn btn-sm btn-link text-danger p-0 ms-2" onclick="gestionarCuenta('{{ c.nombre }}', '', 'eliminar')" title="Quitar de la lista">✕</button>
+
+                {% elif c.tipo == "ARQUEO_TIPO_PAGO" %}
+                    {% if c.tiene_regla %}
+                    <span class="badge bg-success me-2">Manual este mes</span>
+                    {% elif c.arqueo_ok %}
+                    <span class="badge bg-warning text-dark">Arqueo · {{ c.arqueo_label or 'mix' }}</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Arqueo sin mix</span>
+                    {% endif %}
+                    <button type="button" class="btn btn-sm btn-outline-light btn-configurar-cuenta" data-cuenta="{{ c.nombre }}">
+                        Configurar
+                    </button>
+                    <button class="btn btn-sm btn-link text-danger p-0 ms-1" onclick="gestionarCuenta('{{ c.nombre }}', '', 'eliminar')" title="Quitar de la lista">✕</button>
                     
                 {% elif c.tipo == "MANUAL_SUCURSAL" %}
                     {% if c.tiene_regla %}
@@ -143,6 +178,14 @@
               <td class="text-center">
                 {% if c.tipo == "VENTAS_SUCURSAL" %}
                   <span class="badge bg-info">Automático (ventas)</span>
+                {% elif c.tipo == "ARQUEO_TIPO_PAGO" %}
+                  {% if c.tiene_regla %}
+                    <span class="small text-success">Edición manual · clic en la cuenta</span>
+                  {% elif c.arqueo_ok %}
+                    <span class="small text-warning">{{ c.arqueo_label }} · clic en la cuenta</span>
+                  {% else %}
+                    <span class="small text-secondary">{{ c.arqueo_motivo or 'Sin datos Arqueo este mes' }}</span>
+                  {% endif %}
                 {% elif c.tipo == "MANUAL_SUCURSAL" %}
                   {% if c.tiene_regla %}
                     <span class="badge bg-success me-2">Definido</span>
@@ -474,7 +517,7 @@
             </table>
           </div>
           <small class="text-warning">
-            La suma debe ser exactamente 100%. Se guarda como proporción (0–1) en el JSON.
+            La suma debe ser exactamente 100%. En comisiones, si no guardás nada se usa el mix de Arqueo.
           </small>
         {% else %}
           <div class="alert alert-warning">
@@ -483,6 +526,9 @@
         {% endif %}
       </div>
       <div class="modal-footer">
+        <button type="button" class="btn btn-outline-warning btn-sm d-none" id="btn-volver-arqueo">
+          Volver al mix Arqueo
+        </button>
         <button type="button"
                 class="btn btn-secondary btn-sm"
                 data-bs-dismiss="modal">Cancelar</button>
@@ -609,8 +655,41 @@ document.addEventListener("DOMContentLoaded", function () {
   const centrosDisponibles = {{ centros_disponibles|tojson|safe }};
   const reglasCuentas = {{ reglas_cuentas|default({})|tojson|safe }};
   const reglasSG = {{ reglas_sg|default({})|tojson|safe }};
+  const reglasSgHeredadas = {{ reglas_sg_heredadas|default({})|tojson|safe }};
   const ventasTotales = {{ ventas_totales|default(0.0)|tojson|safe }};
   const ventasPorCC = {{ ventas_por_cc|default({})|tojson|safe }};
+  const distArqueoCuentas = {{ dist_arqueo_cuentas|default({})|tojson|safe }};
+  const mesSgOrigen = {{ mes_sg_origen|tojson }};
+  const haySgPropia = {{ hay_sg_propia|default(false)|tojson }};
+
+  const btnHeredarSg = document.getElementById("btn-heredar-sg");
+  if (btnHeredarSg) {
+    btnHeredarSg.addEventListener("click", async () => {
+      const orig = mesSgOrigen || "el mes anterior";
+      const aviso = haySgPropia
+        ? `Esto reemplaza la distribución de ${periodoActual} por la de ${orig}. ¿Continuar?`
+        : `Se copiará la distribución de ${orig} a ${periodoActual}. Después puedes ajustar cuenta por cuenta. ¿Continuar?`;
+      if (!confirm(aviso)) return;
+      btnHeredarSg.disabled = true;
+      try {
+        const resp = await fetch("{{ url_for('contab.api_heredar_prorrateo_serv_generales') }}", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ periodo: periodoActual })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.ok) {
+          alert(data.error || "No se pudo copiar la distribución");
+          btnHeredarSg.disabled = false;
+          return;
+        }
+        window.location.reload();
+      } catch (e) {
+        alert("Error de conexión");
+        btnHeredarSg.disabled = false;
+      }
+    });
+  }
 
   // =========================
   // Servicios Generales
@@ -644,7 +723,7 @@ document.addEventListener("DOMContentLoaded", function () {
       document.getElementById("texto-cuenta-sg").innerText =
         `Cuenta: ${cuentaSGActual} – Periodo: ${periodoActual}`;
 
-      const regla_actual = reglasSG[cuentaSGActual] || {};
+      const regla_actual = reglasSG[cuentaSGActual] || reglasSgHeredadas[cuentaSGActual] || {};
 
       if (tbodySG) {
         tbodySG.querySelectorAll(".input-porcentaje").forEach(inp => {
@@ -786,19 +865,42 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+  function propParaCentro(dist, centro) {
+    if (!dist) return null;
+    if (dist[centro] != null) return dist[centro];
+    const fold = (s) => (s || "").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const c0 = fold(centro);
+    for (const [k, v] of Object.entries(dist)) {
+      const k0 = fold(k);
+      if (k0 === c0 || (c0 && (k0.includes(c0) || c0.includes(k0)))) return v;
+    }
+    return null;
+  }
+
   document.querySelectorAll(".btn-configurar-cuenta").forEach(btn => {
     btn.addEventListener("click", () => {
       if (!tbodyCuenta) return;
       cuentaGlobalActual = btn.dataset.cuenta;
-      document.getElementById("texto-cuenta-global").innerText =
-        `Cuenta: ${cuentaGlobalActual} – Periodo: ${periodoActual}`;
-
+      const esArqueo = Object.prototype.hasOwnProperty.call(distArqueoCuentas, cuentaGlobalActual);
       const regla = reglasCuentas[cuentaGlobalActual] || {};
+      const mix = distArqueoCuentas[cuentaGlobalActual] || {};
+      const hayManual = Object.keys(regla).length > 0;
+      const fuente = hayManual ? regla : mix;
+      document.getElementById("texto-cuenta-global").innerText = hayManual
+        ? `Cuenta: ${cuentaGlobalActual} – Periodo: ${periodoActual} (edición manual)`
+        : (esArqueo
+          ? `Cuenta: ${cuentaGlobalActual} – Periodo: ${periodoActual} (mix Arqueo; podés editar y guardar)`
+          : `Cuenta: ${cuentaGlobalActual} – Periodo: ${periodoActual}`);
+
       tbodyCuenta.querySelectorAll(".input-porcentaje-cuenta").forEach(inp => {
         const centro = inp.dataset.centro;
-        const valor = regla[centro] != null ? regla[centro] * 100 : 0;
-        inp.value = valor.toFixed(1);
+        const prop = propParaCentro(fuente, centro);
+        inp.value = (prop != null ? prop * 100 : 0).toFixed(1);
       });
+      const btnVolver = document.getElementById("btn-volver-arqueo");
+      if (btnVolver) {
+        btnVolver.classList.toggle("d-none", !(esArqueo && hayManual));
+      }
       recalcularTotalCuenta();
       modalCuenta.show();
     });
@@ -838,6 +940,29 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
       }
 
+      window.location.reload();
+    });
+  }
+
+  const btnVolverArqueo = document.getElementById("btn-volver-arqueo");
+  if (btnVolverArqueo) {
+    btnVolverArqueo.addEventListener("click", async () => {
+      if (!cuentaGlobalActual) return;
+      if (!confirm("Se quita la edición manual de este mes y vuelve el mix de Arqueo. ¿Continuar?")) return;
+      const resp = await fetch("{{ url_for('contab.api_guardar_prorrateo_cuenta_manual') }}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          periodo: periodoActual,
+          cuenta: cuentaGlobalActual,
+          borrar: true
+        })
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || data.ok === false) {
+        alert(data.error || "No se pudo volver al mix Arqueo");
+        return;
+      }
       window.location.reload();
     });
   }
@@ -913,6 +1038,14 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         for (const [cc, v] of Object.entries(ventasPorCC || {})) {
           dist[cc] = v / total;
+        }
+      } else if (tipo === "ARQUEO_TIPO_PAGO") {
+        const regla = reglasCuentas[cuenta] || {};
+        dist = Object.keys(regla).length ? regla : (distArqueoCuentas[cuenta] || {});
+        if (Object.keys(dist).length === 0) {
+          tbody.innerHTML = "<tr><td colspan='3' class='text-center'>No hay mix de Arqueo ni edición manual para esta cuenta en el mes.</td></tr>";
+          modalPreview.show();
+          return;
         }
       } else if (tipo === "MANUAL_SUCURSAL") {
         const regla = reglasCuentas[cuenta] || {};
@@ -1017,8 +1150,9 @@ document.addEventListener("DOMContentLoaded", function () {
         <div class="mb-3">
             <label class="form-label">Tipo de Distribución</label>
             <select class="form-select bg-dark text-white border-secondary" id="select-tipo-nueva">
-                <option value="MANUAL_SUCURSAL">Manual (% fijo por sucursal)</option>
+                <option value="ARQUEO_TIPO_PAGO">Automático (mix Arqueo: tipo de pago)</option>
                 <option value="VENTAS_SUCURSAL">Automático (Según ventas del mes)</option>
+                <option value="MANUAL_SUCURSAL">Manual (% fijo por sucursal)</option>
             </select>
         </div>
       </div>

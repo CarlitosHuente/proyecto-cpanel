@@ -140,7 +140,8 @@ Blueprint `contab` — `routes/contab_routes.py`.
 | Comparativo | comparativo gestión |
 | Acumulado | `/contab/acumulado_gestion` — rango de meses + mismo rango año anterior |
 | Macros P&amp;L | `/contab/macros_gestion` + `macros_gestion.json` opcional (`activo: false` → comportamiento previo) |
-| Otros | mayor, prorrateos, clasificaciones, rentabilidad gerencia, etc. |
+| Otros | mayor, clasificaciones, rentabilidad gerencia, etc. |
+| Prorrateos | `/contab/prorrateos` — periodo predeterminado = mes más reciente del mayor. Serv. Generales: copiar mes anterior. Comisiones: mix Arqueo (`% de este tipo`; Mercado Pago = Redelcom) con **Configurar** manual del mes (manda sobre Arqueo). |
 
 **Estructura compartida:** `utils/gestion_estructura.py` — `ESTRUCTURA_GESTION`, helpers KPIs/resumen/`serie_kpis_mensual`.  
 **Ventas brutas en KPIs:** suma cuentas 4xx (misma base que tendencia).  
