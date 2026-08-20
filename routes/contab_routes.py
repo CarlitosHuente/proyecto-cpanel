@@ -622,7 +622,7 @@ def calcular_matriz_gestion(df, periodo, switch_sg, switch_fab, data_config):
 
     for row in filas_trabajo:
         per = row["PERIODO_STR"]
-        cc = row["CENTRO COSTO"]
+        cc = str(row.get("CENTRO COSTO") or "")
         nom = row["NOMBRE"]
         monto = row["SALDO_REAL"]
         

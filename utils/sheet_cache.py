@@ -316,8 +316,8 @@ def obtener_datos(empresa="comercial", raise_errors=False):
             
             except Exception as e:
                 print(f"ERROR al cargar 'mayor.xlsx' desde la API de Drive: {e}")
-            if raise_errors:
-                raise e
+                if raise_errors:
+                    raise
                 return pd.DataFrame()
 
         elif empresa == "agricola":

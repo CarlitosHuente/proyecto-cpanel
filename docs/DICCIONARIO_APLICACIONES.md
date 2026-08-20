@@ -150,9 +150,11 @@ Blueprint `contab` — `routes/contab_routes.py`.
 
 ## 8. Costeo
 
-- Blueprint `costeo`: mapeo, costos directos, reglas, GAV, simuladores, rentabilidad.
+- Blueprint `costeo`: mapeo, costos directos, reglas, GAV, simuladores, rentabilidad. Entrada: `/costeo/mapeo` (menú Gestión → Contab → Costeo de Productos).
+- Periodo **predeterminado**: mes más antiguo con movimiento en el mayor. El filtro de mes se puede cambiar a cualquiera.
 - Ventas: misma capa NETO/presentación que dashboard (`obtener_datos("comercial")`); agrupación con clave única `EMPANADA DE QUESO CRUDA`.
-- Archivos: `routes/costeo_routes.py`, `utils/costeo_manager.py`, templates `templates/costeo/*` / contab relacionados.
+- Si Drive no entrega `mayor.xlsx` o el mes aún no tiene movimientos, las pantallas quedan vacías (no 500). El simulador inicializa costos automáticos de pizza/empanada en 0 cuando no hay mayor del periodo.
+- Archivos: `routes/costeo_routes.py`, `utils/costeo_manager.py`, templates `templates/contab/costeo_*.html`.
 
 ---
 

@@ -8,6 +8,15 @@ Al cerrar un cambio relevante: entrada breve aquí + actualizar diccionario si c
 
 ---
 
+## 2026-08-19 — Costeo: periodo = mes más antiguo del mayor
+
+- Directos, GAV, simulador y rentabilidad abren en el YYYY-MM más antiguo del mayor; el usuario puede cambiar el mes a cualquiera.
+
+## 2026-08-19 — Costeo: 500 en producción
+
+- Causa: `UnboundLocalError` al abrir Costeo si falla Drive (`mayor.xlsx`) o si el simulador corre un mes con ventas de pizza pero sin mayor de ese periodo.
+- Arreglo: devolver DataFrame vacío si no carga el mayor; inicializar `costo_total_piz`; ordenar productos/sucursales como texto.
+
 ## 2026-08-19 — FxR: eliminar del inbox
 
 - Botón Eliminar en inbox: dueño o superusuario borra comprobante staging (archivo + fila).

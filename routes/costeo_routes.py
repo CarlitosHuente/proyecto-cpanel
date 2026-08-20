@@ -25,21 +25,57 @@ def obtener_alias_sucursal(sucursal):
         alias.extend(["PLAZA EGANA", "PLAZA EGAÑA"])
     return list(set(alias))
 
+
+def _unicos_str(series):
+    """Lista ordenada de valores texto (evita TypeError al mezclar str/float en prod)."""
+    if series is None:
+        return []
+    vals = series.dropna().astype(str).str.strip()
+    vals = vals[(vals != "") & (vals.str.lower() != "nan")]
+    return sorted(vals.unique().tolist())
+
+
+def _asegurar_col(df, nombre, default=""):
+    if nombre not in df.columns:
+        df[nombre] = default
+    return df
+
+
+def _periodos_mayor(df_mayor=None):
+    """YYYY-MM con movimiento en el mayor, ordenados de más antiguo a más reciente."""
+    if df_mayor is None:
+        df_mayor = obtener_datos("mayor")
+    if df_mayor is None or getattr(df_mayor, "empty", True) or "FECHA" not in df_mayor.columns:
+        return []
+    fechas = pd.to_datetime(df_mayor["FECHA"], errors="coerce").dropna()
+    if fechas.empty:
+        return []
+    return sorted(fechas.dt.strftime("%Y-%m").unique().tolist())
+
+
+def periodo_costeo(df_mayor=None):
+    """Predeterminado: mes más antiguo del mayor. Si el usuario elige otro mes, se respeta."""
+    pedido = (request.args.get("periodo") or "").strip()
+    if pedido:
+        return pedido
+    periodos = _periodos_mayor(df_mayor)
+    if periodos:
+        return periodos[0]
+    return datetime.now().strftime("%Y-%m")
+
 @costeo_bp.route("/mapeo")
 @login_requerido
 @permiso_modulo("contab")
 def mapeo():
     # 1. Extraer lista única de Productos desde las Ventas
     df_ventas = obtener_datos("comercial")
-    if not df_ventas.empty and "DESCRIPCION" in df_ventas.columns:
-        productos = sorted(df_ventas["DESCRIPCION"].dropna().unique().tolist())
-    else:
-        productos = []
+    productos = _unicos_str(df_ventas["DESCRIPCION"]) if not df_ventas.empty and "DESCRIPCION" in df_ventas.columns else []
 
     # 2. Extraer solo las Cuentas de Ingresos (Comienzan con 4) desde Contabilidad
     df_mayor = obtener_datos("mayor")
     cuentas_ingreso = []
     if not df_mayor.empty and "CUENTA" in df_mayor.columns:
+        _asegurar_col(df_mayor, "NOMBRE")
         df_mayor["CUENTA"] = df_mayor["CUENTA"].astype(str).str.strip()
         df_mayor["NOMBRE"] = df_mayor["NOMBRE"].astype(str).str.strip()
         
@@ -71,14 +107,11 @@ def api_guardar_mapeo():
 @login_requerido
 @permiso_modulo("contab")
 def costos_directos():
-    periodo = request.args.get("periodo", datetime.now().strftime("%Y-%m"))
+    periodo = periodo_costeo()
     
     # Extraer lista única de Productos
     df_ventas = obtener_datos("comercial")
-    if not df_ventas.empty and "DESCRIPCION" in df_ventas.columns:
-        productos = sorted(df_ventas["DESCRIPCION"].dropna().unique().tolist())
-    else:
-        productos = []
+    productos = _unicos_str(df_ventas["DESCRIPCION"]) if not df_ventas.empty and "DESCRIPCION" in df_ventas.columns else []
 
     # Obtener los costos vigentes para el periodo seleccionado
     costos_efectivos, costos_propios = obtener_costos_efectivos(periodo)
@@ -114,8 +147,8 @@ def reglas_gastos():
     # Extraer lista de Productos
     df_ventas = obtener_datos("comercial")
     if not df_ventas.empty and "DESCRIPCION" in df_ventas.columns:
-        productos = sorted(df_ventas["DESCRIPCION"].dropna().unique().tolist())
-        sucursales = sorted(df_ventas["SUCURSAL"].dropna().unique().tolist())
+        productos = _unicos_str(df_ventas["DESCRIPCION"])
+        sucursales = _unicos_str(df_ventas["SUCURSAL"]) if "SUCURSAL" in df_ventas.columns else []
     else:
         productos = []
         sucursales = []
@@ -124,6 +157,7 @@ def reglas_gastos():
     df_mayor = obtener_datos("mayor")
     cuentas_gasto = []
     if not df_mayor.empty and "CUENTA" in df_mayor.columns:
+        _asegurar_col(df_mayor, "NOMBRE")
         df_mayor["CUENTA"] = df_mayor["CUENTA"].astype(str).str.strip()
         df_mayor["NOMBRE"] = df_mayor["NOMBRE"].astype(str).str.strip()
         
@@ -165,9 +199,9 @@ def api_copiar_reglas():
 @login_requerido
 @permiso_modulo("contab")
 def gav_corporativo():
-    periodo = request.args.get("periodo", datetime.now().strftime("%Y-%m"))
+    periodo = periodo_costeo()
     df_ventas = obtener_datos("comercial")
-    sucursales = sorted(df_ventas["SUCURSAL"].dropna().unique().tolist()) if not df_ventas.empty else []
+    sucursales = _unicos_str(df_ventas["SUCURSAL"]) if not df_ventas.empty and "SUCURSAL" in df_ventas.columns else []
     
     prorrateo_adm = obtener_prorrateo_adm()
     
@@ -177,7 +211,7 @@ def gav_corporativo():
     pool_sg = {}
     for p_key, d in prorrateos_data.get("reglas_mensuales", {}).items():
         if "serv_generales" in d: pool_sg[p_key] = d["serv_generales"]
-    ants = [p_key for p_key in pool_sg.keys() if p_key <= periodo]
+    ants = [p_key for p_key in pool_sg.keys() if str(p_key) <= str(periodo)]
     regla_efectiva_sg = pool_sg[max(ants)] if ants else {}
     hay_reglas_sg = periodo in pool_sg
     mes_heredado_sg = max(ants) if ants else None
@@ -196,6 +230,8 @@ def gav_corporativo():
         df_mes = df_mayor_raw[df_mayor_raw["PERIODO_STR"] == periodo].copy()
         
         if not df_mes.empty:
+            _asegurar_col(df_mes, "CENTRO COSTO")
+            _asegurar_col(df_mes, "NOMBRE")
             df_mes["DEBE"] = pd.to_numeric(df_mes["DEBE"], errors="coerce").fillna(0)
             df_mes["HABER"] = pd.to_numeric(df_mes["HABER"], errors="coerce").fillna(0)
             df_mes["SALDO_REAL"] = (df_mes["DEBE"] - df_mes["HABER"]) * -1
@@ -227,13 +263,18 @@ def gav_corporativo():
                     
                     # Calcular cuánto se le asignó a cada sucursal según las reglas de SG
                     regla_cta = regla_efectiva_sg.get(cta_nombre, {})
+                    if not isinstance(regla_cta, dict):
+                        continue
                     for suc in sucursales:
                         pct = 0.0
                         aliases_suc = obtener_alias_sucursal(suc)
                         for branch_key, val in regla_cta.items():
-                            b_search = branch_key.upper().strip().replace("Ñ", "N")
+                            b_search = str(branch_key).upper().strip().replace("Ñ", "N")
                             if any(a in b_search or b_search in a for a in aliases_suc):
-                                pct = float(val)
+                                try:
+                                    pct = float(val)
+                                except (TypeError, ValueError):
+                                    pct = 0.0
                                 break
                         asignado_sg_por_sucursal[suc] += saldo * pct
 
@@ -263,7 +304,7 @@ def correr_motor_costeo(periodo, sucursal, escenario="Escenario 1"):
     df_ventas_raw = obtener_datos("comercial")
     sucursales = []
     if not df_ventas_raw.empty and "SUCURSAL" in df_ventas_raw.columns:
-        sucursales = sorted(df_ventas_raw["SUCURSAL"].dropna().unique().tolist())
+        sucursales = _unicos_str(df_ventas_raw["SUCURSAL"])
         if not sucursal and sucursales:
             sucursal = sucursales[0]
 
@@ -295,6 +336,7 @@ def correr_motor_costeo(periodo, sucursal, escenario="Escenario 1"):
     gastos_cuenta = {}
     data_config = {}
     df_procesado = pd.DataFrame()
+    costo_total_piz = 0.0
     if not df_mayor_raw.empty and "FECHA" in df_mayor_raw.columns:
         df_mayor_raw["FECHA_DT"] = pd.to_datetime(df_mayor_raw["FECHA"], errors="coerce")
         df_mayor_raw["PERIODO_STR"] = df_mayor_raw["FECHA_DT"].dt.strftime("%Y-%m")
@@ -302,6 +344,8 @@ def correr_motor_costeo(periodo, sucursal, escenario="Escenario 1"):
         
         if not df_mes.empty:
             # A. Formatear para el motor de prorrateos
+            _asegurar_col(df_mes, "CENTRO COSTO")
+            _asegurar_col(df_mes, "NOMBRE")
             df_mes["DEBE"] = pd.to_numeric(df_mes["DEBE"], errors="coerce").fillna(0)
             df_mes["HABER"] = pd.to_numeric(df_mes["HABER"], errors="coerce").fillna(0)
             df_mes["SALDO_REAL"] = (df_mes["DEBE"] - df_mes["HABER"]) * -1
@@ -328,8 +372,6 @@ def correr_motor_costeo(periodo, sucursal, escenario="Escenario 1"):
                 mask_cc = cc_normalized.apply(lambda x: any((a in x or x in a) for a in aliases_suc) if str(x).strip() else False)
                 mask = (df_procesado["CUENTA"].str.startswith("3")) & mask_cc
                 df_gastos = df_procesado[mask].copy()
-            
-            costo_total_piz = 0.0
             
             if not df_gastos.empty:
                 df_gastos["DISPLAY"] = df_gastos["CUENTA"] + " - " + df_gastos["NOMBRE"]
@@ -463,7 +505,7 @@ def correr_motor_costeo(periodo, sucursal, escenario="Escenario 1"):
     pool_sg = {}
     for p_key, d in data_config.get("reglas_mensuales", {}).items():
         if "serv_generales" in d: pool_sg[p_key] = d["serv_generales"]
-    ants = [p_key for p_key in pool_sg.keys() if p_key <= periodo]
+    ants = [p_key for p_key in pool_sg.keys() if str(p_key) <= str(periodo)]
     regla_efectiva_sg = pool_sg[max(ants)] if ants else {}
     
     if not df_procesado.empty and "CUENTA" in df_procesado.columns and "CENTRO COSTO" in df_procesado.columns:
@@ -473,11 +515,16 @@ def correr_motor_costeo(periodo, sucursal, escenario="Escenario 1"):
             monto = abs(float(row["SALDO_REAL"]))
             pct = 0.0
             aliases_suc = obtener_alias_sucursal(sucursal)
-            for branch_key, val in regla_efectiva_sg.get(cta_nombre, {}).items():
-                b_search = branch_key.upper().strip().replace("Ñ", "N")
-                if any(a in b_search or b_search in a for a in aliases_suc):
-                    pct = float(val)
-                    break
+            regla_cta = regla_efectiva_sg.get(cta_nombre, {})
+            if isinstance(regla_cta, dict):
+                for branch_key, val in regla_cta.items():
+                    b_search = str(branch_key).upper().strip().replace("Ñ", "N")
+                    if any(a in b_search or b_search in a for a in aliases_suc):
+                        try:
+                            pct = float(val)
+                        except (TypeError, ValueError):
+                            pct = 0.0
+                        break
             if pct > 0:
                 asignado = monto * pct
                 total_gav_sucursal += asignado
@@ -485,7 +532,10 @@ def correr_motor_costeo(periodo, sucursal, escenario="Escenario 1"):
 
         # B. Administración (Desde la nueva pestaña)
         prorrateo_adm = obtener_prorrateo_adm()
-        pct_adm = float(prorrateo_adm.get(sucursal, 0)) / 100.0
+        try:
+            pct_adm = float(prorrateo_adm.get(sucursal, 0) or 0) / 100.0
+        except (TypeError, ValueError):
+            pct_adm = 0.0
         mask_adm = (df_procesado["CUENTA"].str.startswith("3")) & (df_procesado["CENTRO COSTO"].str.contains("ADMINISTRACION", na=False))
         for _, row in df_procesado[mask_adm].iterrows():
             monto = abs(float(row["SALDO_REAL"]))
@@ -574,7 +624,7 @@ def correr_motor_costeo(periodo, sucursal, escenario="Escenario 1"):
 @login_requerido
 @permiso_modulo("contab")
 def simulador():
-    periodo = request.args.get("periodo", datetime.now().strftime("%Y-%m"))
+    periodo = periodo_costeo()
     sucursal = request.args.get("sucursal", "")
     escenario = request.args.get("escenario", "Escenario 1")
     
@@ -598,7 +648,7 @@ def simulador():
 @login_requerido
 @permiso_modulo("contab")
 def simulador_global():
-    periodo = request.args.get("periodo", datetime.now().strftime("%Y-%m"))
+    periodo = periodo_costeo()
     sucursal = request.args.get("sucursal", "")
     escenario = request.args.get("escenario", "Escenario 1")
     
@@ -641,7 +691,7 @@ def simulador_global():
 @login_requerido
 @permiso_modulo("contab")
 def exportar_simulador():
-    periodo = request.args.get("periodo", datetime.now().strftime("%Y-%m"))
+    periodo = periodo_costeo()
     sucursal = request.args.get("sucursal", "")
     escenario = request.args.get("escenario", "Escenario 1")
     
@@ -673,7 +723,7 @@ def exportar_simulador():
 @login_requerido
 @permiso_modulo("reporte")
 def rentabilidad_gerencia():
-    periodo = request.args.get("periodo", datetime.now().strftime("%Y-%m"))
+    periodo = periodo_costeo()
     sucursal = request.args.get("sucursal", "")
     escenario = request.args.get("escenario", "Escenario 1")
     
