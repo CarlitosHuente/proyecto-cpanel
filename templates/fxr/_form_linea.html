@@ -1,5 +1,9 @@
-<form method="post">
+<form method="post" {% if form_action %}action="{{ form_action }}"{% endif %}>
   {% if overlay %}<input type="hidden" name="overlay" value="1">{% endif %}
+  {% if wizard %}
+  <input type="hidden" name="i" value="{{ idx }}">
+  <input type="hidden" name="accion" id="fxr-form-accion" value="guardar">
+  {% endif %}
   <div class="row g-2">
     <div class="col-6">
       <label class="form-label small">Tipo doc</label>
@@ -48,9 +52,20 @@
       <textarea name="observaciones" rows="2" class="form-control bg-black text-white border-secondary" {% if not editable %}readonly{% endif %}>{{ linea.observaciones or '' }}</textarea>
     </div>
     {% if editable %}
-    <div class="col-12 d-flex gap-2 mt-2">
+    <div class="col-12 d-flex flex-wrap gap-2 mt-2">
+      {% if wizard %}
+      <button class="btn btn-success" type="submit"
+              onclick="document.getElementById('fxr-form-accion').value='guardar'">Guardar</button>
+      {% if idx is defined and n is defined and idx < n - 1 %}
+      <button class="btn btn-primary" type="submit"
+              onclick="document.getElementById('fxr-form-accion').value='siguiente'">Guardar y siguiente</button>
+      {% endif %}
+      <button class="btn btn-outline-light" type="submit"
+              onclick="document.getElementById('fxr-form-accion').value='lista'">Guardar y lista</button>
+      {% else %}
       <button class="btn btn-success" type="submit">Guardar</button>
       <button class="btn btn-outline-light" type="submit" name="volver" value="1">Guardar y volver</button>
+      {% endif %}
     </div>
     {% endif %}
   </div>

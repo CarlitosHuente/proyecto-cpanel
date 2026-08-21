@@ -439,7 +439,7 @@ Contab Archivos sigue siendo el dueño del mayor; el camino `imagen` es independ
 
 **Rutas:** `/fxr/` — [`routes/fxr_routes.py`](../routes/fxr_routes.py). Utils: `utils/fxr_db.py`, `fxr_files.py`, `fxr_pdf.py`, `fxr_drive.py`. Templates: `templates/fxr/*`. JS: `static/js/fxr_pulir.js`. Staging: `uploads/fxr/` (gitignored).
 
-**Flujo captura:** móvil → **Fotografiar** guarda solo en inbox; completar/pulir en PC (misma UI si se usa el celu). Inbox → seleccionar → rendir. **Pulir imagen** (`/fxr/comprobante/<id>/pulir`): detección de papel con **jscanify** + OpenCV.js (CDN 4.8.0; vendor `static/js/vendor/jscanify.js` v1.4.0), rotación 90° ⟲/⟳, 4 esquinas arrastrables, `extractPaper` a proporción Carta + contraste documento → JPEG. **Eliminar** del inbox: dueño o superusuario (`POST …/comprobante/<id>/eliminar`); borra archivo y registro.
+**Flujo captura:** móvil → **Fotografiar** guarda solo en inbox; completar/pulir en PC (misma UI si se usa el celu). Inbox → seleccionar → **Rendir seleccionados** crea borrador y abre **`/fxr/rendicion/<id>/completar`** (fullscreen estilo revisión: comprobante | formulario editable, chips y ←→). En rendición editable: **Agregar del inbox** (`POST …/agregar`) y botón Completar datos. **Pulir imagen** (`/fxr/comprobante/<id>/pulir`): jscanify + OpenCV.js, rotación 90°, 4 esquinas → JPEG Carta. **Eliminar** del inbox: dueño o superusuario (`POST …/comprobante/<id>/eliminar`); borra archivo y registro.
 
 **Edición línea:** split imagen | formulario con fondos **opacos** (sin overlay transparente).
 

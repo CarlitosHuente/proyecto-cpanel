@@ -130,15 +130,12 @@ def subir():
     cid = db.crear_comprobante(email, rel, mime, pages)
     flash("Comprobante guardado en inbox.", "success")
     if modo == "registrar":
-        # crea rendición borrador de 1 ítem y abre edición
+        # crea rendición borrador de 1 ítem y abre completar (split como revisión)
         perfil = _perfil()
         area_def = (perfil.get("fxr_cc_nombre") or "")[:120]
         rid = db.crear_rendicion(email, perfil["nombre"], area=area_def)
         db.vincular_comprobantes_a_rendicion(rid, [cid], email)
-        lineas = db.listar_lineas(rid)
-        if lineas:
-            return redirect(url_for("fxr.editar_linea", linea_id=lineas[0]["id"], overlay=1))
-        return redirect(url_for("fxr.rendicion", rid=rid))
+        return redirect(url_for("fxr.completar_rendicion", rid=rid, i=0))
     return redirect(url_for("fxr.index"))
 
 
@@ -231,6 +228,22 @@ def pulir_comprobante(cid):
         flash("Pulir solo aplica a imágenes.", "warning")
         return redirect(url_for("fxr.index"))
     next_linea = request.args.get("next_linea") or request.form.get("next_linea")
+    volver_url = url_for("fxr.index")
+    if next_linea and str(next_linea).isdigit():
+        lid = int(next_linea)
+        linea = db.obtener_linea(lid)
+        if linea and linea.get("rendicion_id"):
+            lineas = db.listar_lineas(int(linea["rendicion_id"]))
+            idx = 0
+            for i, L in enumerate(lineas):
+                if int(L["id"]) == lid:
+                    idx = i
+                    break
+            volver_url = url_for("fxr.completar_rendicion", rid=linea["rendicion_id"], i=idx)
+        else:
+            volver_url = url_for("fxr.editar_linea", linea_id=lid)
+    elif comp.get("rendicion_id"):
+        volver_url = url_for("fxr.rendicion", rid=comp["rendicion_id"])
     if request.method == "POST":
         archivo = request.files.get("archivo")
         if not archivo or not archivo.filename:
@@ -247,17 +260,14 @@ def pulir_comprobante(cid):
         if anterior and anterior != nuevo:
             borrar_archivo_local(anterior)
         flash("Imagen pulida guardada.", "success")
-        if next_linea and str(next_linea).isdigit():
-            return redirect(url_for("fxr.editar_linea", linea_id=int(next_linea)))
-        if comp.get("rendicion_id"):
-            return redirect(url_for("fxr.rendicion", rid=comp["rendicion_id"]))
-        return redirect(url_for("fxr.index"))
+        return redirect(volver_url)
     return render_template(
         "fxr/pulir.html",
         comp=comp,
         next_linea=next_linea,
         img_url=url_for("fxr.servir_archivo", cid=cid),
         post_url=url_for("fxr.pulir_comprobante", cid=cid),
+        volver_url=volver_url,
     )
 
 
@@ -276,8 +286,106 @@ def nueva_rendicion():
     area = (request.form.get("area") or "").strip() or (perfil.get("fxr_cc_nombre") or "")
     rid = db.crear_rendicion(email, perfil["nombre"], area=area[:120])
     n = db.vincular_comprobantes_a_rendicion(rid, ids, email)
-    flash(f"Rendición creada con {n} comprobante(s).", "success")
+    flash(f"Rendición creada con {n} comprobante(s). Completa los datos.", "success")
+    return redirect(url_for("fxr.completar_rendicion", rid=rid, i=0))
+
+
+@fxr_bp.route("/rendicion/<int:rid>/agregar", methods=["POST"])
+@login_requerido
+@permiso_modulo("fxr")
+def agregar_a_rendicion(rid):
+    """Vincula comprobantes del inbox a una rendición borrador/rechazada del dueño."""
+    r = db.obtener_rendicion(rid)
+    if not r or r["usuario_email"] != _email() or r["estado"] not in ("borrador", "rechazada"):
+        abort(403)
+    ids = [int(x) for x in request.form.getlist("comp_ids") if str(x).isdigit()]
+    if not ids:
+        flash("Selecciona al menos un comprobante del inbox.", "warning")
+        return redirect(url_for("fxr.rendicion", rid=rid))
+    n = db.vincular_comprobantes_a_rendicion(rid, ids, _email())
+    flash(f"Se agregaron {n} comprobante(s) a la rendición.", "success" if n else "warning")
+    if n and request.form.get("ir_completar") == "1":
+        lineas = db.listar_lineas(rid)
+        # Abrir en el primer ítem recién agregado (últimos n)
+        idx = max(0, len(lineas) - n)
+        return redirect(url_for("fxr.completar_rendicion", rid=rid, i=idx))
     return redirect(url_for("fxr.rendicion", rid=rid))
+
+
+@fxr_bp.route("/rendicion/<int:rid>/completar", methods=["GET", "POST"])
+@login_requerido
+@permiso_modulo("fxr")
+def completar_rendicion(rid):
+    """Pantalla fullscreen (estilo revisión) para ingresar datos línea a línea."""
+    r = db.obtener_rendicion(rid)
+    if not r or not _puede_ver_rendicion(r):
+        abort(404)
+    editable = r["estado"] in ("borrador", "rechazada") and r["usuario_email"] == _email()
+    if not editable:
+        flash("Esta rendición no se puede editar.", "warning")
+        return redirect(url_for("fxr.rendicion", rid=rid))
+
+    lineas = db.listar_lineas(rid)
+    n = len(lineas)
+    try:
+        idx = int(request.args.get("i") or request.form.get("i") or 0)
+    except (TypeError, ValueError):
+        idx = 0
+    if n == 0:
+        flash("La rendición no tiene comprobantes.", "warning")
+        return redirect(url_for("fxr.rendicion", rid=rid))
+    idx = max(0, min(idx, n - 1))
+    cur = lineas[idx]
+    dups = []
+
+    if request.method == "POST":
+        ok, msg, dups = db.guardar_linea(
+            cur["id"],
+            {
+                "tipo_doc": request.form.get("tipo_doc"),
+                "n_doc": request.form.get("n_doc"),
+                "fecha_comprobante": request.form.get("fecha_comprobante"),
+                "concepto": request.form.get("concepto"),
+                "tipo_gasto_id": request.form.get("tipo_gasto_id") or None,
+                "centro_costo_id": request.form.get("centro_costo_id") or None,
+                "monto": request.form.get("monto"),
+                "observaciones": request.form.get("observaciones"),
+            },
+        )
+        flash(msg, "warning" if dups else ("success" if ok else "danger"))
+        accion = (request.form.get("accion") or "guardar").strip()
+        if ok and accion == "lista":
+            return redirect(url_for("fxr.rendicion", rid=rid))
+        if ok and accion == "siguiente" and idx < n - 1:
+            return redirect(url_for("fxr.completar_rendicion", rid=rid, i=idx + 1))
+        if ok and accion == "anterior" and idx > 0:
+            return redirect(url_for("fxr.completar_rendicion", rid=rid, i=idx - 1))
+        # Recargar línea/rendición tras guardar
+        r = db.obtener_rendicion(rid)
+        lineas = db.listar_lineas(rid)
+        cur = lineas[idx]
+        if not dups and cur.get("n_doc_norm"):
+            dups = db.buscar_duplicados(cur["tipo_doc"], cur["n_doc_norm"], excluir_linea_id=cur["id"])
+    else:
+        if cur.get("n_doc_norm"):
+            dups = db.buscar_duplicados(cur["tipo_doc"], cur["n_doc_norm"], excluir_linea_id=cur["id"])
+
+    return render_template(
+        "fxr/completar.html",
+        r=r,
+        lineas=lineas,
+        idx=idx,
+        n=n,
+        cur=cur,
+        linea=cur,
+        editable=True,
+        wizard=True,
+        dups=dups,
+        centros=db.listar_centros_costo(solo_activos=True),
+        tipos_gasto=db.listar_tipos_gasto(solo_activos=True),
+        tipos_doc=db.TIPOS_DOC,
+        form_action=url_for("fxr.completar_rendicion", rid=rid),
+    )
 
 
 @fxr_bp.route("/rendicion/<int:rid>")
@@ -292,6 +400,7 @@ def rendicion(rid):
     editable = r["estado"] in ("borrador", "rechazada") and r["usuario_email"] == _email()
     # Solo mostrar faltantes tras intentar Preparar (no al crear la rendición)
     faltantes = session.pop(f"fxr_faltantes_{rid}", None) or []
+    inbox = db.listar_inbox(_email()) if editable else []
     return render_template(
         "fxr/rendicion.html",
         r=r,
@@ -300,6 +409,7 @@ def rendicion(rid):
         es_super=_es_super(),
         editable=editable,
         faltantes=faltantes,
+        inbox=inbox,
         centros=db.listar_centros_costo(solo_activos=True),
         tipos_gasto=db.listar_tipos_gasto(solo_activos=True),
     )

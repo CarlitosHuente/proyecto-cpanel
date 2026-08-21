@@ -22,8 +22,7 @@
 </style>
 <div class="container-fluid mt-2 fxr-pulir-wrap pb-4">
   <div class="fxr-pulir-toolbar mb-2">
-    <a href="{% if next_linea %}{{ url_for('fxr.editar_linea', linea_id=next_linea) }}{% elif comp.rendicion_id %}{{ url_for('fxr.rendicion', rid=comp.rendicion_id) }}{% else %}{{ url_for('fxr.index') }}{% endif %}"
-       class="btn btn-sm btn-outline-secondary">← Volver</a>
+    <a href="{{ volver_url }}" class="btn btn-sm btn-outline-secondary">← Volver</a>
     <strong class="text-info">Pulir imagen #{{ comp.id }}</strong>
     <span class="fxr-pulir-hint" id="fxr-pulir-status">Cargando detector…</span>
     <button type="button" class="btn btn-sm btn-outline-light" id="fxr-rotate-ccw" title="Girar 90° izquierda">Girar ⟲</button>

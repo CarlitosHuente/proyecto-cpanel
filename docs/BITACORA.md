@@ -8,6 +8,11 @@ Al cerrar un cambio relevante: entrada breve aquí + actualizar diccionario si c
 
 ---
 
+## 2026-08-20 — FxR: agregar inbox + completar estilo revisión
+
+- En rendición borrador/rechazada: «Agregar del inbox» vincula staging a la rendición abierta.
+- Tras «Rendir seleccionados» (y Registrar ahora): pantalla fullscreen `/fxr/rendicion/<id>/completar` (comprobante | formulario, navegación entre líneas).
+
 ## 2026-08-20 — FxR Pulir: jscanify + rotación
 
 - Detección de papel con jscanify (OpenCV.js CDN 4.8.0 + vendor `static/js/vendor/jscanify.js` v1.4.0).

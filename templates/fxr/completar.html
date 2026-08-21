@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Completar rendición #{{ r.id }}{% endblock %}
+{% block content %}
+<style>
+  .fxr-comp-fs {
+    position: fixed; inset: 0; z-index: 1040;
+    background: #0d0d0d; color: #eee;
+    display: flex; flex-direction: column;
+  }
+  .fxr-comp-top {
+    flex: 0 0 auto;
+    background: #1a1a1a;
+    border-bottom: 1px solid #444;
+    padding: .55rem .85rem;
+    display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; justify-content: space-between;
+  }
+  .fxr-comp-body {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: 1fr minmax(300px, 380px);
+    min-height: 0;
+  }
+  @media (max-width: 900px) {
+    .fxr-comp-body { grid-template-columns: 1fr; grid-template-rows: minmax(40vh, 1fr) auto; }
+  }
+  .fxr-comp-viewer {
+    background: #000;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 0; overflow: auto; padding: .5rem;
+  }
+  .fxr-comp-viewer img {
+    max-width: 100%; max-height: calc(100vh - 150px);
+    object-fit: contain;
+  }
+  .fxr-comp-viewer iframe {
+    width: 100%; height: calc(100vh - 150px); border: 0; background: #111;
+  }
+  @media (max-width: 900px) {
+    .fxr-comp-viewer img { max-height: 42vh; }
+    .fxr-comp-viewer iframe { height: 42vh; }
+  }
+  .fxr-comp-side {
+    background: #1a1a1a;
+    border-left: 1px solid #444;
+    padding: .85rem;
+    overflow-y: auto;
+    color: #eee;
+  }
+  .fxr-comp-side h6 { color: #ffe566; margin-bottom: .5rem; }
+  .fxr-comp-nav {
+    flex: 0 0 auto;
+    background: #1a1a1a;
+    border-top: 1px solid #444;
+    padding: .5rem .85rem;
+    display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+  }
+  .fxr-comp-chips {
+    display: flex; flex-wrap: wrap; gap: .25rem; max-height: 4.5rem; overflow-y: auto;
+  }
+  .fxr-comp-chips a {
+    font-size: .75rem; padding: .15rem .4rem;
+    border: 1px solid #555; border-radius: .25rem; color: #ccc; text-decoration: none;
+    background: #111;
+  }
+  .fxr-comp-chips a.active { background: #ffe566; color: #111; border-color: #ffe566; font-weight: 600; }
+  .fxr-comp-chips a.ok { border-color: #2e7d32; }
+</style>
+
+<div class="fxr-comp-fs">
+  <div class="fxr-comp-top">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <a href="{{ url_for('fxr.rendicion', rid=r.id) }}" class="btn btn-sm btn-outline-secondary">← Lista</a>
+      <strong class="text-info">Completar datos</strong>
+      <span class="text-white">{{ r.nombre_snapshot }}</span>
+      <span class="text-white">{{ r.total|dinero }}</span>
+      {% if n %}<span class="small text-muted">{{ idx + 1 }} / {{ n }}</span>{% endif %}
+    </div>
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      {% if cur and 'pdf' not in (cur.mime or '') %}
+      <a class="btn btn-sm btn-outline-info"
+         href="{{ url_for('fxr.pulir_comprobante', cid=cur.comprobante_id, next_linea=cur.id) }}">Pulir</a>
+      {% endif %}
+      <a class="btn btn-sm btn-outline-info" href="{{ url_for('fxr.preview', rid=r.id) }}">Vista previa</a>
+      <form method="post" action="{{ url_for('fxr.preparar', rid=r.id) }}" class="d-inline"
+            onsubmit="return confirm('¿Marcar como Preparada para revisión?');">
+        <button class="btn btn-sm btn-warning" type="submit">Marcar Preparada</button>
+      </form>
+    </div>
+  </div>
+
+  {% if dups %}
+  <div class="alert alert-danger mb-0 rounded-0 py-2 px-3">
+    <strong>N° documento ya usado:</strong>
+    {% for d in dups %}
+      Rendición {% if d.correlativo %}N° {{ d.correlativo }}{% else %}#{{ d.rendicion_id }}{% endif %}
+      · {{ d.monto|dinero }}{% if not loop.last %}; {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="fxr-comp-body">
+    <div class="fxr-comp-viewer">
+      {% if cur %}
+        {% if 'pdf' in (cur.mime or '') %}
+        <iframe src="{{ url_for('fxr.servir_archivo', cid=cur.comprobante_id) }}" title="pdf"></iframe>
+        {% else %}
+        <img src="{{ url_for('fxr.servir_archivo', cid=cur.comprobante_id) }}" alt="comprobante">
+        {% endif %}
+      {% else %}
+        <p class="text-muted">Sin líneas.</p>
+      {% endif %}
+    </div>
+
+    <aside class="fxr-comp-side">
+      <h6>Datos del comprobante</h6>
+      {% include "fxr/_form_linea.html" %}
+
+      <hr class="border-secondary">
+      <h6>Todos ({{ n }})</h6>
+      <div class="fxr-comp-chips">
+        {% for l in lineas %}
+        {% set completo = l.concepto and l.monto and (l.monto + 0) > 0 %}
+        <a href="{{ url_for('fxr.completar_rendicion', rid=r.id, i=loop.index0) }}"
+           class="{% if loop.index0 == idx %}active{% endif %} {% if completo %}ok{% endif %}"
+           title="{{ l.concepto or l.tipo_doc }}">
+          {{ loop.index }}. {{ (l.concepto or l.tipo_doc or '—')[:16] }}
+        </a>
+        {% endfor %}
+      </div>
+    </aside>
+  </div>
+
+  <div class="fxr-comp-nav">
+    {% if n %}
+    <a class="btn btn-outline-light btn-sm {% if idx <= 0 %}disabled{% endif %}"
+       href="{{ url_for('fxr.completar_rendicion', rid=r.id, i=idx - 1) }}">‹ Anterior</a>
+    <span class="small text-muted">← → navegan sin guardar · usa los botones del formulario para guardar</span>
+    <a class="btn btn-outline-light btn-sm {% if idx >= n - 1 %}disabled{% endif %}"
+       href="{{ url_for('fxr.completar_rendicion', rid=r.id, i=idx + 1) }}">Siguiente ›</a>
+    {% else %}
+    <span></span><span class="text-muted">Sin comprobantes</span><span></span>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+(function () {
+  var rid = {{ r.id }};
+  var idx = {{ idx }};
+  var n = {{ n }};
+  document.addEventListener('keydown', function (e) {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) return;
+    if (e.key === 'ArrowLeft' && idx > 0) {
+      window.location = '/fxr/rendicion/' + rid + '/completar?i=' + (idx - 1);
+    } else if (e.key === 'ArrowRight' && idx < n - 1) {
+      window.location = '/fxr/rendicion/' + rid + '/completar?i=' + (idx + 1);
+    }
+  });
+})();
+</script>
+{% endblock %}

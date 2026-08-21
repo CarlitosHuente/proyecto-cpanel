@@ -112,7 +112,12 @@
                 <td><span class="badge bg-secondary">{{ r.estado }}</span></td>
                 <td class="text-end">{{ r.total|dinero }}</td>
                 <td>{{ r.fecha_rendicion or '—' }}</td>
-                <td><a class="btn btn-sm btn-outline-light" href="{{ url_for('fxr.rendicion', rid=r.id) }}">Abrir</a></td>
+                <td class="text-nowrap">
+                  <a class="btn btn-sm btn-outline-light" href="{{ url_for('fxr.rendicion', rid=r.id) }}">Abrir</a>
+                  {% if r.estado in ('borrador', 'rechazada') %}
+                  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('fxr.completar_rendicion', rid=r.id, i=0) }}">Completar</a>
+                  {% endif %}
+                </td>
               </tr>
             {% else %}
               <tr><td colspan="6" class="text-muted">Sin rendiciones.</td></tr>
