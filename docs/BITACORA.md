@@ -8,6 +8,12 @@ Al cerrar un cambio relevante: entrada breve aquí + actualizar diccionario si c
 
 ---
 
+## 2026-08-20 — FxR Pulir: jscanify + rotación
+
+- Detección de papel con jscanify (OpenCV.js CDN 4.8.0 + vendor `static/js/vendor/jscanify.js` v1.4.0).
+- Botones Girar ⟲/⟳ (90°) en `/fxr/…/pulir`; re-detecta tras rotar.
+- Extracción con `extractPaper` + contraste; arrastre manual de esquinas se mantiene.
+
 ## 2026-08-19 — Prorrateos: comisiones según mix de Arqueo
 
 - Cuentas Comisión Uber / Rappi / Pedidos Ya / Mercado Pago / Mesa Chilena se reparte con el `% de este tipo` del reporte mensual de tipos de pago. Mercado Pago usa el mix de Redelcom. Se puede editar % a mano en el mes o volver al mix.

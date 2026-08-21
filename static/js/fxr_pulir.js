@@ -1,23 +1,32 @@
 /**
- * FxR — pulir imagen: 4 esquinas, warp perspectiva, contraste documento, Letter.
- * Sin dependencias obligatorias; OpenCV.js opcional vía CDN si está disponible.
+ * FxR — pulir imagen: jscanify (OpenCV.js) + 4 esquinas arrastrables + rotación 90° + Letter.
  */
 (function () {
   const cfg = window.FXR_PULIR || {};
   const canvas = document.getElementById("fxr-pulir-canvas");
   if (!canvas || !cfg.imgUrl) return;
   const ctx = canvas.getContext("2d");
-  const img = new Image();
-  img.crossOrigin = "anonymous";
+  const statusEl = document.getElementById("fxr-pulir-status");
 
-  let corners = []; // [{x,y}] en coords de imagen natural
+  const work = document.createElement("canvas");
+  const workCtx = work.getContext("2d");
+
+  let corners = []; // [{x,y}] en coords del bitmap de trabajo
   let dragIdx = -1;
   let scale = 1;
   let offsetX = 0;
   let offsetY = 0;
   let outBlob = null;
+  let scanner = null;
+  let cvReady = false;
+  let imgReady = false;
 
   const HANDLE = 14;
+  const LETTER = 8.5 / 11;
+
+  function setStatus(msg) {
+    if (statusEl) statusEl.textContent = msg;
+  }
 
   function defaultCorners(w, h) {
     const m = 0.08;
@@ -29,12 +38,19 @@
     ];
   }
 
+  function workW() {
+    return work.width;
+  }
+  function workH() {
+    return work.height;
+  }
+
   function layout() {
     const maxW = canvas.parentElement.clientWidth - 8;
     const maxH = Math.min(window.innerHeight * 0.7, 720);
-    scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
-    canvas.width = Math.round(img.naturalWidth * scale);
-    canvas.height = Math.round(img.naturalHeight * scale);
+    scale = Math.min(maxW / workW(), maxH / workH(), 1);
+    canvas.width = Math.round(workW() * scale);
+    canvas.height = Math.round(workH() * scale);
     offsetX = 0;
     offsetY = 0;
   }
@@ -44,15 +60,15 @@
   }
   function toImg(cx, cy) {
     return {
-      x: Math.max(0, Math.min(img.naturalWidth, (cx - offsetX) / scale)),
-      y: Math.max(0, Math.min(img.naturalHeight, (cy - offsetY) / scale)),
+      x: Math.max(0, Math.min(workW(), (cx - offsetX) / scale)),
+      y: Math.max(0, Math.min(workH(), (cy - offsetY) / scale)),
     };
   }
 
   function draw() {
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(work, 0, 0, canvas.width, canvas.height);
     if (corners.length !== 4) return;
     ctx.beginPath();
     const c0 = toCanvas(corners[0]);
@@ -138,9 +154,126 @@
     dragIdx = -1;
   });
 
-  // --- Perspective (pure JS) ---
+  function cornersToJscanify(pts) {
+    const ordered = orderCorners(pts);
+    return {
+      topLeftCorner: ordered[0],
+      topRightCorner: ordered[1],
+      bottomRightCorner: ordered[2],
+      bottomLeftCorner: ordered[3],
+    };
+  }
+
+  function jscanifyToCorners(cp) {
+    if (
+      !cp ||
+      !cp.topLeftCorner ||
+      !cp.topRightCorner ||
+      !cp.bottomRightCorner ||
+      !cp.bottomLeftCorner
+    ) {
+      return null;
+    }
+    return [
+      { x: cp.topLeftCorner.x, y: cp.topLeftCorner.y },
+      { x: cp.topRightCorner.x, y: cp.topRightCorner.y },
+      { x: cp.bottomRightCorner.x, y: cp.bottomRightCorner.y },
+      { x: cp.bottomLeftCorner.x, y: cp.bottomLeftCorner.y },
+    ];
+  }
+
+  function orderCorners(pts) {
+    const byX = pts.slice().sort((a, b) => a.x - b.x);
+    const left = [byX[0], byX[1]].sort((a, b) => a.y - b.y);
+    const right = [byX[2], byX[3]].sort((a, b) => a.y - b.y);
+    return [left[0], right[0], right[1], left[1]]; // TL, TR, BR, BL
+  }
+
+  function letterSizeFromCorners(pts) {
+    const o = orderCorners(pts);
+    const sideTop = Math.hypot(o[1].x - o[0].x, o[1].y - o[0].y);
+    const sideBot = Math.hypot(o[2].x - o[3].x, o[2].y - o[3].y);
+    const sideL = Math.hypot(o[3].x - o[0].x, o[3].y - o[0].y);
+    const sideR = Math.hypot(o[2].x - o[1].x, o[2].y - o[1].y);
+    let outW = Math.max(sideTop, sideBot, 200);
+    let outH = Math.max(sideL, sideR, 200);
+    const cur = outW / outH;
+    if (cur > LETTER) outH = outW / LETTER;
+    else outW = outH * LETTER;
+    outW = Math.round(Math.min(outW, 1700));
+    outH = Math.round(outW / LETTER);
+    return { outW, outH };
+  }
+
+  function contrastDocument(srcCanvas) {
+    const w = srcCanvas.width;
+    const h = srcCanvas.height;
+    const out = document.createElement("canvas");
+    out.width = w;
+    out.height = h;
+    const octx = out.getContext("2d");
+    octx.drawImage(srcCanvas, 0, 0);
+    const imgData = octx.getImageData(0, 0, w, h);
+    const d = imgData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      let g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      g = (g - 128) * 1.25 + 128;
+      g = Math.max(0, Math.min(255, g));
+      if (g > 210) g = 255;
+      if (g < 35) g = 0;
+      d[i] = d[i + 1] = d[i + 2] = g;
+    }
+    octx.putImageData(imgData, 0, 0);
+    return out;
+  }
+
+  function warpDocument() {
+    const { outW, outH } = letterSizeFromCorners(corners);
+    const cornerPoints = cornersToJscanify(corners);
+
+    if (cvReady && scanner) {
+      try {
+        const extracted = scanner.extractPaper(work, outW, outH, cornerPoints);
+        if (extracted) return contrastDocument(extracted);
+      } catch (e) {
+        console.warn("jscanify extractPaper failed", e);
+      }
+    }
+    return contrastDocument(warpFallback(outW, outH));
+  }
+
+  function warpFallback(outW, outH) {
+    const ordered = orderCorners(corners);
+    const dst = [
+      { x: 0, y: 0 },
+      { x: outW - 1, y: 0 },
+      { x: outW - 1, y: outH - 1 },
+      { x: 0, y: outH - 1 },
+    ];
+    const H = solveHomography(dst, ordered);
+    const srcData = workCtx.getImageData(0, 0, workW(), workH()).data;
+    const outCanvas = document.createElement("canvas");
+    outCanvas.width = outW;
+    outCanvas.height = outH;
+    const octx = outCanvas.getContext("2d");
+    const imgData = octx.createImageData(outW, outH);
+    const d = imgData.data;
+    for (let y = 0; y < outH; y++) {
+      for (let x = 0; x < outW; x++) {
+        const p = applyH(H, x, y);
+        const rgb = sampleBilinear(srcData, workW(), workH(), p.x, p.y);
+        const i = (y * outW + x) * 4;
+        d[i] = rgb[0];
+        d[i + 1] = rgb[1];
+        d[i + 2] = rgb[2];
+        d[i + 3] = 255;
+      }
+    }
+    octx.putImageData(imgData, 0, 0);
+    return outCanvas;
+  }
+
   function solveHomography(src, dst) {
-    // src/dst: 4 points {x,y}
     const A = [];
     const b = [];
     for (let i = 0; i < 4; i++) {
@@ -210,88 +343,6 @@
     return out;
   }
 
-  function orderCorners(pts) {
-    // TL, TR, BR, BL by sum/diff
-    const sorted = pts.slice();
-    sorted.sort((a, b) => a.x + a.y - (b.x + b.y));
-    const tl = sorted[0];
-    const br = sorted[3];
-    const rest = [sorted[1], sorted[2]];
-    rest.sort((a, b) => a.y - b.y);
-    let tr, bl;
-    if (rest[0].x > rest[1].x) {
-      tr = rest[0];
-      bl = rest[1];
-    } else {
-      // one of them may be TR
-      const byX = pts.slice().sort((a, b) => a.x - b.x);
-      const left = [byX[0], byX[1]].sort((a, b) => a.y - b.y);
-      const right = [byX[2], byX[3]].sort((a, b) => a.y - b.y);
-      return [left[0], right[0], right[1], left[1]];
-    }
-    return [tl, tr, br, bl];
-  }
-
-  function warpDocument() {
-    const ordered = orderCorners(corners);
-    const wSrc = img.naturalWidth;
-    const hSrc = img.naturalHeight;
-    const sideTop = Math.hypot(ordered[1].x - ordered[0].x, ordered[1].y - ordered[0].y);
-    const sideBot = Math.hypot(ordered[2].x - ordered[3].x, ordered[2].y - ordered[3].y);
-    const sideL = Math.hypot(ordered[3].x - ordered[0].x, ordered[3].y - ordered[0].y);
-    const sideR = Math.hypot(ordered[2].x - ordered[1].x, ordered[2].y - ordered[1].y);
-    let outW = Math.max(sideTop, sideBot, 200);
-    let outH = Math.max(sideL, sideR, 200);
-    // Letter aspect 8.5 x 11
-    const letter = 8.5 / 11;
-    const cur = outW / outH;
-    if (cur > letter) outH = outW / letter;
-    else outW = outH * letter;
-    outW = Math.round(Math.min(outW, 1700));
-    outH = Math.round(outW / letter);
-
-    const dst = [
-      { x: 0, y: 0 },
-      { x: outW - 1, y: 0 },
-      { x: outW - 1, y: outH - 1 },
-      { x: 0, y: outH - 1 },
-    ];
-    // Map from dest -> source
-    const H = solveHomography(dst, ordered);
-
-    const srcCanvas = document.createElement("canvas");
-    srcCanvas.width = wSrc;
-    srcCanvas.height = hSrc;
-    const sctx = srcCanvas.getContext("2d");
-    sctx.drawImage(img, 0, 0);
-    const srcData = sctx.getImageData(0, 0, wSrc, hSrc).data;
-
-    const outCanvas = document.createElement("canvas");
-    outCanvas.width = outW;
-    outCanvas.height = outH;
-    const octx = outCanvas.getContext("2d");
-    const imgData = octx.createImageData(outW, outH);
-    const d = imgData.data;
-    for (let y = 0; y < outH; y++) {
-      for (let x = 0; x < outW; x++) {
-        const p = applyH(H, x, y);
-        let rgb = sampleBilinear(srcData, wSrc, hSrc, p.x, p.y);
-        // document mode: grayscale + contrast
-        let g = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2];
-        g = (g - 128) * 1.35 + 128;
-        g = Math.max(0, Math.min(255, g));
-        // mild threshold boost
-        if (g > 200) g = 255;
-        if (g < 40) g = 0;
-        const i = (y * outW + x) * 4;
-        d[i] = d[i + 1] = d[i + 2] = g;
-        d[i + 3] = 255;
-      }
-    }
-    octx.putImageData(imgData, 0, 0);
-    return outCanvas;
-  }
-
   function showPreview(canvasOut) {
     canvasOut.toBlob(
       (blob) => {
@@ -308,13 +359,108 @@
     );
   }
 
+  function autoDetect(silent) {
+    if (!cvReady || !scanner) {
+      if (!silent) setStatus("Detector aún cargando… espera un momento.");
+      corners = defaultCorners(workW(), workH());
+      draw();
+      return false;
+    }
+    let mat = null;
+    let contour = null;
+    try {
+      mat = cv.imread(work);
+      contour = scanner.findPaperContour(mat);
+      if (!contour) {
+        if (!silent) setStatus("No se detectó el papel; ajusta las esquinas a mano.");
+        corners = defaultCorners(workW(), workH());
+        draw();
+        return false;
+      }
+      const cp = scanner.getCornerPoints(contour);
+      const pts = jscanifyToCorners(cp);
+      if (!pts) {
+        if (!silent) setStatus("Detección incompleta; ajusta las esquinas a mano.");
+        corners = defaultCorners(workW(), workH());
+        draw();
+        return false;
+      }
+      // Validar área mínima
+      const xs = pts.map((p) => p.x);
+      const ys = pts.map((p) => p.y);
+      const area =
+        (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
+      if (area < workW() * workH() * 0.05) {
+        if (!silent) setStatus("Área detectada muy pequeña; ajusta a mano.");
+        corners = defaultCorners(workW(), workH());
+        draw();
+        return false;
+      }
+      corners = pts;
+      draw();
+      setStatus("Arrastra las esquinas si hace falta. Usa Girar si la foto está ladeada.");
+      return true;
+    } catch (e) {
+      console.warn("jscanify detect failed", e);
+      if (!silent) setStatus("Error al detectar; ajusta las esquinas a mano.");
+      corners = defaultCorners(workW(), workH());
+      draw();
+      return false;
+    } finally {
+      if (mat) mat.delete();
+      if (contour) {
+        try {
+          contour.delete();
+        } catch (_) {
+          /* ignore */
+        }
+      }
+    }
+  }
+
+  function rotateWork(dir) {
+    // dir: 1 = CW 90°, -1 = CCW 90°
+    const srcW = workW();
+    const srcH = workH();
+    const tmp = document.createElement("canvas");
+    tmp.width = srcH;
+    tmp.height = srcW;
+    const tctx = tmp.getContext("2d");
+    tctx.translate(tmp.width / 2, tmp.height / 2);
+    tctx.rotate((dir * Math.PI) / 2);
+    tctx.drawImage(work, -srcW / 2, -srcH / 2);
+
+    work.width = tmp.width;
+    work.height = tmp.height;
+    workCtx.drawImage(tmp, 0, 0);
+
+    layout();
+    autoDetect(true);
+    if (corners.length !== 4) {
+      corners = defaultCorners(workW(), workH());
+      draw();
+    }
+  }
+
   document.getElementById("fxr-preview-btn").addEventListener("click", () => {
     showPreview(warpDocument());
   });
 
   document.getElementById("fxr-reset").addEventListener("click", () => {
-    corners = defaultCorners(img.naturalWidth, img.naturalHeight);
+    corners = defaultCorners(workW(), workH());
     draw();
+    setStatus("Esquinas reiniciadas.");
+  });
+
+  document.getElementById("fxr-detect").addEventListener("click", () => {
+    autoDetect(false);
+  });
+
+  document.getElementById("fxr-rotate-cw").addEventListener("click", () => {
+    rotateWork(1);
+  });
+  document.getElementById("fxr-rotate-ccw").addEventListener("click", () => {
+    rotateWork(-1);
   });
 
   document.getElementById("fxr-aplicar").addEventListener("click", () => {
@@ -337,277 +483,66 @@
     );
   });
 
-  // Detección mejorada: bordes Sobel + escaneo desde el marco + blob claro
-  function autoDetectSimple() {
-    const w = img.naturalWidth;
-    const h = img.naturalHeight;
-    const c = document.createElement("canvas");
-    const maxSide = 480;
-    const s = Math.min(1, maxSide / Math.max(w, h));
-    const sw = Math.round(w * s);
-    const sh = Math.round(h * s);
-    c.width = sw;
-    c.height = sh;
-    const cx = c.getContext("2d", { willReadFrequently: true });
-    cx.drawImage(img, 0, 0, sw, sh);
-    const data = cx.getImageData(0, 0, sw, sh).data;
-    const gray = new Float32Array(sw * sh);
-    for (let i = 0; i < sw * sh; i++) {
-      const o = i * 4;
-      gray[i] = 0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2];
-    }
-
-    // Soft blur 3x3
-    const blur = new Float32Array(sw * sh);
-    for (let y = 1; y < sh - 1; y++) {
-      for (let x = 1; x < sw - 1; x++) {
-        let sum = 0;
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) sum += gray[(y + dy) * sw + (x + dx)];
-        }
-        blur[y * sw + x] = sum / 9;
-      }
-    }
-
-    // Sobel magnitude
-    const mag = new Float32Array(sw * sh);
-    let magMax = 1;
-    for (let y = 1; y < sh - 1; y++) {
-      for (let x = 1; x < sw - 1; x++) {
-        const gx =
-          -blur[(y - 1) * sw + (x - 1)] +
-          blur[(y - 1) * sw + (x + 1)] -
-          2 * blur[y * sw + (x - 1)] +
-          2 * blur[y * sw + (x + 1)] -
-          blur[(y + 1) * sw + (x - 1)] +
-          blur[(y + 1) * sw + (x + 1)];
-        const gy =
-          -blur[(y - 1) * sw + (x - 1)] -
-          2 * blur[(y - 1) * sw + x] -
-          blur[(y - 1) * sw + (x + 1)] +
-          blur[(y + 1) * sw + (x - 1)] +
-          2 * blur[(y + 1) * sw + x] +
-          blur[(y + 1) * sw + (x + 1)];
-        const m = Math.sqrt(gx * gx + gy * gy);
-        mag[y * sw + x] = m;
-        if (m > magMax) magMax = m;
-      }
-    }
-    const edgeThr = magMax * 0.18;
-
-    // Desde cada borde, encontrar la primera línea con muchos bordes (marco del papel)
-    function scanEdge(horizontal, fromStart) {
-      const limit = horizontal ? sh : sw;
-      const other = horizontal ? sw : sh;
-      const start = fromStart ? 2 : limit - 3;
-      const end = fromStart ? Math.floor(limit * 0.45) : Math.floor(limit * 0.55);
-      const step = fromStart ? 1 : -1;
-      let best = fromStart ? Math.floor(limit * 0.08) : Math.floor(limit * 0.92);
-      let bestScore = -1;
-      for (let i = start; fromStart ? i < end : i > end; i += step) {
-        let score = 0;
-        for (let j = Math.floor(other * 0.1); j < Math.floor(other * 0.9); j++) {
-          const x = horizontal ? j : i;
-          const y = horizontal ? i : j;
-          if (mag[y * sw + x] >= edgeThr) score++;
-        }
-        if (score > bestScore) {
-          bestScore = score;
-          best = i;
-        }
-        // early stop if strong continuous edge after leaving border noise
-        if (score > other * 0.25 && (fromStart ? i > 8 : i < limit - 8)) break;
-      }
-      return best;
-    }
-
-    let top = scanEdge(true, true);
-    let bottom = scanEdge(true, false);
-    let left = scanEdge(false, true);
-    let right = scanEdge(false, false);
-
-    // Refinar con blob claro (papel) si el marco es dudoso
-    const sorted = Array.from(blur).filter((_, i) => {
-      const x = i % sw;
-      const y = (i / sw) | 0;
-      return x > 2 && y > 2 && x < sw - 2 && y < sh - 2;
-    });
-    sorted.sort((a, b) => a - b);
-    const candidates = [];
-    for (const pct of [0.45, 0.55, 0.65]) {
-      const thr = sorted[Math.floor(sorted.length * pct)] || 128;
-      let minX = sw,
-        minY = sh,
-        maxX = 0,
-        maxY = 0,
-        count = 0;
-      for (let y = 0; y < sh; y++) {
-        for (let x = 0; x < sw; x++) {
-          if (blur[y * sw + x] >= thr) {
-            count++;
-            if (x < minX) minX = x;
-            if (y < minY) minY = y;
-            if (x > maxX) maxX = x;
-            if (y > maxY) maxY = y;
-          }
-        }
-      }
-      const area = (maxX - minX) * (maxY - minY);
-      if (count > sw * sh * 0.08 && area > sw * sh * 0.12) {
-        candidates.push({ minX, minY, maxX, maxY, area, count });
-      }
-    }
-    if (candidates.length) {
-      candidates.sort((a, b) => b.area - a.area);
-      const best = candidates[0];
-      // Mezcla: preferir blob si el scan de bordes quedó muy al margen
-      const frameArea = Math.max(1, (right - left) * (bottom - top));
-      if (best.area > frameArea * 0.7 || frameArea > sw * sh * 0.95) {
-        left = best.minX;
-        top = best.minY;
-        right = best.maxX;
-        bottom = best.maxY;
-      }
-    }
-
-    // Asegurar orden y margen mínimo
-    if (right - left < sw * 0.25 || bottom - top < sh * 0.25) {
-      corners = defaultCorners(w, h);
+  function onReady() {
+    if (!imgReady || !cvReady) return;
+    scanner = typeof jscanify === "function" ? new jscanify() : null;
+    if (!scanner) {
+      setStatus("jscanify no disponible; ajusta esquinas a mano.");
+      corners = defaultCorners(workW(), workH());
       draw();
       return;
     }
-    const pad = 3;
-    left = Math.max(0, left - pad);
-    top = Math.max(0, top - pad);
-    right = Math.min(sw - 1, right + pad);
-    bottom = Math.min(sh - 1, bottom + pad);
-
-    // Esquinas: extremos del rectángulo (usuario puede arrastrar si hay perspectiva)
-    // Intento de esquinas “reales” buscando máximo borde cerca de cada esquina del bbox
-    function refineCorner(cx0, cy0, dx, dy) {
-      let bestX = cx0,
-        bestY = cy0,
-        best = -1;
-      for (let t = 0; t < 18; t++) {
-        for (let u = 0; u < 18; u++) {
-          const x = Math.round(cx0 + dx * t);
-          const y = Math.round(cy0 + dy * u);
-          if (x < 1 || y < 1 || x >= sw - 1 || y >= sh - 1) continue;
-          const m = mag[y * sw + x];
-          if (m > best) {
-            best = m;
-            bestX = x;
-            bestY = y;
-          }
-        }
-      }
-      return { x: bestX / s, y: bestY / s };
-    }
-
-    corners = [
-      refineCorner(left, top, 1, 1),
-      refineCorner(right, top, -1, 1),
-      refineCorner(right, bottom, -1, -1),
-      refineCorner(left, bottom, 1, -1),
-    ];
-    draw();
+    autoDetect(true);
   }
 
-  document.getElementById("fxr-detect").addEventListener("click", () => {
-    if (window.cv && typeof cv.Mat === "function" && cv.Mat) {
-      try {
-        detectOpenCV();
-        return;
-      } catch (e) {
-        console.warn("OpenCV detect failed", e);
-      }
-    }
-    autoDetectSimple();
-  });
-
-  function detectOpenCV() {
-    const src = cv.imread(img);
-    const gray = new cv.Mat();
-    const blur = new cv.Mat();
-    const edges = new cv.Mat();
-    const contours = new cv.MatVector();
-    const hierarchy = new cv.Mat();
-    try {
-      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
-      cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
-      cv.Canny(blur, edges, 40, 120);
-      cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
-      let bestPts = null;
-      let bestArea = 0;
-      const minArea = img.naturalWidth * img.naturalHeight * 0.08;
-      for (let i = 0; i < contours.size(); i++) {
-        const cnt = contours.get(i);
-        const peri = cv.arcLength(cnt, true);
-        for (const eps of [0.02, 0.03, 0.04, 0.015]) {
-          const approx = new cv.Mat();
-          cv.approxPolyDP(cnt, approx, eps * peri, true);
-          if (approx.rows === 4 && cv.isContourConvex(approx)) {
-            const area = Math.abs(cv.contourArea(approx));
-            if (area > bestArea && area > minArea) {
-              bestArea = area;
-              const pts = [];
-              for (let k = 0; k < 4; k++) {
-                pts.push({ x: approx.intPtr(k, 0)[0], y: approx.intPtr(k, 0)[1] });
-              }
-              bestPts = pts;
-            }
-          }
-          approx.delete();
-        }
-      }
-      if (bestPts) {
-        corners = orderCorners(bestPts);
-        draw();
-      } else {
-        autoDetectSimple();
-      }
-    } finally {
-      src.delete();
-      gray.delete();
-      blur.delete();
-      edges.delete();
-      contours.delete();
-      hierarchy.delete();
-    }
+  function markCvReady() {
+    cvReady = true;
+    setStatus("Detector listo. Auto-detectando…");
+    onReady();
   }
 
-  function tryLoadOpenCV() {
-    if (window.cv && cv.Mat) return;
-    const s = document.createElement("script");
-    s.src = "https://docs.opencv.org/4.8.0/opencv.js";
-    s.async = true;
-    s.onload = () => {
-      const boot = () => {
-        /* listo para botón Auto detectar */
-      };
-      if (typeof cv !== "undefined" && cv["onRuntimeInitialized"]) {
-        cv["onRuntimeInitialized"] = boot;
-      } else {
-        setTimeout(boot, 800);
-      }
+  function waitForCv() {
+    if (typeof cv === "undefined") {
+      setTimeout(waitForCv, 200);
+      return;
+    }
+    if (cv.Mat) {
+      markCvReady();
+      return;
+    }
+    const prev = cv.onRuntimeInitialized;
+    cv.onRuntimeInitialized = function () {
+      if (typeof prev === "function") prev();
+      markCvReady();
     };
-    document.head.appendChild(s);
+    // timeout fallback
+    setTimeout(() => {
+      if (!cvReady && typeof cv !== "undefined" && cv.Mat) markCvReady();
+    }, 8000);
   }
 
+  const img = new Image();
+  img.crossOrigin = "anonymous";
   img.onload = () => {
+    work.width = img.naturalWidth;
+    work.height = img.naturalHeight;
+    workCtx.drawImage(img, 0, 0);
     layout();
-    corners = defaultCorners(img.naturalWidth, img.naturalHeight);
+    corners = defaultCorners(workW(), workH());
     draw();
-    autoDetectSimple();
-    tryLoadOpenCV();
+    imgReady = true;
+    onReady();
   };
   img.onerror = () => {
     alert("No se pudo cargar la imagen");
+    setStatus("Error al cargar la imagen.");
   };
   img.src = cfg.imgUrl;
 
+  waitForCv();
+
   window.addEventListener("resize", () => {
-    if (!img.naturalWidth) return;
+    if (!work.width) return;
     layout();
     draw();
   });

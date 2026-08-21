@@ -25,7 +25,9 @@
     <a href="{% if next_linea %}{{ url_for('fxr.editar_linea', linea_id=next_linea) }}{% elif comp.rendicion_id %}{{ url_for('fxr.rendicion', rid=comp.rendicion_id) }}{% else %}{{ url_for('fxr.index') }}{% endif %}"
        class="btn btn-sm btn-outline-secondary">← Volver</a>
     <strong class="text-info">Pulir imagen #{{ comp.id }}</strong>
-    <span class="fxr-pulir-hint">Arrastra las 4 esquinas del papel. Auto-detecta si puede.</span>
+    <span class="fxr-pulir-hint" id="fxr-pulir-status">Cargando detector…</span>
+    <button type="button" class="btn btn-sm btn-outline-light" id="fxr-rotate-ccw" title="Girar 90° izquierda">Girar ⟲</button>
+    <button type="button" class="btn btn-sm btn-outline-light" id="fxr-rotate-cw" title="Girar 90° derecha">Girar ⟳</button>
     <button type="button" class="btn btn-sm btn-outline-warning" id="fxr-detect">Auto detectar</button>
     <button type="button" class="btn btn-sm btn-outline-light" id="fxr-reset">Reset esquinas</button>
     <button type="button" class="btn btn-sm btn-outline-info" id="fxr-preview-btn">Vista previa</button>
@@ -44,7 +46,7 @@
         <img id="fxr-out-preview" alt="preview" style="display:none">
         <div id="fxr-out-placeholder" class="small" style="color:#555">Pulsa «Vista previa» o «Aplicar»</div>
       </div>
-      <p class="small text-muted mb-0">El pulido endereza el documento, recorta el fondo y mejora contraste. Luego completa los datos en la rendición.</p>
+      <p class="small text-muted mb-0">Gira si hace falta, ajusta las 4 esquinas del papel y aplica. El pulido endereza, recorta el fondo y mejora contraste (proporción Carta).</p>
     </div>
   </div>
 </div>
@@ -60,5 +62,8 @@
     postUrl: {{ post_url|tojson }}
   };
 </script>
-<script src="{{ url_for('static', filename='js/fxr_pulir.js') }}?v=2"></script>
+{# OpenCV.js async (pin 4.8.0) + jscanify v1.4.0 vendored #}
+<script async src="https://docs.opencv.org/4.8.0/opencv.js"></script>
+<script src="{{ url_for('static', filename='js/vendor/jscanify.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='js/fxr_pulir.js') }}?v=3"></script>
 {% endblock %}
