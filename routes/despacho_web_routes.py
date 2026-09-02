@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 from datetime import datetime
 
@@ -44,7 +46,6 @@ from utils.despacho_web_maps import (
     partir_ruta_google,
     url_buscar_direccion,
 )
-from utils.despacho_web_ors import OrsError, optimizar_paradas
 from utils.env_config import ors_settings
 from utils.despacho_web_pdf_parser import parse_factura_pdf_bytes
 from utils.despacho_web_pdf_split import dividir_pdf_por_paginas
@@ -704,35 +705,46 @@ def ruta():
     buscar = request.args.get("q", "").strip() or None
     ors = ors_settings()
 
-    conn = get_db_connection()
     try:
-        with conn.cursor() as cur:
-            ordenes = listar_ordenes_para_ruta(
-                cur,
-                comuna=comuna,
-                transporte=transporte,
-                buscar=buscar,
-            )
-    finally:
-        conn.close()
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as cur:
+                ordenes = listar_ordenes_para_ruta(
+                    cur,
+                    comuna=comuna,
+                    transporte=transporte,
+                    buscar=buscar,
+                )
+        finally:
+            conn.close()
 
-    return render_template(
-        "despacho_web/ruta.html",
-        ordenes=ordenes,
-        comuna_filtro=comuna or "",
-        transporte_filtro=transporte or "",
-        buscar=buscar or "",
-        transportes=TRANSPORTES,
-        origen_default=ors["origen_default"],
-        ors_configurado=ors["configurado"],
-        max_paradas_enlace=MAX_PARADAS_POR_ENLACE,
-    )
+        return render_template(
+            "despacho_web/ruta.html",
+            ordenes=ordenes,
+            comuna_filtro=comuna or "",
+            transporte_filtro=transporte or "",
+            buscar=buscar or "",
+            transportes=TRANSPORTES,
+            origen_default=ors["origen_default"],
+            ors_configurado=ors["configurado"],
+            max_paradas_enlace=MAX_PARADAS_POR_ENLACE,
+        )
+    except Exception as e:
+        current_app.logger.exception("despacho_web ruta: %s", e)
+        flash(
+            "No se pudo abrir Armar ruta. Verifique que el deploy incluyó "
+            "templates/despacho_web/ruta.html y reinicie la app en cPanel.",
+            "danger",
+        )
+        return redirect(url_for("despacho_web.index"))
 
 
 @despacho_web_bp.route("/ruta/optimizar", methods=["POST"])
 @login_requerido
 @permiso_modulo("despacho_web")
 def ruta_optimizar():
+    from utils.despacho_web_ors import OrsError, optimizar_paradas
+
     data = request.get_json(silent=True) or {}
     origen = (data.get("origen") or ors_settings()["origen_default"]).strip()
     volver_origen = bool(data.get("volver_origen"))
