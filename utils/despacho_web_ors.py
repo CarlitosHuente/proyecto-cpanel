@@ -187,3 +187,68 @@ def optimizar_paradas(
         "no_geocodificadas": no_geo,
         "origen_normalizado": normalizar_direccion_maps(origen),
     }
+
+
+def geocodificar_paradas(
+    paradas: List[dict],
+    *,
+    origen: Optional[str] = None,
+    incluir_origen: bool = False,
+    api_key: Optional[str] = None,
+) -> dict[str, Any]:
+    """Geocodifica paradas para mapa de puntos (sin optimizar ni trazar ruta)."""
+    cfg = ors_settings()
+    key = (api_key or cfg.get("api_key") or "").strip()
+    if not key:
+        raise OrsError("ORS_API_KEY no configurada.")
+
+    if not paradas and not (incluir_origen and origen):
+        raise OrsError("Sin paradas para geocodificar.")
+
+    puntos: list[dict] = []
+    no_geo: list[dict] = []
+
+    if incluir_origen and origen:
+        try:
+            lon, lat = geocodificar_direccion(origen, api_key=key)
+            puntos.append(
+                {
+                    "lat": lat,
+                    "lon": lon,
+                    "n_orden": "",
+                    "cliente": "Origen",
+                    "direccion": normalizar_direccion_maps(origen),
+                    "es_origen": True,
+                }
+            )
+        except OrsGeocodeError:
+            pass
+
+    for i, p in enumerate(paradas):
+        try:
+            lon, lat = geocodificar_direccion(p["direccion"], api_key=key)
+        except OrsGeocodeError:
+            no_geo.append(p)
+            continue
+        puntos.append(
+            {
+                "lat": lat,
+                "lon": lon,
+                "n_orden": p.get("n_orden") or "",
+                "cliente": p.get("cliente") or "",
+                "direccion": p.get("direccion") or "",
+                "orden": i + 1,
+                "es_origen": False,
+            }
+        )
+
+    if not puntos:
+        raise OrsError("Ninguna parada pudo geocodificarse.")
+
+    advertencias: list[str] = []
+    if no_geo:
+        advertencias.append(
+            f"{len(no_geo)} parada(s) sin geocodificar (no aparecen en el mapa)."
+        )
+
+    return {"puntos": puntos, "no_geocodificadas": no_geo, "advertencias": advertencias}

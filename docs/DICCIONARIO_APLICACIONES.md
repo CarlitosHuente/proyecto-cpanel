@@ -254,7 +254,8 @@ Dependencias: `pdfplumber`, `pypdf`, `requests` (ORS).
 2. Seleccionar pedidos y reordenar manualmente (drag-and-drop) si hace falta.
 3. **Optimizar (ORS):** geocodifica origen + paradas y reordena con VROOM (`POST …/ruta/optimizar`). Requiere `ORS_API_KEY`.
 4. **Abrir Google Maps:** genera enlaces directions con el orden actual, sin API Google (`POST …/ruta/enlaces`). Máx. 10 paradas por enlace; rutas largas se parten en «Ruta 1», «Ruta 2», etc.
-5. Enlace 📍 por fila: `GET …/ruta/maps/<n_orden>` → búsqueda Google de esa dirección.
+5. **Puntos sin ruta:** `POST …/ruta/puntos-google` — un enlace de búsqueda Google por dirección (sin trazar camino). **Mapa solo puntos** (`POST …/ruta/puntos-mapa`) — mapa embebido OpenStreetMap/Leaflet con pins (requiere ORS para geocodificar).
+6. Enlace 📍 por fila: `GET …/ruta/maps/<n_orden>` → búsqueda Google de esa dirección.
 
 **Variables `.env`:** `ORS_API_KEY` (cuenta gratuita en openrouteservice.org), `ORS_ORIGEN_DESPACHO` (punto de salida; editable en la UI). Sin clave ORS: orden manual + enlaces Maps siguen funcionando.
 

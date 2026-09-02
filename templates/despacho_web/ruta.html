@@ -94,14 +94,17 @@
                     <span class="text-white">Ruta seleccionada <span class="text-muted" id="lblCount">(0)</span></span>
                     <div class="d-flex flex-wrap gap-2">
                         <button type="button" class="btn btn-sm btn-outline-light" id="btnOrdenComuna">Por comuna A→Z</button>
+                        <button type="button" class="btn btn-sm btn-outline-info" id="btnSoloPuntosGoogle">Puntos Google (sin ruta)</button>
+                        <button type="button" class="btn btn-sm btn-outline-info" id="btnMapaPuntos" {% if not ors_configurado %}disabled title="Configure ORS_API_KEY"{% endif %}>Mapa solo puntos</button>
                         <button type="button" class="btn btn-sm btn-danger" id="btnOptimizar" {% if not ors_configurado %}disabled title="Configure ORS_API_KEY"{% endif %}>Optimizar (ORS)</button>
-                        <button type="button" class="btn btn-sm btn-outline-danger" id="btnAbrirMaps">Abrir Google Maps</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" id="btnAbrirMaps">Ruta Google Maps</button>
                     </div>
                 </div>
                 <div class="card-body">
                     <div id="alertRuta" class="alert d-none py-2 small"></div>
                     <ol class="list-group list-group-numbered mb-3" id="listaRuta"></ol>
-                    <p class="text-muted small mb-2">Arrastre para reordenar. El orden de esta lista es el que se usa en Google Maps.</p>
+                    <p class="text-muted small mb-2">Arrastre para reordenar. «Ruta Google Maps» traza el camino; «Puntos Google» o «Mapa solo puntos» muestran ubicaciones sin ruta.</p>
+                    <div id="mapaPuntos" class="rounded border border-secondary mb-3 d-none" style="height: 380px; z-index: 1;"></div>
                     <div id="bloqueEnlaces"></div>
                 </div>
             </div>
@@ -109,15 +112,19 @@
     </div>
 </div>
 
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <script>
 window.DW_RUTA = {
     maxParadasEnlace: {{ max_paradas_enlace }},
     orsOk: {{ ors_configurado|tojson }},
     urls: {
         optimizar: {{ url_for('despacho_web.ruta_optimizar')|tojson }},
-        enlaces: {{ url_for('despacho_web.ruta_enlaces')|tojson }}
+        enlaces: {{ url_for('despacho_web.ruta_enlaces')|tojson }},
+        puntosGoogle: {{ url_for('despacho_web.ruta_puntos_google')|tojson }},
+        puntosMapa: {{ url_for('despacho_web.ruta_puntos_mapa')|tojson }}
     }
 };
 </script>
-<script src="{{ url_for('static', filename='js/despacho_web_ruta.js') }}?v=2"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="{{ url_for('static', filename='js/despacho_web_ruta.js') }}?v=3"></script>
 {% endblock %}

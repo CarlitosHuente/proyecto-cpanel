@@ -8,6 +8,10 @@ Al cerrar un cambio relevante: entrada breve aquí + actualizar diccionario si c
 
 ---
 
+## 2026-09-02 — DespachoWeb ruta: ver solo puntos (sin trazar ruta)
+
+- Botones «Puntos Google (sin ruta)» y «Mapa solo puntos» en `/despacho-web/ruta`.
+
 ## 2026-09-02 — DespachoWeb ruta: fix Unicode surrogates (refuerzo)
 
 - Sanea HTML completo de `/despacho-web/ruta` además de filas MySQL (surrogates en base.html o filtros).

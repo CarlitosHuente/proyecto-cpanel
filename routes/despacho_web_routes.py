@@ -42,6 +42,7 @@ from utils.despacho_web_export import (
 from utils.despacho_web_imprimir import preparar_factura_impresion
 from utils.despacho_web_maps import (
     MAX_PARADAS_POR_ENLACE,
+    enlaces_busqueda_puntos,
     normalizar_direccion_maps,
     partir_ruta_google,
     url_buscar_direccion,
@@ -789,6 +790,53 @@ def ruta_enlaces():
         return jsonify({"success": False, "error": "Seleccione al menos una parada."}), 400
     enlaces = _enlaces_google(origen, paradas, volver_origen)
     return jsonify({"success": True, "enlaces": enlaces})
+
+
+@despacho_web_bp.route("/ruta/puntos-google", methods=["POST"])
+@login_requerido
+@permiso_modulo("despacho_web")
+def ruta_puntos_google():
+    """Enlaces Google Maps búsqueda por dirección (sin trazar ruta)."""
+    data = request.get_json(silent=True) or {}
+    paradas = _paradas_desde_payload(data)
+    if not paradas:
+        return jsonify({"success": False, "error": "Seleccione al menos una parada."}), 400
+    enlaces = enlaces_busqueda_puntos(paradas)
+    return jsonify({"success": True, "enlaces": enlaces})
+
+
+@despacho_web_bp.route("/ruta/puntos-mapa", methods=["POST"])
+@login_requerido
+@permiso_modulo("despacho_web")
+def ruta_puntos_mapa():
+    """Geocodifica paradas para mapa embebido (solo puntos, sin ruta)."""
+    from utils.despacho_web_ors import OrsError, geocodificar_paradas
+
+    data = request.get_json(silent=True) or {}
+    origen = (data.get("origen") or ors_settings()["origen_default"]).strip()
+    incluir_origen = bool(data.get("incluir_origen"))
+    paradas = _paradas_desde_payload(data)
+    if not paradas:
+        return jsonify({"success": False, "error": "Seleccione al menos una parada."}), 400
+    try:
+        result = geocodificar_paradas(
+            paradas,
+            origen=origen,
+            incluir_origen=incluir_origen,
+        )
+        return jsonify(
+            {
+                "success": True,
+                "puntos": result["puntos"],
+                "advertencias": result.get("advertencias") or [],
+                "no_geocodificadas": result.get("no_geocodificadas") or [],
+            }
+        )
+    except OrsError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except Exception as e:
+        current_app.logger.exception("ORS puntos mapa: %s", e)
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @despacho_web_bp.route("/ruta/maps/<n_orden>")

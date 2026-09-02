@@ -9,9 +9,12 @@
     const bloqueEnlaces = document.getElementById("bloqueEnlaces");
     const inpOrigen = document.getElementById("inpOrigen");
     const chkVolver = document.getElementById("chkVolverOrigen");
+    const mapaEl = document.getElementById("mapaPuntos");
 
     let paradas = [];
     let dragSrc = null;
+    let mapaLeaflet = null;
+    let capaMarcadores = null;
 
     function showAlert(msg, tipo) {
         alertRuta.textContent = msg;
@@ -162,7 +165,7 @@
         };
     }
 
-    function renderEnlaces(enlaces) {
+    function renderEnlaces(enlaces, tituloAbrir) {
         bloqueEnlaces.innerHTML = "";
         if (!enlaces || !enlaces.length) return;
         enlaces.forEach(function (seg) {
@@ -173,7 +176,7 @@
             openA.target = "_blank";
             openA.rel = "noopener";
             openA.className = "btn btn-sm btn-danger";
-            openA.textContent = "Abrir Maps";
+            openA.textContent = tituloAbrir || "Abrir Maps";
             const copyBtn = document.createElement("button");
             copyBtn.type = "button";
             copyBtn.className = "btn btn-sm btn-outline-light btn-copy";
@@ -193,7 +196,11 @@
             div.appendChild(row);
             const sub = document.createElement("div");
             sub.className = "small text-muted mt-1";
-            sub.textContent = (seg.paradas || []).length + " parada(s)";
+            if (seg.direccion) {
+                sub.textContent = seg.direccion;
+            } else {
+                sub.textContent = (seg.paradas || []).length + " parada(s)";
+            }
             div.appendChild(sub);
             bloqueEnlaces.appendChild(div);
         });
@@ -217,6 +224,113 @@
             });
         });
     }
+
+    function ocultarMapa() {
+        if (mapaEl) {
+            mapaEl.classList.add("d-none");
+        }
+        if (mapaLeaflet) {
+            mapaLeaflet.remove();
+            mapaLeaflet = null;
+            capaMarcadores = null;
+        }
+    }
+
+    function renderMapaPuntos(puntos) {
+        if (!mapaEl || typeof L === "undefined") {
+            showAlert("No se pudo cargar el mapa (Leaflet).", "danger");
+            return;
+        }
+        ocultarMapa();
+        mapaEl.classList.remove("d-none");
+        mapaLeaflet = L.map(mapaEl);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "&copy; OpenStreetMap",
+            maxZoom: 19,
+        }).addTo(mapaLeaflet);
+        capaMarcadores = L.layerGroup().addTo(mapaLeaflet);
+        const bounds = [];
+        puntos.forEach(function (pt) {
+            const lat = pt.lat;
+            const lon = pt.lon;
+            if (lat == null || lon == null) return;
+            const label = pt.es_origen
+                ? "Origen"
+                : (pt.orden ? pt.orden + ". " : "") + (pt.n_orden || pt.cliente || "Parada");
+            const popup = "<strong>" + escapeHtml(label) + "</strong><br>" + escapeHtml(pt.direccion || "");
+            const color = pt.es_origen ? "#0d6efd" : "#dc3545";
+            const marker = L.circleMarker([lat, lon], {
+                radius: 9,
+                color: color,
+                fillColor: color,
+                fillOpacity: 0.85,
+                weight: 2,
+            }).bindPopup(popup);
+            capaMarcadores.addLayer(marker);
+            bounds.push([lat, lon]);
+        });
+        if (bounds.length === 1) {
+            mapaLeaflet.setView(bounds[0], 14);
+        } else if (bounds.length > 1) {
+            mapaLeaflet.fitBounds(bounds, { padding: [30, 30] });
+        }
+        setTimeout(function () {
+            if (mapaLeaflet) mapaLeaflet.invalidateSize();
+        }, 150);
+    }
+
+    document.getElementById("btnSoloPuntosGoogle")?.addEventListener("click", function () {
+        if (!paradas.length) {
+            showAlert("Seleccione al menos un pedido.", "warning");
+            return;
+        }
+        hideAlert();
+        ocultarMapa();
+        postJson(cfg.urls.puntosGoogle, payload()).then(function (res) {
+            if (!res.ok || !res.data.success) {
+                showAlert(res.data.error || "No se pudieron generar los enlaces.", "danger");
+                return;
+            }
+            renderEnlaces(res.data.enlaces, "Ver punto");
+            showAlert(
+                "Enlaces de búsqueda en Google Maps (un pin por dirección, sin ruta).",
+                "info"
+            );
+        });
+    });
+
+    document.getElementById("btnMapaPuntos")?.addEventListener("click", function () {
+        if (!paradas.length) {
+            showAlert("Seleccione al menos un pedido.", "warning");
+            return;
+        }
+        hideAlert();
+        const btn = document.getElementById("btnMapaPuntos");
+        btn.disabled = true;
+        btn.textContent = "Cargando mapa…";
+        const body = payload();
+        body.incluir_origen = true;
+        postJson(cfg.urls.puntosMapa, body)
+            .then(function (res) {
+                if (!res.ok || !res.data.success) {
+                    showAlert(res.data.error || "No se pudo geocodificar.", "danger");
+                    return;
+                }
+                renderMapaPuntos(res.data.puntos || []);
+                let msg = "Mapa con " + (res.data.puntos || []).length + " punto(s), sin trazar ruta.";
+                if (res.data.advertencias && res.data.advertencias.length) {
+                    msg += " " + res.data.advertencias.join(" ");
+                }
+                showAlert(msg, "success");
+            })
+            .catch(function () {
+                showAlert("Error de red al cargar el mapa.", "danger");
+            })
+            .finally(function () {
+                btn.disabled = !cfg.orsOk;
+                btn.textContent = "Mapa solo puntos";
+            });
+    });
 
     document.getElementById("btnOptimizar")?.addEventListener("click", function () {
         if (!paradas.length) {
@@ -242,6 +356,7 @@
                     };
                 });
                 renderLista();
+                ocultarMapa();
                 renderEnlaces(res.data.enlaces);
                 let msg = "Ruta optimizada con OpenRouteService.";
                 if (res.data.advertencias && res.data.advertencias.length) {
@@ -264,6 +379,7 @@
             return;
         }
         hideAlert();
+        ocultarMapa();
         postJson(cfg.urls.enlaces, payload()).then(function (res) {
             if (!res.ok || !res.data.success) {
                 showAlert(res.data.error || "No se pudo generar el enlace.", "danger");

@@ -139,3 +139,28 @@ def partir_ruta_google(
         )
 
     return segmentos
+
+
+def enlaces_busqueda_puntos(paradas: List[dict]) -> List[dict]:
+    """
+    Enlaces Google Maps de búsqueda (un pin por dirección, sin trazar ruta).
+    paradas: {n_orden, cliente, direccion, comuna?}
+    """
+    enlaces: List[dict] = []
+    for i, p in enumerate(paradas):
+        direccion = (p.get("direccion") or "").strip()
+        if not direccion:
+            continue
+        n_orden = (p.get("n_orden") or "").strip()
+        titulo = f"Punto {i + 1}"
+        if n_orden:
+            titulo += f" — N° {n_orden}"
+        enlaces.append(
+            {
+                "titulo": titulo,
+                "url": url_buscar_direccion(direccion),
+                "direccion": normalizar_direccion_maps(direccion, p.get("comuna") or ""),
+                "n_orden": n_orden,
+            }
+        )
+    return enlaces
