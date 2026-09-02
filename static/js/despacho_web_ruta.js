@@ -286,17 +286,45 @@
         }
         hideAlert();
         ocultarMapa();
-        postJson(cfg.urls.puntosGoogle, payload()).then(function (res) {
-            if (!res.ok || !res.data.success) {
-                showAlert(res.data.error || "No se pudieron generar los enlaces.", "danger");
-                return;
-            }
-            renderEnlaces(res.data.enlaces, "Ver punto");
-            showAlert(
-                "Enlaces de búsqueda en Google Maps (un pin por dirección, sin ruta).",
-                "info"
-            );
-        });
+        const btn = document.getElementById("btnSoloPuntosGoogle");
+        btn.disabled = true;
+        const body = payload();
+        body.incluir_origen = true;
+        postJson(cfg.urls.puntosGoogle, body)
+            .then(function (res) {
+                if (!res.ok || !res.data.success) {
+                    showAlert(res.data.error || "No se pudo abrir Google Maps.", "danger");
+                    return;
+                }
+                if (res.data.url) {
+                    window.open(res.data.url, "_blank", "noopener");
+                }
+                let msg = "Abriendo todos los puntos en Google Maps (archivo KML, sin trazar ruta).";
+                if (res.data.advertencias && res.data.advertencias.length) {
+                    msg += " " + res.data.advertencias.join(" ");
+                }
+                showAlert(msg, "success");
+                if (res.data.kml_url) {
+                    bloqueEnlaces.innerHTML = "";
+                    const div = document.createElement("div");
+                    div.className = "small text-muted";
+                    div.appendChild(document.createTextNode("KML: "));
+                    const a = document.createElement("a");
+                    a.href = res.data.kml_url;
+                    a.target = "_blank";
+                    a.rel = "noopener";
+                    a.className = "text-info";
+                    a.textContent = "descargar / reabrir";
+                    div.appendChild(a);
+                    bloqueEnlaces.appendChild(div);
+                }
+            })
+            .catch(function () {
+                showAlert("Error de red al generar el mapa.", "danger");
+            })
+            .finally(function () {
+                btn.disabled = false;
+            });
     });
 
     document.getElementById("btnMapaPuntos")?.addEventListener("click", function () {

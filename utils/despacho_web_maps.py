@@ -1,6 +1,9 @@
 """Enlaces Google Maps para rutas DespachoWeb (sin API key)."""
 from __future__ import annotations
 
+import re
+import secrets
+from html import escape as html_escape
 from typing import List, Optional
 from urllib.parse import quote
 
@@ -164,3 +167,47 @@ def enlaces_busqueda_puntos(paradas: List[dict]) -> List[dict]:
             }
         )
     return enlaces
+
+
+def generar_kml_puntos(puntos: List[dict], titulo: str = "DespachoWeb — puntos") -> str:
+    """
+    KML con marcadores (coordenadas o dirección textual).
+    puntos: {lat?, lon?, n_orden, cliente, direccion, es_origen?}
+    """
+    lineas = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<kml xmlns="http://www.opengis.net/kml/2.2">',
+        "<Document>",
+        f"<name>{html_escape(titulo)}</name>",
+    ]
+    for i, p in enumerate(puntos):
+        nombre = (p.get("n_orden") or p.get("cliente") or f"Punto {i + 1}").strip()
+        if p.get("es_origen"):
+            nombre = "Origen"
+        direccion = (p.get("direccion") or "").strip()
+        lat = p.get("lat")
+        lon = p.get("lon")
+        lineas.append("<Placemark>")
+        lineas.append(f"<name>{html_escape(nombre)}</name>")
+        if direccion:
+            lineas.append(f"<description>{html_escape(direccion)}</description>")
+        if lat is not None and lon is not None:
+            lineas.append(f"<Point><coordinates>{lon},{lat},0</coordinates></Point>")
+        elif direccion:
+            lineas.append(f"<address>{html_escape(direccion)}</address>")
+        lineas.append("</Placemark>")
+    lineas.extend(["</Document>", "</kml>"])
+    return "\n".join(lineas)
+
+
+def url_google_abrir_kml(kml_url: str) -> str:
+    """Abre el KML en Google Maps / Earth (una ventana, sin trazar ruta)."""
+    return f"https://www.google.com/maps?q={quote(kml_url, safe='')}"
+
+
+def token_kml_valido(token: str) -> bool:
+    return bool(re.fullmatch(r"[a-f0-9]{32}", token or ""))
+
+
+def nuevo_token_kml() -> str:
+    return secrets.token_hex(16)

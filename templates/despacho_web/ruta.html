@@ -94,7 +94,7 @@
                     <span class="text-white">Ruta seleccionada <span class="text-muted" id="lblCount">(0)</span></span>
                     <div class="d-flex flex-wrap gap-2">
                         <button type="button" class="btn btn-sm btn-outline-light" id="btnOrdenComuna">Por comuna A→Z</button>
-                        <button type="button" class="btn btn-sm btn-outline-info" id="btnSoloPuntosGoogle">Puntos Google (sin ruta)</button>
+                        <button type="button" class="btn btn-sm btn-outline-info" id="btnSoloPuntosGoogle">Todos en Google Maps (sin ruta)</button>
                         <button type="button" class="btn btn-sm btn-outline-info" id="btnMapaPuntos" {% if not ors_configurado %}disabled title="Configure ORS_API_KEY"{% endif %}>Mapa solo puntos</button>
                         <button type="button" class="btn btn-sm btn-danger" id="btnOptimizar" {% if not ors_configurado %}disabled title="Configure ORS_API_KEY"{% endif %}>Optimizar (ORS)</button>
                         <button type="button" class="btn btn-sm btn-outline-danger" id="btnAbrirMaps">Ruta Google Maps</button>
@@ -103,7 +103,7 @@
                 <div class="card-body">
                     <div id="alertRuta" class="alert d-none py-2 small"></div>
                     <ol class="list-group list-group-numbered mb-3" id="listaRuta"></ol>
-                    <p class="text-muted small mb-2">Arrastre para reordenar. «Ruta Google Maps» traza el camino; «Puntos Google» o «Mapa solo puntos» muestran ubicaciones sin ruta.</p>
+                    <p class="text-muted small mb-2">Arrastre para reordenar. «Ruta Google Maps» traza camino. «Todos en Google Maps (sin ruta)» abre todos los pins juntos (KML). «Mapa solo puntos» los muestra aquí.</p>
                     <div id="mapaPuntos" class="rounded border border-secondary mb-3 d-none" style="height: 380px; z-index: 1;"></div>
                     <div id="bloqueEnlaces"></div>
                 </div>
@@ -126,5 +126,5 @@ window.DW_RUTA = {
 };
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="{{ url_for('static', filename='js/despacho_web_ruta.js') }}?v=3"></script>
+<script src="{{ url_for('static', filename='js/despacho_web_ruta.js') }}?v=4"></script>
 {% endblock %}

@@ -8,6 +8,10 @@ Al cerrar un cambio relevante: entrada breve aquí + actualizar diccionario si c
 
 ---
 
+## 2026-09-02 — DespachoWeb ruta: todos los puntos juntos en Google Maps (KML)
+
+- Botón «Todos en Google Maps (sin ruta)» genera KML temporal y abre una sola ventana con todos los pins.
+
 ## 2026-09-02 — DespachoWeb ruta: ver solo puntos (sin trazar ruta)
 
 - Botones «Puntos Google (sin ruta)» y «Mapa solo puntos» en `/despacho-web/ruta`.

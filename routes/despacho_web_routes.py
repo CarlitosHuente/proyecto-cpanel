@@ -11,11 +11,13 @@ from flask import (
     redirect,
     render_template,
     request,
+    Response,
     send_file,
     session,
     url_for,
 )
 from werkzeug.utils import secure_filename
+from werkzeug.exceptions import abort
 
 from utils.auth import login_requerido, permiso_modulo
 from utils.db import get_db_connection
@@ -42,10 +44,13 @@ from utils.despacho_web_export import (
 from utils.despacho_web_imprimir import preparar_factura_impresion
 from utils.despacho_web_maps import (
     MAX_PARADAS_POR_ENLACE,
-    enlaces_busqueda_puntos,
+    generar_kml_puntos,
     normalizar_direccion_maps,
+    nuevo_token_kml,
     partir_ruta_google,
+    token_kml_valido,
     url_buscar_direccion,
+    url_google_abrir_kml,
 )
 from utils.env_config import ors_settings
 from utils.despacho_web_pdf_parser import parse_factura_pdf_bytes
@@ -79,6 +84,24 @@ despacho_web_bp = Blueprint("despacho_web", __name__, url_prefix="/despacho-web"
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UPLOAD_ROOT = os.path.join(BASE_DIR, "uploads", "despacho_web")
+KML_TEMP_DIR = os.path.join(BASE_DIR, "tmp", "ruta_kml")
+
+
+def _kml_temp_dir() -> str:
+    os.makedirs(KML_TEMP_DIR, exist_ok=True)
+    return KML_TEMP_DIR
+
+
+def _guardar_kml_temp(kml: str) -> str:
+    token = nuevo_token_kml()
+    path = os.path.join(_kml_temp_dir(), f"{token}.kml")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(kml)
+    return token
+
+
+def _ruta_kml_temp(token: str) -> str:
+    return os.path.join(_kml_temp_dir(), f"{token}.kml")
 
 
 def _init_upload_dirs(app):
@@ -796,13 +819,80 @@ def ruta_enlaces():
 @login_requerido
 @permiso_modulo("despacho_web")
 def ruta_puntos_google():
-    """Enlaces Google Maps búsqueda por dirección (sin trazar ruta)."""
+    """KML temporal + enlace único a Google Maps (todos los puntos juntos, sin ruta)."""
+    from utils.despacho_web_ors import OrsError, geocodificar_paradas
+
     data = request.get_json(silent=True) or {}
+    origen = (data.get("origen") or ors_settings()["origen_default"]).strip()
+    incluir_origen = bool(data.get("incluir_origen", True))
     paradas = _paradas_desde_payload(data)
     if not paradas:
         return jsonify({"success": False, "error": "Seleccione al menos una parada."}), 400
-    enlaces = enlaces_busqueda_puntos(paradas)
-    return jsonify({"success": True, "enlaces": enlaces})
+
+    advertencias: list[str] = []
+    puntos_kml: list[dict] = []
+    ors = ors_settings()
+    if ors.get("configurado"):
+        try:
+            result = geocodificar_paradas(
+                paradas,
+                origen=origen,
+                incluir_origen=incluir_origen,
+            )
+            puntos_kml = result["puntos"]
+            advertencias.extend(result.get("advertencias") or [])
+        except OrsError as e:
+            advertencias.append(str(e))
+
+    if not puntos_kml:
+        if incluir_origen and origen:
+            puntos_kml.append(
+                {
+                    "cliente": "Origen",
+                    "direccion": normalizar_direccion_maps(origen),
+                    "es_origen": True,
+                }
+            )
+        for i, p in enumerate(paradas):
+            puntos_kml.append(
+                {
+                    "n_orden": p.get("n_orden") or "",
+                    "cliente": p.get("cliente") or "",
+                    "direccion": p.get("direccion") or "",
+                    "orden": i + 1,
+                }
+            )
+        if not ors.get("configurado"):
+            advertencias.append(
+                "Sin ORS: el mapa usa direcciones en texto; Google puede ubicarlas con menor precisión."
+            )
+
+    kml = generar_kml_puntos(puntos_kml)
+    token = _guardar_kml_temp(kml)
+    kml_url = url_for("despacho_web.ruta_kml_publico", token=token, _external=True)
+    google_url = url_google_abrir_kml(kml_url)
+
+    return jsonify(
+        {
+            "success": True,
+            "url": google_url,
+            "kml_url": kml_url,
+            "advertencias": advertencias,
+        }
+    )
+
+
+@despacho_web_bp.route("/ruta/kml/<token>.kml")
+def ruta_kml_publico(token):
+    """Sirve KML temporal (público: Google Maps lo lee sin sesión)."""
+    if not token_kml_valido(token):
+        abort(404)
+    path = _ruta_kml_temp(token)
+    if not os.path.isfile(path):
+        abort(404)
+    with open(path, encoding="utf-8") as f:
+        kml = f.read()
+    return Response(kml, mimetype="application/vnd.google-earth.kml+xml")
 
 
 @despacho_web_bp.route("/ruta/puntos-mapa", methods=["POST"])
