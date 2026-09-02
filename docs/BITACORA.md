@@ -8,6 +8,10 @@ Al cerrar un cambio relevante: entrada breve aquí + actualizar diccionario si c
 
 ---
 
+## 2026-09-02 — DespachoWeb ruta: fix Unicode surrogates (refuerzo)
+
+- Sanea HTML completo de `/despacho-web/ruta` además de filas MySQL (surrogates en base.html o filtros).
+
 ## 2026-09-02 — DespachoWeb ruta: fix Unicode surrogates
 
 - `/despacho-web/ruta` fallaba con 500 si un pedido tenía caracteres inválidos en cliente/dirección (surrogates UTF-16 en MySQL). Se sanea al listar.

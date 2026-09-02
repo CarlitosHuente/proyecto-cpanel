@@ -128,7 +128,8 @@ def sanear_texto_web(val) -> str:
         return ""
     if not isinstance(val, str):
         val = str(val)
-    return val.encode("utf-8", errors="surrogatepass").decode("utf-8", errors="replace")
+    val = "".join(ch for ch in val if not ("\ud800" <= ch <= "\udfff"))
+    return val.encode("utf-8", errors="replace").decode("utf-8")
 
 
 def _sanear_fila_orden(row: dict) -> dict:

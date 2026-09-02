@@ -71,6 +71,7 @@ from utils.despacho_web_service import (
     obtener_orden,
     orden_existe,
     resumir_ventas_por_producto,
+    sanear_texto_web,
 )
 
 despacho_web_bp = Blueprint("despacho_web", __name__, url_prefix="/despacho-web")
@@ -718,17 +719,19 @@ def ruta():
         finally:
             conn.close()
 
-        return render_template(
+        html = render_template(
             "despacho_web/ruta.html",
             ordenes=ordenes,
-            comuna_filtro=comuna or "",
-            transporte_filtro=transporte or "",
-            buscar=buscar or "",
+            comuna_filtro=sanear_texto_web(comuna or ""),
+            transporte_filtro=sanear_texto_web(transporte or ""),
+            buscar=sanear_texto_web(buscar or ""),
             transportes=TRANSPORTES,
-            origen_default=ors["origen_default"],
+            origen_default=sanear_texto_web(ors["origen_default"]),
             ors_configurado=ors["configurado"],
             max_paradas_enlace=MAX_PARADAS_POR_ENLACE,
         )
+        # base.html u otros contextos pueden traer surrogates; limpiar HTML completo.
+        return sanear_texto_web(html)
     except Exception as e:
         current_app.logger.exception("despacho_web ruta: %s", e)
         flash(
