@@ -76,7 +76,7 @@
                                 <td class="small">{{ o.cliente }}</td>
                                 <td class="small">{{ o.comuna or '—' }}</td>
                                 <td>
-                                    <a href="{{ url_for('despacho_web.ruta_maps_una', n_orden=o.n_orden) }}" class="btn btn-sm btn-outline-secondary py-0" target="_blank" title="Ver en Maps">📍</a>
+                                    <a href="{{ url_for('despacho_web.ruta_maps_una', n_orden=o.n_orden) }}" class="btn btn-sm btn-outline-secondary py-0" target="_blank" title="Ver en Maps"><i class="bi bi-geo-alt"></i></a>
                                 </td>
                             </tr>
                             {% else %}

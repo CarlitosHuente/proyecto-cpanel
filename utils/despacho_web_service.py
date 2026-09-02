@@ -122,6 +122,23 @@ def _sort_col(sort: Optional[str], allowed: dict[str, str], default: str) -> str
     return default
 
 
+def sanear_texto_web(val) -> str:
+    """Quita surrogates UTF-16 inválidos (MySQL/AppSheet) para no romper HTML UTF-8."""
+    if val is None:
+        return ""
+    if not isinstance(val, str):
+        val = str(val)
+    return val.encode("utf-8", errors="surrogatepass").decode("utf-8", errors="replace")
+
+
+def _sanear_fila_orden(row: dict) -> dict:
+    out = dict(row)
+    for k, v in out.items():
+        if isinstance(v, str):
+            out[k] = sanear_texto_web(v)
+    return out
+
+
 def normalizar_estado_orden(estado: Optional[str], default: str = "Pendiente") -> str:
     e = (estado or default).strip()
     if e in ESTADOS_ORDEN:
@@ -227,7 +244,7 @@ def listar_ordenes_para_ruta(
     sql += " ORDER BY comuna ASC, creado_at ASC LIMIT %s"
     params.append(limite)
     cursor.execute(sql, params)
-    return cursor.fetchall() or []
+    return [_sanear_fila_orden(r) for r in (cursor.fetchall() or [])]
 
 
 def contar_ordenes(cursor, comuna=None, estado=None, buscar=None) -> int:
