@@ -239,11 +239,26 @@ La casilla `IMAP_*` también alimenta el envío SMTP compartido si no hay `SMTP_
 |------|---------|--------|
 | Unitario | 1–5 PDFs | Validación split-screen |
 | Masivo | 1 PDF multipágina (máx. 100) | Resumen lote → validar una a una |
+| Ruta Maps | Pedidos Pendiente/Armado/En Ruta | Optimizar (OpenRouteService) → abrir Google Maps |
 
 Estados: Pendiente, Retiro Costanera, Armado, En Ruta, Entregada, Anulado.  
 Celular normalizado `+569…`. Impresión operacional: `…/ordenes/<n>/imprimir` (no DTE SII).  
-Dependencias: `pdfplumber`, `pypdf`.  
-**Archivos:** `routes/despacho_web_routes.py`, `utils/despacho_web_*.py`, `templates/despacho_web/*`, `static/js/despacho_web_validar.js`.
+Dependencias: `pdfplumber`, `pypdf`, `requests` (ORS).  
+**Archivos:** `routes/despacho_web_routes.py`, `utils/despacho_web_*.py`, `templates/despacho_web/*`, `static/js/despacho_web_validar.js`, `static/js/despacho_web_ruta.js`.
+
+### Armar ruta (Maps + ORS)
+
+**Pantalla:** `GET /despacho-web/ruta` — botón «Armar ruta» en el índice DespachoWeb.
+
+1. Filtrar órdenes con dirección en estados Pendiente / Armado / En Ruta (excluye Anulado, Entregada, Retiro Costanera).
+2. Seleccionar pedidos y reordenar manualmente (drag-and-drop) si hace falta.
+3. **Optimizar (ORS):** geocodifica origen + paradas y reordena con VROOM (`POST …/ruta/optimizar`). Requiere `ORS_API_KEY`.
+4. **Abrir Google Maps:** genera enlaces directions con el orden actual, sin API Google (`POST …/ruta/enlaces`). Máx. 10 paradas por enlace; rutas largas se parten en «Ruta 1», «Ruta 2», etc.
+5. Enlace 📍 por fila: `GET …/ruta/maps/<n_orden>` → búsqueda Google de esa dirección.
+
+**Variables `.env`:** `ORS_API_KEY` (cuenta gratuita en openrouteservice.org), `ORS_ORIGEN_DESPACHO` (punto de salida; editable en la UI). Sin clave ORS: orden manual + enlaces Maps siguen funcionando.
+
+**Limitaciones:** Google Maps URL no reoptimiza; solo navega el orden entregado. Geocoding OSM puede fallar con direcciones vagas. Cuota free ORS ~500 optimizaciones/día.
 
 ---
 

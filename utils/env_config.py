@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 ENV_FILE = ROOT_DIR / ".env"
@@ -131,6 +131,20 @@ def mail_sync_token() -> str:
     """Token secreto para endpoint de sync por cron."""
     load_env()
     return (os.environ.get("MAIL_SYNC_TOKEN") or "").strip()
+
+
+def ors_settings() -> Dict[str, Any]:
+    """OpenRouteService — geocoding y optimización de rutas DespachoWeb."""
+    load_env()
+    api_key = (os.environ.get("ORS_API_KEY") or "").strip()
+    origen = (os.environ.get("ORS_ORIGEN_DESPACHO") or "").strip()
+    if not origen:
+        origen = "Costanera, Santiago, Región Metropolitana, Chile"
+    return {
+        "api_key": api_key,
+        "configurado": bool(api_key),
+        "origen_default": origen,
+    }
 
 
 def smtp_settings() -> Dict[str, Optional[str]]:

@@ -38,6 +38,14 @@ from utils.despacho_web_export import (
     respuesta_excel,
 )
 from utils.despacho_web_imprimir import preparar_factura_impresion
+from utils.despacho_web_maps import (
+    MAX_PARADAS_POR_ENLACE,
+    normalizar_direccion_maps,
+    partir_ruta_google,
+    url_buscar_direccion,
+)
+from utils.despacho_web_ors import OrsError, optimizar_paradas
+from utils.env_config import ors_settings
 from utils.despacho_web_pdf_parser import parse_factura_pdf_bytes
 from utils.despacho_web_pdf_split import dividir_pdf_por_paginas
 from utils.despacho_web_service import (
@@ -55,6 +63,7 @@ from utils.despacho_web_service import (
     listar_lineas_por_producto,
     listar_ordenes,
     listar_ordenes_index_inbox,
+    listar_ordenes_para_ruta,
     listar_ordenes_recientes,
     listar_productos_activos,
     contar_ordenes_index_inbox,
@@ -655,6 +664,135 @@ def orden_imprimir(n_orden):
 
     factura = preparar_factura_impresion(orden, detalle)
     return render_template("despacho_web/imprimir_factura.html", factura=factura)
+
+
+def _paradas_desde_payload(data: dict) -> list[dict]:
+    """Normaliza lista de paradas desde JSON del cliente."""
+    out = []
+    for i, p in enumerate(data.get("paradas") or []):
+        if isinstance(p, str):
+            out.append({"id": i + 1, "direccion": p, "n_orden": "", "cliente": ""})
+            continue
+        n_orden = str(p.get("n_orden") or "").strip()
+        direccion = (p.get("direccion") or "").strip()
+        comuna = (p.get("comuna") or "").strip()
+        if not direccion and n_orden:
+            continue
+        out.append(
+            {
+                "id": int(p.get("id") or i + 1),
+                "n_orden": n_orden,
+                "cliente": (p.get("cliente") or "").strip(),
+                "comuna": comuna,
+                "direccion": normalizar_direccion_maps(direccion, comuna),
+            }
+        )
+    return out
+
+
+def _enlaces_google(origen: str, paradas: list[dict], volver_origen: bool) -> list[dict]:
+    dirs = [p["direccion"] for p in paradas if p.get("direccion")]
+    return partir_ruta_google(origen, dirs, volver_origen=volver_origen)
+
+
+@despacho_web_bp.route("/ruta")
+@login_requerido
+@permiso_modulo("despacho_web")
+def ruta():
+    comuna = request.args.get("comuna", "").strip() or None
+    transporte = request.args.get("transporte", "").strip() or None
+    buscar = request.args.get("q", "").strip() or None
+    ors = ors_settings()
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            ordenes = listar_ordenes_para_ruta(
+                cur,
+                comuna=comuna,
+                transporte=transporte,
+                buscar=buscar,
+            )
+    finally:
+        conn.close()
+
+    return render_template(
+        "despacho_web/ruta.html",
+        ordenes=ordenes,
+        comuna_filtro=comuna or "",
+        transporte_filtro=transporte or "",
+        buscar=buscar or "",
+        transportes=TRANSPORTES,
+        origen_default=ors["origen_default"],
+        ors_configurado=ors["configurado"],
+        max_paradas_enlace=MAX_PARADAS_POR_ENLACE,
+    )
+
+
+@despacho_web_bp.route("/ruta/optimizar", methods=["POST"])
+@login_requerido
+@permiso_modulo("despacho_web")
+def ruta_optimizar():
+    data = request.get_json(silent=True) or {}
+    origen = (data.get("origen") or ors_settings()["origen_default"]).strip()
+    volver_origen = bool(data.get("volver_origen"))
+    paradas = _paradas_desde_payload(data)
+    if not paradas:
+        return jsonify({"success": False, "error": "Seleccione al menos una parada."}), 400
+
+    try:
+        for i, p in enumerate(paradas):
+            p["id"] = i + 1
+        result = optimizar_paradas(origen, paradas, volver_origen=volver_origen)
+        enlaces = _enlaces_google(origen, result["paradas"], volver_origen)
+        return jsonify(
+            {
+                "success": True,
+                "paradas": result["paradas"],
+                "advertencias": result.get("advertencias") or [],
+                "no_geocodificadas": result.get("no_geocodificadas") or [],
+                "enlaces": enlaces,
+            }
+        )
+    except OrsError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except Exception as e:
+        current_app.logger.exception("ORS optimize: %s", e)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@despacho_web_bp.route("/ruta/enlaces", methods=["POST"])
+@login_requerido
+@permiso_modulo("despacho_web")
+def ruta_enlaces():
+    """Genera enlaces Google Maps con el orden actual (sin optimizar)."""
+    data = request.get_json(silent=True) or {}
+    origen = (data.get("origen") or ors_settings()["origen_default"]).strip()
+    volver_origen = bool(data.get("volver_origen"))
+    paradas = _paradas_desde_payload(data)
+    if not paradas:
+        return jsonify({"success": False, "error": "Seleccione al menos una parada."}), 400
+    enlaces = _enlaces_google(origen, paradas, volver_origen)
+    return jsonify({"success": True, "enlaces": enlaces})
+
+
+@despacho_web_bp.route("/ruta/maps/<n_orden>")
+@login_requerido
+@permiso_modulo("despacho_web")
+def ruta_maps_una(n_orden):
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            orden = obtener_orden(cur, n_orden)
+    finally:
+        conn.close()
+    if not orden:
+        flash(f"Orden N° {n_orden} no encontrada.", "warning")
+        return redirect(url_for("despacho_web.ruta"))
+    url = url_buscar_direccion(
+        normalizar_direccion_maps(orden.get("direccion") or "", orden.get("comuna") or "")
+    )
+    return redirect(url)
 
 
 @despacho_web_bp.route("/ordenes/<n_orden>/eliminar", methods=["POST"])

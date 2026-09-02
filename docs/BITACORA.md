@@ -8,6 +8,12 @@ Al cerrar un cambio relevante: entrada breve aquí + actualizar diccionario si c
 
 ---
 
+## 2026-09-02 — DespachoWeb: armar ruta (ORS + Google Maps)
+
+- Pantalla `/despacho-web/ruta`: selección de pedidos Pendiente/Armado/En Ruta, reorden manual, optimización OpenRouteService (VROOM) y enlaces Google Maps directions (sin API Google).
+- Utilidades `utils/despacho_web_maps.py` (URLs + split 10 paradas) y `utils/despacho_web_ors.py` (geocoding + optimización).
+- Env: `ORS_API_KEY`, `ORS_ORIGEN_DESPACHO`. Ver diccionario § DespachoWeb → Armar ruta.
+
 ## 2026-08-20 — FxR: agregar inbox + completar estilo revisión
 
 - En rendición borrador/rechazada: «Agregar del inbox» vincula staging a la rendición abierta.

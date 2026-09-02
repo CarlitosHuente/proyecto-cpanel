@@ -196,6 +196,40 @@ def listar_ordenes(
     return cursor.fetchall() or []
 
 
+def listar_ordenes_para_ruta(
+    cursor,
+    comuna: Optional[str] = None,
+    estados: Optional[tuple[str, ...]] = None,
+    transporte: Optional[str] = None,
+    buscar: Optional[str] = None,
+    limite: int = 150,
+):
+    """Órdenes elegibles para armar ruta (excluye Anulado, Entregada, Retiro Costanera por defecto)."""
+    estados = estados or ("Pendiente", "Armado", "En Ruta")
+    placeholders = ",".join(["%s"] * len(estados))
+    sql = f"""
+        SELECT n_orden, fecha_oc, cliente, estado, comuna, transporte, celular, direccion, creado_at
+        FROM {TBL_ORDEN}
+        WHERE estado IN ({placeholders})
+          AND COALESCE(TRIM(direccion), '') != ''
+    """
+    params: list[Any] = list(estados)
+    if comuna:
+        sql += " AND comuna LIKE %s"
+        params.append(f"%{comuna.strip()}%")
+    if transporte:
+        sql += " AND transporte = %s"
+        params.append(transporte.strip())
+    if buscar:
+        sql += " AND (n_orden LIKE %s OR cliente LIKE %s OR celular LIKE %s)"
+        like = f"%{buscar.strip()}%"
+        params.extend([like, like, like])
+    sql += " ORDER BY comuna ASC, creado_at ASC LIMIT %s"
+    params.append(limite)
+    cursor.execute(sql, params)
+    return cursor.fetchall() or []
+
+
 def contar_ordenes(cursor, comuna=None, estado=None, buscar=None) -> int:
     sql = f"SELECT COUNT(*) AS c FROM {TBL_ORDEN} WHERE 1=1"
     params: list[Any] = []

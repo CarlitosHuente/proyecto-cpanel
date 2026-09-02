@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% from "despacho_web/_sort_macros.html" import badge_estado %}
+{% block title %}DespachoWeb — Armar ruta{% endblock %}
+{% block content %}
+<div class="container-fluid mt-3" id="paginaRuta">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <h2 class="text-white mb-1"><i class="bi bi-signpost-split text-danger me-2"></i>Armar ruta de despacho</h2>
+            <p class="text-muted mb-0 small">Optimice con OpenRouteService y abra la ruta en Google Maps (gratis).</p>
+        </div>
+        <a href="{{ url_for('despacho_web.index') }}" class="btn btn-outline-light btn-sm">← DespachoWeb</a>
+    </div>
+
+    {% if not ors_configurado %}
+    <div class="alert alert-warning py-2 small">
+        <strong>ORS_API_KEY</strong> no configurada: puede ordenar manualmente y abrir Google Maps, pero «Optimizar orden» no estará disponible hasta agregar la clave en <code>.env</code> / cPanel.
+    </div>
+    {% endif %}
+
+    <div class="row g-3">
+        <div class="col-lg-5">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header border-secondary text-white">Filtros y origen</div>
+                <div class="card-body">
+                    <form method="get" class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <input type="text" name="comuna" class="form-control form-control-sm bg-black text-white border-secondary" placeholder="Comuna" value="{{ comuna_filtro }}">
+                        </div>
+                        <div class="col-md-6">
+                            <select name="transporte" class="form-select form-select-sm bg-black text-white border-secondary">
+                                <option value="">Transporte</option>
+                                {% for t in transportes %}
+                                {% if t %}
+                                <option value="{{ t }}" {% if transporte_filtro == t %}selected{% endif %}>{{ t }}</option>
+                                {% endif %}
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <input type="text" name="q" class="form-control form-control-sm bg-black text-white border-secondary" placeholder="Buscar N°, cliente…" value="{{ buscar }}">
+                        </div>
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-sm btn-outline-light">Aplicar filtros</button>
+                        </div>
+                    </form>
+                    <label class="form-label text-white-50 small">Origen (depósito / salida)</label>
+                    <input type="text" class="form-control bg-black text-white border-secondary mb-2" id="inpOrigen" value="{{ origen_default }}">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="chkVolverOrigen">
+                        <label class="form-check-label text-muted small" for="chkVolverOrigen">Vuelta al origen al final</label>
+                    </div>
+                    <p class="text-muted small mb-0">Estados: Pendiente, Armado, En Ruta. Máx. {{ max_paradas_enlace }} paradas por enlace Google Maps.</p>
+                </div>
+            </div>
+
+            <div class="card bg-dark border-secondary mt-3">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                    <span class="text-white">Pedidos disponibles</span>
+                    <button type="button" class="btn btn-sm btn-outline-light" id="btnSelTodos">Todos</button>
+                </div>
+                <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
+                    <table class="table table-dark table-sm table-hover mb-0 align-middle">
+                        <thead class="sticky-top bg-dark">
+                            <tr>
+                                <th style="width:2rem"></th>
+                                <th>N°</th>
+                                <th>Cliente</th>
+                                <th>Comuna</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="tblOrdenes">
+                            {% for o in ordenes %}
+                            <tr data-n-orden="{{ o.n_orden }}" data-cliente="{{ o.cliente|e }}" data-comuna="{{ o.comuna or ''|e }}" data-direccion="{{ o.direccion|e }}">
+                                <td><input type="checkbox" class="form-check-input chk-orden"></td>
+                                <td class="fw-bold">{{ o.n_orden }}</td>
+                                <td class="small">{{ o.cliente }}</td>
+                                <td class="small">{{ o.comuna or '—' }}</td>
+                                <td>
+                                    <a href="{{ url_for('despacho_web.ruta_maps_una', n_orden=o.n_orden) }}" class="btn btn-sm btn-outline-secondary py-0" target="_blank" title="Ver en Maps">📍</a>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="5" class="text-center text-muted py-3">Sin pedidos con dirección para los filtros actuales.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header border-secondary d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <span class="text-white">Ruta seleccionada <span class="text-muted" id="lblCount">(0)</span></span>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-light" id="btnOrdenComuna">Por comuna A→Z</button>
+                        <button type="button" class="btn btn-sm btn-danger" id="btnOptimizar" {% if not ors_configurado %}disabled title="Configure ORS_API_KEY"{% endif %}>Optimizar (ORS)</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" id="btnAbrirMaps">Abrir Google Maps</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="alertRuta" class="alert d-none py-2 small"></div>
+                    <ol class="list-group list-group-numbered mb-3" id="listaRuta"></ol>
+                    <p class="text-muted small mb-2">Arrastre para reordenar. El orden de esta lista es el que se usa en Google Maps.</p>
+                    <div id="bloqueEnlaces"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+window.DW_RUTA = {
+    maxParadasEnlace: {{ max_paradas_enlace }},
+    orsOk: {{ ors_configurado|tojson }},
+    urls: {
+        optimizar: {{ url_for('despacho_web.ruta_optimizar')|tojson }},
+        enlaces: {{ url_for('despacho_web.ruta_enlaces')|tojson }}
+    }
+};
+</script>
+<script src="{{ url_for('static', filename='js/despacho_web_ruta.js') }}?v=2"></script>
+{% endblock %}
