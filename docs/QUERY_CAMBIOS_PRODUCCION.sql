@@ -666,3 +666,54 @@ ALTER TABLE usuarios_huente ADD COLUMN fxr_centro_costo_id INT NULL;
 -- ALTER TABLE usuarios_huente DROP COLUMN fxr_centro_costo_id;
 -- ALTER TABLE usuarios_huente DROP COLUMN nombre;
 
+
+-- [2026-09-23] [IA] [Reportería]
+-- Motivo: reportes de ventas con filtros guardados y PDF en disco.
+-- Entorno probado: local (la app también crea la tabla con CREATE TABLE IF NOT EXISTS al abrir el módulo).
+-- SQL:
+
+CREATE TABLE IF NOT EXISTS reporteria_reportes (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(160) NOT NULL,
+    empresa VARCHAR(20) NOT NULL,
+    corte VARCHAR(20) NOT NULL,
+    vista VARCHAR(20) NOT NULL,
+    sucursales_json TEXT NULL,
+    familias_json TEXT NULL,
+    correos_json TEXT NULL,
+    estado VARCHAR(20) NOT NULL DEFAULT 'borrador',
+    error_msg VARCHAR(500) NULL,
+    ruta_pdf VARCHAR(255) NULL,
+    usuario VARCHAR(120) NULL,
+    creado_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    actualizado_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    generado_at TIMESTAMP NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Rollback:
+-- DROP TABLE IF EXISTS reporteria_reportes;
+
+
+-- [2026-09-23] [IA] [Reportería — fichas de familia]
+-- Motivo: familias elegidas para cantidad / neto / precio del último periodo.
+-- SQL: omitir si la columna ya existe (la app también la agrega al abrir el módulo).
+
+ALTER TABLE reporteria_reportes ADD COLUMN familias_ficha_json TEXT NULL;
+
+-- Rollback:
+-- ALTER TABLE reporteria_reportes DROP COLUMN familias_ficha_json;
+
+
+-- [2026-09-23] [IA] [Reportería — tipo y periodo base]
+-- Motivo: Reporte Ventas guarda el tipo y el periodo elegido (semana o mes).
+-- SQL: omitir cada ALTER si la columna ya existe (la app también las agrega al abrir el módulo).
+
+ALTER TABLE reporteria_reportes ADD COLUMN tipo VARCHAR(40) NOT NULL DEFAULT 'ventas';
+ALTER TABLE reporteria_reportes ADD COLUMN periodo_num INT NULL;
+ALTER TABLE reporteria_reportes ADD COLUMN periodo_anio INT NULL;
+
+-- Rollback:
+-- ALTER TABLE reporteria_reportes DROP COLUMN tipo;
+-- ALTER TABLE reporteria_reportes DROP COLUMN periodo_num;
+-- ALTER TABLE reporteria_reportes DROP COLUMN periodo_anio;
+

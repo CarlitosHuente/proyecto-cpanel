@@ -30,6 +30,7 @@
 18. [Cachés y `/refresh`](#18-cachés-y-refresh)
 19. [Drive vía Apps Script (archivos / fotos)](#19-drive-vía-apps-script-archivos--fotos)
 20. [Fondos por Rendir (FxR)](#20-fondos-por-rendir-fxr)
+21. [Reportería](#21-reportería)
 
 ---
 
@@ -465,6 +466,35 @@ Contab Archivos sigue siendo el dueño del mayor; el camino `imagen` es independ
 **Vista previa:** hoja blanca aislada del tema oscuro; encabezados amarillos con texto negro; concepto con wrap.
 
 **Tablas / estados / PDF:** sin cambio de modelo; correlativo al aprobar; PDF Carta a Drive vía Apps Script (`accion=imagen`).
+
+---
+
+## 21. Reportería
+
+**Objetivo:** guardar reportes de ventas con nombre y filtros, generar un PDF en neto (pantalla bloqueada) y enviarlo a mano por correo. Sin cola ni cron.
+
+**Permiso:** `reporteria` (menú «Reportería»). En roles nuevos, `admin` y `gerencia` lo traen en el default de [`utils/roles_config.py`](../utils/roles_config.py). Un `data/roles_config.json` ya existente no se actualiza solo: hay que marcar el permiso en Config → Accesos (superusuario con `*` ya entra).
+
+**Rutas:** `/reporteria/` listado; `/reporteria/nuevo` y `/reporteria/<id>/editar`; `POST /reporteria/guardar`; `POST /reporteria/<id>/generar`; `GET /reporteria/<id>/pdf`; `POST /reporteria/<id>/enviar`; `POST /reporteria/<id>/eliminar`.
+
+**Tipo `ventas` (Reporte Ventas).** Es el primer bloque. El nombre del reporte se puede cambiar; el tipo queda fijo en `ventas` para, más adelante, juntar varios reportes en un solo PDF con numeración continua. Todavía no existe el compositor ni otros tipos (evolución de precios, histórico, horarios).
+
+**Variables del formulario:** empresa (`comercial` o `agricola`), periodicidad (`semanal` o `mensual`) y un periodo base opcional (semana 1–53 o mes 1–12, más el año). Vacío = última venta cobrada del sistema. Ese periodo cierra la ventana de 6 (seis semanas ISO o seis meses) y es el de las secciones 1, 2 y 4. El PDF incluye todas las sucursales y todas las familias. Si cambia empresa, periodicidad o periodo, el PDF anterior se invalida.
+
+**Neto:** misma regla que el dashboard. Comercial reutiliza `procesar_neto_comercial_mismo_que_dashboard` (promoción fuera). Agrícola: `SUB_RENGL / 1.19`; la «sucursal» es el canal (`BOLETAS`, `FACTURA`, `TRABAJADOR`) según `des_client`. La consulta filtra por fecha (rango actual y rango del año anterior), no usa `obtener_datos()`.
+
+**PDF (apaisado), en este orden:**
+
+1. Periodo base: neto consolidado, ticket promedio (neto / comprobantes), torta por sucursal y torta por familia con el monto en la leyenda, y fichas de las 4 familias de mayor neto (cantidad, neto, $/Und).
+2. Tabla breve de sucursales de ese periodo contra el mismo corte del año anterior.
+3. Hoja siguiente: solo el consolidado de los 6 periodos (línea roja del año actual con área, línea gris punteada del año anterior). Otra hoja: sucursales de a dos.
+4. Todos los productos del periodo base, agrupados por familia (Empanadas, Papayas, etc.). Bajo cada sucursal, las columnas son el año y el anterior.
+
+El archivo queda en `uploads/reporteria/reporte_<id>.pdf`. El periodo en curso se marca incompleto. Eliminar borra la fila y el PDF.
+
+**Correo:** icono del listado, solo si el estado es `listo`. Si no hay correos guardados, los pide y los guarda. Adjunto PDF vía `enviar_correo(..., adjuntos=)`.
+
+**Archivos:** `routes/reporteria_routes.py`, `utils/reporteria_db.py`, `utils/reporteria_ventas.py`, `utils/reporteria_pdf.py`, `templates/reporteria/*`, `static/js/reporteria.js`.
 
 ---
 

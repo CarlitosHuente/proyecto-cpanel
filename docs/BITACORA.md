@@ -8,6 +8,41 @@ Al cerrar un cambio relevante: entrada breve aquí + actualizar diccionario si c
 
 ---
 
+## 2026-09-23 — Reportería: aire bajo el encabezado
+
+- El título del periodo queda separado de la franja roja y parte con mayúscula («Última semana», «Último mes»).
+
+## 2026-09-23 — Reportería: Reporte Ventas con periodo elegido
+
+- El formulario queda en empresa, periodicidad y un periodo base (vacío = última venta).
+- El detalle de productos agrupa por familia. Se puede eliminar un reporte.
+- El tipo guardado es `ventas`, para armar después un PDF con varios reportes.
+
+## 2026-09-23 — Reportería: hojas y colores del dashboard
+
+- Secciones 1 y 2 juntas; el consolidado y las sucursales parten en hoja nueva.
+- Línea roja con área y año anterior punteado. En el detalle, las columnas dicen el año (2026 / 2025).
+
+## 2026-09-23 — Reportería: dos sucursales por hoja
+
+- Gráficos en azul pizarra y gris, con la leyenda separada del eje.
+- En sucursales, dos columnas por hoja (gráfico y tabla). El detalle de productos compara semana actual y año anterior en cada sucursal.
+
+## 2026-09-23 — Reportería: rojo corporativo y detalle de la semana
+
+- Gráficos en rojo `#d80000` y negro, con aire entre el título y la leyenda.
+- El detalle de productos nombra la semana y cierra con la misma semana del año anterior y la diferencia.
+
+## 2026-09-23 — Reportería: semana actual, líneas y matriz
+
+- El PDF abre con la última semana o mes (tortas por sucursal y familia, ticket, fichas de familias elegidas), sigue con el comparativo de sucursales, las 6 líneas año contra año y la matriz producto × sucursal.
+- Filtro nuevo `familias_ficha` (columna `familias_ficha_json`).
+
+## 2026-09-23 — Reportería: comparativo de ventas en PDF
+
+- Módulo `/reporteria`: nombre y filtros guardados (6 semanas o 6 meses vs año anterior, empresa, sucursal, familia), PDF en neto con gráfico y variación, descarga y envío manual con adjunto.
+- Tabla `reporteria_reportes`. Permiso `reporteria`. Sin cola ni cron.
+
 ## 2026-09-23 — Seremi temperatura equipos: catálogo `Activo`
 
 - Vista e impresión listan solo equipos con `Activo=TRUE` en CSV `equipos_info`; inactivos ocultos aunque tengan lecturas; activos sin lecturas en el mes con grilla vacía.

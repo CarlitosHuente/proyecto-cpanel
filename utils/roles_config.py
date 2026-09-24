@@ -21,7 +21,7 @@ PERMISOS_LEGACY_FILE = os.path.join(BASE_DIR, "permisos.json")
 DEFAULT_PERMISOS: Dict[str, List[str]] = {
     "superusuario": ["*"],
     "admin": [
-        "dashboard", "ventas", "clientes", "seremi", "contab", "reporte",
+        "dashboard", "ventas", "reporteria", "clientes", "seremi", "contab", "reporte",
         "sucursales", "productos", "categorias", "agricola", "utilidades",
         "arqueo_caja", "despacho_web", "buk", "fabrica", "fabrica_papaya", "flujo", "config",
     ],
@@ -30,7 +30,7 @@ DEFAULT_PERMISOS: Dict[str, List[str]] = {
     "seremi": ["sucursales", "seremi", "productos", "categorias"],
     "contab": ["contab", "utilidades"],
     "sucursales": ["sucursales", "seremi"],
-    "gerencia": ["reporte", "ventas", "dashboard", "utilidades"],
+    "gerencia": ["reporte", "ventas", "reporteria", "dashboard", "utilidades"],
     "logistica": ["sucursales", "productos", "categorias", "utilidades", "fabrica", "despacho_web"],
     "supervisor": ["fabrica_papaya"],
     "digitador": ["fabrica_papaya"],

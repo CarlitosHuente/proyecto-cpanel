@@ -242,6 +242,12 @@
         </div>
         {% endif %}
 
+        {% if tiene_permiso(rol_actual, 'reporteria') %}
+        <a href="{{ url_for('reporteria.index') }}" class="d-block px-3 py-2 text-white">
+            <span class="texto-menu">Reportería</span>
+        </a>
+        {% endif %}
+
         {% if tiene_seccion(rol_actual, 'seremi') %}
         <div class="dropdown">
             <a class="dropdown-toggle d-block px-3 py-2 text-white" href="#" role="button" id="seremiDropdown" data-bs-toggle="dropdown" aria-expanded="false">

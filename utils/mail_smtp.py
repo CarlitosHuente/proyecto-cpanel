@@ -60,6 +60,7 @@ def enviar_correo(
     *,
     html: Optional[str] = None,
     bcc: Optional[Union[str, Sequence[str]]] = None,
+    adjuntos: Optional[Sequence[tuple]] = None,
 ) -> dict:
     """
     Envía un correo de texto (y HTML opcional).
@@ -108,6 +109,17 @@ def enviar_correo(
     msg.set_content(body_text or "")
     if html:
         msg.add_alternative(html, subtype="html")
+    for adj in adjuntos or ():
+        nombre, data, mime = adj[0], adj[1], (adj[2] if len(adj) > 2 else "application/octet-stream")
+        if not data:
+            continue
+        maintype, _, subtype = (mime or "application/octet-stream").partition("/")
+        msg.add_attachment(
+            data,
+            maintype=maintype or "application",
+            subtype=subtype or "octet-stream",
+            filename=nombre or "adjunto",
+        )
 
     recipients = list(dict.fromkeys(destinos + destinos_bcc))
 

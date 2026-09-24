@@ -20,6 +20,12 @@ CATALOGO: List[dict] = [
         ],
     },
     {
+        "id": "reporteria",
+        "label": "Reportería",
+        "desc": "Informes de ventas en PDF (neto) y envío manual por correo.",
+        "hijos": [],
+    },
+    {
         "id": "ventas",
         "label": "Ventas",
         "desc": "Análisis comercial y operativo de ventas.",
