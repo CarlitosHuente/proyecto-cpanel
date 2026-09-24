@@ -8,6 +8,11 @@ Al cerrar un cambio relevante: entrada breve aquí + actualizar diccionario si c
 
 ---
 
+## 2026-09-23 — Seremi temperatura equipos: catálogo `Activo`
+
+- Vista e impresión listan solo equipos con `Activo=TRUE` en CSV `equipos_info`; inactivos ocultos aunque tengan lecturas; activos sin lecturas en el mes con grilla vacía.
+- `routes/seremi_routes.py` — helpers `_catalogo_equipos_activos`, `_grilla_temperatura_equipos_*`.
+
 ## 2026-09-02 — DespachoWeb ruta: todos los puntos juntos en Google Maps (KML)
 
 - Botón «Todos en Google Maps (sin ruta)» genera KML temporal y abre una sola ventana con todos los pins.

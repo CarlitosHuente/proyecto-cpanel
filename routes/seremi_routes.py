@@ -3,7 +3,6 @@ from flask import Blueprint, render_template, request, session, redirect, url_fo
 from utils.sheet_cache import obtener_datos, obtener_fecha_actualizacion
 from services.resumen_service import MESES as NOMBRES_MESES
 from datetime import datetime
-from collections import defaultdict
 import pandas as pd
 from utils.auth import login_requerido, permiso_modulo
 import calendar
@@ -132,6 +131,101 @@ def _dias_del_mes(año, mes):
     return calendar.monthrange(año, mes)[1]
 
 
+def _es_equipo_activo(valor):
+    s = str(valor).strip().upper()
+    return s in ("TRUE", "1", "SI", "SÍ", "YES", "S", "VERDADERO", "ACTIVO")
+
+
+def _catalogo_equipos_activos(sucursal_activa):
+    """Filas del CSV equipos_info con Activo=TRUE, opcionalmente por sucursal."""
+    df = obtener_datos("equipos_info")
+    df.columns = df.columns.str.strip().str.upper()
+    if "ACTIVO" in df.columns:
+        df = df[df["ACTIVO"].apply(_es_equipo_activo)]
+    if sucursal_activa != "TODAS":
+        df = df[df["SUCURSAL"] == sucursal_activa]
+    sort_cols = [c for c in ("SUCURSAL", "NOMBRE_EQUIPO", "ID_EQUIPO") if c in df.columns]
+    if sort_cols:
+        df = df.sort_values(sort_cols)
+    return df
+
+
+def _lecturas_por_equipo(df_lecturas):
+    if df_lecturas is None or df_lecturas.empty:
+        return {}
+    return {cod: grp.sort_values("FECHA") for cod, grp in df_lecturas.groupby("EQUIPO")}
+
+
+def _grilla_temperatura_equipos_vista(df_lecturas, sucursal_activa, mes, año):
+    """Grilla mensual solo para equipos activos en catálogo (vacía si no hay lecturas)."""
+    catalogo = _catalogo_equipos_activos(sucursal_activa)
+    por_codigo = _lecturas_por_equipo(df_lecturas)
+    ultimo_dia = _dias_del_mes(año, mes)
+    equipos = {}
+    for _, fila in catalogo.iterrows():
+        cod = fila["ID_EQUIPO"]
+        nombre = fila.get("NOMBRE_EQUIPO", cod)
+        nombre_mostrado = f"{nombre} ({cod})"
+        grupo = por_codigo.get(cod)
+        registros = []
+        for dia in range(1, ultimo_dia + 1):
+            if grupo is not None and not grupo.empty:
+                registros_dia = grupo[grupo["DIA"] == dia]
+                temps = [
+                    f"{row['TEMPERATURA C°']}°C ({row['FECHA'].strftime('%H:%M')})"
+                    for _, row in registros_dia.iterrows()
+                ]
+            else:
+                temps = []
+            while len(temps) < 3:
+                temps.append("")
+            registros.append((dia, temps[:3]))
+        equipos[nombre_mostrado] = registros
+    return equipos
+
+
+def _grilla_temperatura_equipos_print(df_lecturas, sucursal_activa, mes, año):
+    """Misma regla de catálogo activo, formato para print_temperatura.html."""
+    catalogo = _catalogo_equipos_activos(sucursal_activa)
+    por_codigo = _lecturas_por_equipo(df_lecturas)
+    ultimo_dia = _dias_del_mes(año, mes)
+    equipos_data = []
+    for _, fila in catalogo.iterrows():
+        cod = fila["ID_EQUIPO"]
+        nombre = fila.get("NOMBRE_EQUIPO", cod)
+        nombre_mostrado = f"{nombre} ({cod})"
+        sucursal_fila = fila.get("SUCURSAL", sucursal_activa)
+        grupo = por_codigo.get(cod)
+        registros = []
+        for dia in range(1, ultimo_dia + 1):
+            temps = []
+            responsables = []
+            if grupo is not None and not grupo.empty:
+                registros_dia = grupo[grupo["DIA"] == dia]
+                for _, row in registros_dia.iterrows():
+                    temps.append(f"{row['TEMPERATURA C°']}°C ({row['FECHA'].strftime('%H:%M')})")
+                    responsable = str(row.get("RESPONSABLE", "")).strip()
+                    responsables.append(responsable if responsable else "-")
+            while len(temps) < 3:
+                temps.append("")
+                responsables.append("-")
+            registros.append({
+                "dia": f"{dia:02d}",
+                "ingreso": temps[0],
+                "intermedio": temps[1],
+                "salida": temps[2],
+                "responsables": " / ".join(responsables[:3]),
+            })
+        equipos_data.append({
+            "nombre": nombre_mostrado,
+            "sucursal": sucursal_fila if sucursal_activa == "TODAS" else sucursal_activa,
+            "mes": mes,
+            "año": año,
+            "registros": registros,
+        })
+    return equipos_data
+
+
 # --- RUTA 1: TEMPERATURA EQUIPOS (MODIFICADA) ---
 @seremi_bp.route("/temperatura_equipos")
 @login_requerido
@@ -146,26 +240,7 @@ def temperatura_equipos():
     df = _filtrar_sucursal(df, sucursal_activa)
     df = _filtrar_periodo(df, mes, año)
 
-    df_equipos = obtener_datos("equipos_info")
-    df_equipos.columns = df_equipos.columns.str.strip().str.upper()
-    mapa_nombre = dict(zip(df_equipos["ID_EQUIPO"], df_equipos["NOMBRE_EQUIPO"]))
-
-    equipos = defaultdict(list)
-    ultimo_dia = _dias_del_mes(año, mes)
-    for cod_equipo, grupo in df.groupby("EQUIPO"):
-        nombre_equipo = mapa_nombre.get(cod_equipo, cod_equipo)
-        nombre_mostrado = f"{nombre_equipo} ({cod_equipo})"
-        grupo = grupo.sort_values("FECHA")
-
-        for dia in range(1, ultimo_dia + 1):
-            registros_dia = grupo[grupo["DIA"] == dia]
-            temps = [
-                f"{row['TEMPERATURA C°']}°C ({row['FECHA'].strftime('%H:%M')})"
-                for _, row in registros_dia.iterrows()
-            ]
-            while len(temps) < 3:
-                temps.append("")
-            equipos[nombre_mostrado].append((dia, temps[:3]))
+    equipos = _grilla_temperatura_equipos_vista(df, sucursal_activa, mes, año)
 
     sucursales = _sucursales_selector("temperatura_equipos", permisos_visuales)
     meses = [(i + 1, nombre.title()) for i, nombre in enumerate(NOMBRES_MESES)]
@@ -410,45 +485,7 @@ def imprimir_temperatura_equipos():
     df = _filtrar_sucursal(df, sucursal_activa)
     df = _filtrar_periodo(df, mes, año)
 
-    df_equipos = obtener_datos("equipos_info")
-    df_equipos.columns = df_equipos.columns.str.strip().str.upper()
-    mapa_nombre = dict(zip(df_equipos["ID_EQUIPO"], df_equipos["NOMBRE_EQUIPO"]))
-
-    ultimo_dia = _dias_del_mes(año, mes)
-    equipos_data = []
-    for cod_equipo, grupo in df.groupby("EQUIPO"):
-        nombre_equipo = mapa_nombre.get(cod_equipo, cod_equipo)
-        nombre_mostrado = f"{nombre_equipo} ({cod_equipo})"
-        registros = []
-
-        for dia in range(1, ultimo_dia + 1):
-            registros_dia = grupo[grupo["DIA"] == dia]
-            temps = []
-            responsables = []
-            for _, row in registros_dia.iterrows():
-                temps.append(f"{row['TEMPERATURA C°']}°C ({row['FECHA'].strftime('%H:%M')})")
-                responsable = str(row.get("RESPONSABLE", "")).strip()
-                responsables.append(responsable if responsable else "-")
-
-            while len(temps) < 3:
-                temps.append("")
-                responsables.append("-")
-
-            registros.append({
-                "dia": f"{dia:02d}",
-                "ingreso": temps[0],
-                "intermedio": temps[1],
-                "salida": temps[2],
-                "responsables": " / ".join(responsables[:3]),
-            })
-
-        equipos_data.append({
-            "nombre": nombre_mostrado,
-            "sucursal": sucursal_activa if sucursal_activa != "TODAS" else "Varias",
-            "mes": mes,
-            "año": año,
-            "registros": registros,
-        })
+    equipos_data = _grilla_temperatura_equipos_print(df, sucursal_activa, mes, año)
 
     return render_template("seremi/print_temperatura.html", equipos=equipos_data)
 

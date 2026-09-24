@@ -125,6 +125,7 @@
 - Vistas + prints: `routes/seremi_routes.py`, `templates/seremi/*.html`, `templates/seremi/print_*.html`.
 - Filtros mensuales: sucursal + mes + año (`?año=` / `?anio=`). Default año: actual con datos o más reciente; años &lt; 2010 ignorados.
 - Grillas día 1…N con `calendar.monthrange`.
+- **Temperatura equipos:** lista maestra desde CSV `equipos_info`; solo filas con `Activo=TRUE`. Inactivos no se muestran aunque tengan lecturas; activos sin lecturas en el mes aparecen con grilla vacía. Vista e impresión comparten la misma regla.
 - Cambio aceite: filtro mes+año; últimos 20 del período.
 
 ---
