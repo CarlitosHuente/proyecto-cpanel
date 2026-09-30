@@ -25,21 +25,34 @@
   }
   .fxr-rev-viewer {
     background: #000;
-    display: flex; align-items: center; justify-content: center;
-    min-height: 0; overflow: auto; padding: .5rem;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 0; overflow: hidden; padding: .35rem;
     position: relative;
   }
-  .fxr-rev-viewer img {
-    max-width: 100%; max-height: calc(100vh - 140px);
-    object-fit: contain;
+  .fxr-rev-viewer-toolbar {
+    flex: 0 0 auto;
+    display: flex; flex-wrap: wrap; gap: .4rem; align-items: center;
+    width: 100%; padding: .25rem .4rem .45rem;
+    background: rgba(26,26,26,.95);
+    border-bottom: 1px solid #333;
+  }
+  .fxr-rev-viewer-stage {
+    flex: 1 1 auto; min-height: 0; width: 100%;
+    display: flex; align-items: center; justify-content: center;
+    overflow: auto;
+  }
+  #fxr-rev-canvas {
+    max-width: 100%; max-height: calc(100vh - 180px);
+    display: block; cursor: crosshair; touch-action: none;
   }
   .fxr-rev-viewer iframe {
     width: 100%; height: calc(100vh - 140px); border: 0; background: #111;
   }
   @media (max-width: 900px) {
-    .fxr-rev-viewer img { max-height: 38vh; }
+    #fxr-rev-canvas { max-height: 38vh; }
     .fxr-rev-viewer iframe { height: 38vh; }
   }
+  .fxr-rev-img-hint { color: #bbb; font-size: .8rem; }
   .fxr-rev-side {
     background: #1a1a1a;
     border-left: 1px solid #444;
@@ -98,7 +111,14 @@
         {% if 'pdf' in (cur.mime or '') %}
         <iframe src="{{ url_for('fxr.servir_archivo', cid=cur.comprobante_id) }}" title="pdf"></iframe>
         {% else %}
-        <img src="{{ url_for('fxr.servir_archivo', cid=cur.comprobante_id) }}" alt="comprobante">
+        <div class="fxr-rev-viewer-toolbar">
+          <button type="button" class="btn btn-sm btn-outline-light" id="fxr-rev-rotate-ccw" title="Girar izquierda ([)">Girar ⟲</button>
+          <button type="button" class="btn btn-sm btn-outline-light" id="fxr-rev-rotate-cw" title="Girar derecha (])">Girar ⟳</button>
+          <span class="fxr-rev-img-hint" id="fxr-rev-img-status">Arrastra sobre la imagen para recortar · se guarda solo</span>
+        </div>
+        <div class="fxr-rev-viewer-stage">
+          <canvas id="fxr-rev-canvas"></canvas>
+        </div>
         {% endif %}
       {% else %}
         <p class="text-muted">Sin líneas.</p>
@@ -203,4 +223,14 @@
   });
 })();
 </script>
+{% if cur and 'pdf' not in (cur.mime or '') %}
+<script>
+  window.FXR_REV_IMG = {
+    cid: {{ cur.comprobante_id|tojson }},
+    imgUrl: {{ url_for('fxr.servir_archivo', cid=cur.comprobante_id)|tojson }},
+    postUrl: {{ url_for('fxr.revision_imagen', cid=cur.comprobante_id)|tojson }}
+  };
+</script>
+<script src="{{ url_for('static', filename='js/fxr_revision_img.js') }}?v=1"></script>
+{% endif %}
 {% endblock %}

@@ -457,7 +457,7 @@ Contab Archivos sigue siendo el dueño del mayor; el camino `imagen` es independ
 
 **Rutas:** `/fxr/` — [`routes/fxr_routes.py`](../routes/fxr_routes.py). Utils: `utils/fxr_db.py`, `fxr_files.py`, `fxr_pdf.py`, `fxr_drive.py`. Templates: `templates/fxr/*`. JS: `static/js/fxr_pulir.js`. Staging: `uploads/fxr/` (gitignored).
 
-**Flujo captura:** móvil → **Fotografiar** guarda solo en inbox; completar/pulir en PC. Inbox → seleccionar → **Rendir seleccionados** crea borrador y abre **`/fxr/rendicion/<id>/completar`** (fullscreen: comprobante | formulario). Dueño en `preparada` puede **Retirar y corregir** (vuelve a borrador). Revisor (super) en revisión: **editar datos** o **quitar comprobante → inbox** con motivo; se registra en historial y se envía **correo** al dueño (`utils/fxr_avisos.py`). **Pulir** (`/fxr/…/pulir`): jscanify + selección por **arrastre rectangular** + «Reset selección» + esquinas finas. **Agregar del inbox** en rendición editable.
+**Flujo captura:** móvil → **Fotografiar** guarda solo en inbox; completar/pulir en PC. Inbox → seleccionar → **Rendir seleccionados** crea borrador y abre **`/fxr/rendicion/<id>/completar`** (fullscreen: comprobante | formulario). Dueño en `preparada` puede **Retirar y corregir** (vuelve a borrador). Revisor (super) en revisión: **editar datos**, **quitar comprobante → inbox** (motivo + correo), y en imágenes **recortar por arrastre / girar in-place** (auto-guarda, `POST …/revision-imagen`). **Pulir** (`/fxr/…/pulir`): jscanify + selección por **arrastre rectangular** + «Reset selección» + esquinas finas. **Agregar del inbox** en rendición editable.
 
 **Edición línea:** split imagen | formulario con fondos **opacos** (sin overlay transparente).
 

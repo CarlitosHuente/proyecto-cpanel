@@ -10,6 +10,7 @@ from flask import (
     abort,
     current_app,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -216,6 +217,27 @@ def _puede_editar_comprobante(comp: dict) -> bool:
     return bool(r and r["estado"] in ("borrador", "rechazada"))
 
 
+def _puede_pulir_en_revision(comp: dict) -> bool:
+    """Super puede recortar/girar imágenes de una rendición en preparada."""
+    if not comp or not _es_super():
+        return False
+    rid = comp.get("rendicion_id")
+    if not rid:
+        return False
+    r = db.obtener_rendicion(rid)
+    return bool(r and r["estado"] == "preparada")
+
+
+def _guardar_imagen_pulida(comp: dict, data: bytes) -> str:
+    """Guarda JPEG pulido y reemplaza archivo; devuelve ruta relativa nueva."""
+    nuevo = guardar_jpeg_pulido(data, (_email() or "fxr").split("@")[0])
+    anterior = comp.get("archivo_local")
+    db.actualizar_comprobante_archivo(comp["id"], nuevo, "image/jpeg", 1)
+    if anterior and anterior != nuevo:
+        borrar_archivo_local(anterior)
+    return nuevo
+
+
 @fxr_bp.route("/comprobante/<int:cid>/pulir", methods=["GET", "POST"])
 @login_requerido
 @permiso_modulo("fxr")
@@ -252,14 +274,10 @@ def pulir_comprobante(cid):
             return redirect(url_for("fxr.pulir_comprobante", cid=cid, next_linea=next_linea or None))
         try:
             data = archivo.read()
-            nuevo = guardar_jpeg_pulido(data, _email().split("@")[0])
+            _guardar_imagen_pulida(comp, data)
         except ValueError as e:
             flash(str(e), "danger")
             return redirect(url_for("fxr.pulir_comprobante", cid=cid, next_linea=next_linea or None))
-        anterior = comp.get("archivo_local")
-        db.actualizar_comprobante_archivo(cid, nuevo, "image/jpeg", 1)
-        if anterior and anterior != nuevo:
-            borrar_archivo_local(anterior)
         flash("Imagen pulida guardada.", "success")
         return redirect(volver_url)
     return render_template(
@@ -270,6 +288,42 @@ def pulir_comprobante(cid):
         post_url=url_for("fxr.pulir_comprobante", cid=cid),
         volver_url=volver_url,
     )
+
+
+@fxr_bp.route("/comprobante/<int:cid>/revision-imagen", methods=["POST"])
+@login_requerido
+@permiso_modulo("fxr")
+@super_requerido
+def revision_imagen(cid):
+    """AJAX: super recorta/gira imagen en revisión (preparada) y guarda JPEG."""
+    comp = db.obtener_comprobante(cid)
+    if not comp or not _puede_pulir_en_revision(comp):
+        return jsonify({"ok": False, "error": "No autorizado o rendición no preparada"}), 403
+    mime = (comp.get("mime") or "").lower()
+    rel = str(comp.get("archivo_local") or "")
+    if "pdf" in mime or rel.lower().endswith(".pdf"):
+        return jsonify({"ok": False, "error": "Solo imágenes"}), 400
+    archivo = request.files.get("archivo")
+    if not archivo or not archivo.filename:
+        return jsonify({"ok": False, "error": "Sin archivo"}), 400
+    try:
+        data = archivo.read()
+        _guardar_imagen_pulida(comp, data)
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    rid = comp.get("rendicion_id")
+    accion = (request.form.get("accion") or "ajuste").strip()[:40]
+    if rid:
+        db.registrar_hist(
+            int(rid),
+            "preparada",
+            "preparada",
+            _email(),
+            f"Ajustó imagen comprobante #{cid} ({accion})"[:500],
+        )
+    # cache-bust
+    url = url_for("fxr.servir_archivo", cid=cid) + f"?t={int(datetime.now().timestamp())}"
+    return jsonify({"ok": True, "url": url, "cid": cid})
 
 
 # ---------- Armar rendición ----------
