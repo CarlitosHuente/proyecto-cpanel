@@ -8,6 +8,12 @@ Al cerrar un cambio relevante: entrada breve aquí + actualizar diccionario si c
 
 ---
 
+## 2026-09-30 — FxR: corrección en revisión + selección arrastre
+
+- Dueño: botón «Retirar y corregir» si está Preparada (vuelve a borrador).
+- Revisor: editar línea o quitar boleta → inbox con motivo; historial + correo al dueño (`fxr_avisos`).
+- Pulir: selección por clic+arrastre (rectángulo), «Reset selección»; esquinas siguen para ajuste fino.
+
 ## 2026-09-23 — Reportería: aire bajo el encabezado
 
 - El título del periodo queda separado de la franja roja y parte con mayúscula («Última semana», «Último mes»).

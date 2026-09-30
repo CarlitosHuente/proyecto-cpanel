@@ -447,7 +447,20 @@ def registrar_hist(rid: int, desde: Optional[str], hasta: str, email: str, nota:
         INSERT INTO fxr_estado_hist (rendicion_id, estado_desde, estado_hasta, usuario_email, nota)
         VALUES (%s,%s,%s,%s,%s)
         """,
-        (rid, desde, hasta, email, nota or None),
+        (rid, desde, hasta, email, (nota or "")[:500] or None),
+    )
+
+
+def listar_hist(rid: int, limit: int = 30) -> List[dict]:
+    return _fetchall(
+        """
+        SELECT id, estado_desde, estado_hasta, usuario_email, nota, created_at
+        FROM fxr_estado_hist
+        WHERE rendicion_id=%s
+        ORDER BY id DESC
+        LIMIT %s
+        """,
+        (rid, limit),
     )
 
 
@@ -495,10 +508,14 @@ def obtener_linea(linea_id: int) -> Optional[dict]:
         """
         SELECT l.*, c.archivo_local, c.mime, c.usuario_email AS comp_usuario,
                r.usuario_email AS rend_usuario, r.estado AS rend_estado,
-               r.correlativo, r.nombre_snapshot, r.aprobada_at
+               r.correlativo, r.nombre_snapshot, r.aprobada_at,
+               tg.nombre AS tipo_gasto_nombre,
+               cc.nombre AS centro_costo_nombre, cc.codigo AS centro_costo_codigo
         FROM fxr_linea l
         JOIN fxr_comprobante c ON c.id = l.comprobante_id
         JOIN fxr_rendicion r ON r.id = l.rendicion_id
+        LEFT JOIN fxr_tipo_gasto tg ON tg.id = l.tipo_gasto_id
+        LEFT JOIN fxr_centro_costo cc ON cc.id = l.centro_costo_id
         WHERE l.id=%s
         """,
         (linea_id,),
@@ -588,11 +605,21 @@ def vincular_comprobantes_a_rendicion(rid: int, comp_ids: List[int], usuario_ema
     return n
 
 
-def guardar_linea(linea_id: int, data: dict) -> Tuple[bool, str, List[dict]]:
+def guardar_linea(
+    linea_id: int,
+    data: dict,
+    *,
+    es_super: bool = False,
+) -> Tuple[bool, str, List[dict]]:
     linea = obtener_linea(linea_id)
     if not linea:
         return False, "Línea no encontrada", []
-    if linea["rend_estado"] not in ("borrador", "rechazada"):
+    estado = linea["rend_estado"]
+    if estado in ("borrador", "rechazada"):
+        pass
+    elif es_super and estado == "preparada":
+        pass
+    else:
         return False, "La rendición no está editable", []
 
     tipo_doc = (data.get("tipo_doc") or "otro").strip().lower()
@@ -693,16 +720,31 @@ def marcar_comprobante_consumido(comp_id: int) -> None:
     )
 
 
-def quitar_linea_a_inbox(linea_id: int, usuario_email: str) -> Tuple[bool, str]:
-    """Quita la línea de la rendición; el comprobante vuelve al inbox (nunca se borra el archivo)."""
+def quitar_linea_a_inbox(
+    linea_id: int,
+    usuario_email: str,
+    *,
+    es_super: bool = False,
+) -> Tuple[bool, str, Optional[dict]]:
+    """Quita la línea de la rendición; el comprobante vuelve al inbox (nunca se borra el archivo).
+
+    Dueño: borrador/rechazada. Super: también en preparada.
+    Devuelve (ok, msg, snapshot_linea|None).
+    """
     linea = obtener_linea(linea_id)
     if not linea:
-        return False, "Línea no encontrada"
-    if linea["rend_usuario"] != usuario_email:
-        return False, "No autorizado"
-    if linea["rend_estado"] not in ("borrador", "rechazada"):
-        return False, "Solo se puede quitar en borrador o rechazada"
+        return False, "Línea no encontrada", None
+    if linea["rend_usuario"] != usuario_email and not es_super:
+        return False, "No autorizado", None
+    estado = linea["rend_estado"]
+    if estado in ("borrador", "rechazada"):
+        pass
+    elif es_super and estado == "preparada":
+        pass
+    else:
+        return False, "Solo se puede quitar en borrador, rechazada o (revisor) preparada", None
 
+    snapshot = dict(linea)
     rid = linea["rendicion_id"]
     cid = linea["comprobante_id"]
     _execute("DELETE FROM fxr_linea WHERE id=%s", (linea_id,))
@@ -715,7 +757,7 @@ def quitar_linea_a_inbox(linea_id: int, usuario_email: str) -> Tuple[bool, str]:
         (cid,),
     )
     recalcular_total(rid)
-    return True, "Documento vuelto al inbox"
+    return True, "Documento vuelto al inbox", snapshot
 
 
 def eliminar_rendicion_a_inbox(rid: int, usuario_email: str) -> Tuple[bool, str]:

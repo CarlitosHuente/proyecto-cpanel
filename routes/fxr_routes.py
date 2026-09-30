@@ -20,6 +20,7 @@ from flask import (
 
 from utils.auth import login_requerido, permiso_modulo
 from utils import fxr_db as db
+from utils import fxr_avisos as avisos
 from utils.fxr_files import (
     abs_path,
     borrar_archivo_local,
@@ -397,10 +398,12 @@ def rendicion(rid):
         abort(404)
     lineas = db.listar_lineas(rid)
     dups_bloquean = db.hay_duplicados_sin_autorizar(rid)
-    editable = r["estado"] in ("borrador", "rechazada") and r["usuario_email"] == _email()
+    email = _email()
+    editable = r["estado"] in ("borrador", "rechazada") and r["usuario_email"] == email
+    puede_retirar = r["estado"] == "preparada" and r["usuario_email"] == email
     # Solo mostrar faltantes tras intentar Preparar (no al crear la rendición)
     faltantes = session.pop(f"fxr_faltantes_{rid}", None) or []
-    inbox = db.listar_inbox(_email()) if editable else []
+    inbox = db.listar_inbox(email) if editable else []
     return render_template(
         "fxr/rendicion.html",
         r=r,
@@ -408,8 +411,10 @@ def rendicion(rid):
         dups_bloquean=dups_bloquean,
         es_super=_es_super(),
         editable=editable,
+        puede_retirar=puede_retirar,
         faltantes=faltantes,
         inbox=inbox,
+        hist=db.listar_hist(rid),
         centros=db.listar_centros_costo(solo_activos=True),
         tipos_gasto=db.listar_tipos_gasto(solo_activos=True),
     )
@@ -487,12 +492,29 @@ def editar_linea(linea_id):
 @permiso_modulo("fxr")
 def eliminar_linea(linea_id):
     """Siempre vuelve el documento al inbox (no borra el archivo)."""
-    ok, msg = db.quitar_linea_a_inbox(linea_id, _email())
+    ok, msg, _snap = db.quitar_linea_a_inbox(linea_id, _email(), es_super=_es_super())
     flash(msg, "success" if ok else "danger")
     rid = request.form.get("rid")
     if rid and str(rid).isdigit():
         return redirect(url_for("fxr.rendicion", rid=int(rid)))
     return redirect(url_for("fxr.index"))
+
+
+@fxr_bp.route("/rendicion/<int:rid>/retirar", methods=["POST"])
+@login_requerido
+@permiso_modulo("fxr")
+def retirar_revision(rid):
+    """Dueño retira de cola (preparada → borrador) para corregir errores."""
+    r = db.obtener_rendicion(rid)
+    if not r or r["usuario_email"] != _email():
+        abort(403)
+    if r["estado"] != "preparada":
+        flash("Solo se puede retirar una rendición en estado Preparada.", "warning")
+        return redirect(url_for("fxr.rendicion", rid=rid))
+    db.actualizar_rendicion_campos(rid, estado="borrador", preparada_at=None)
+    db.registrar_hist(rid, "preparada", "borrador", _email(), "Retirada de revisión por el dueño")
+    flash("Rendición retirada: ya puedes editar y corregir.", "success")
+    return redirect(url_for("fxr.completar_rendicion", rid=rid, i=0))
 
 
 @fxr_bp.route("/rendicion/<int:rid>/eliminar", methods=["POST"])
@@ -568,14 +590,143 @@ def revision_detalle(rid):
         return redirect(url_for("fxr.revision_cola"))
     lineas = db.listar_lineas(rid)
     dups_info = db.info_duplicados_para_pdf(lineas)
+    n = len(lineas)
+    idx = max(0, min(int(request.args.get("i") or 0), max(0, n - 1)))
+    cur = lineas[idx] if n else None
     return render_template(
         "fxr/revision_detalle.html",
         r=r,
         lineas=lineas,
+        cur=cur,
+        linea=cur,
+        n=n,
+        idx=idx,
         dups_info=dups_info,
         dups_bloquean=db.hay_duplicados_sin_autorizar(rid),
-        idx=max(0, min(int(request.args.get("i") or 0), max(0, len(lineas) - 1))),
+        editable=True,
+        wizard=False,
+        revision_edit=True,
+        centros=db.listar_centros_costo(solo_activos=True),
+        tipos_gasto=db.listar_tipos_gasto(solo_activos=True),
+        tipos_doc=db.TIPOS_DOC,
+        form_action=url_for("fxr.revision_guardar_linea", linea_id=cur["id"]) if cur else None,
+        hist=db.listar_hist(rid, 15),
     )
+
+
+@fxr_bp.route("/linea/<int:linea_id>/revision-guardar", methods=["POST"])
+@login_requerido
+@permiso_modulo("fxr")
+@super_requerido
+def revision_guardar_linea(linea_id):
+    """Super corrige datos en preparada y avisa al dueño."""
+    linea_antes = db.obtener_linea(linea_id)
+    if not linea_antes:
+        abort(404)
+    r = db.obtener_rendicion(linea_antes["rendicion_id"])
+    if not r or r["estado"] != "preparada":
+        flash("Solo se puede editar en revisión (Preparada).", "warning")
+        return redirect(url_for("fxr.revision_cola"))
+    motivo = (request.form.get("motivo_aviso") or "").strip() or "Corrección de datos en revisión"
+    ok, msg, dups = db.guardar_linea(
+        linea_id,
+        {
+            "tipo_doc": request.form.get("tipo_doc"),
+            "n_doc": request.form.get("n_doc"),
+            "fecha_comprobante": request.form.get("fecha_comprobante"),
+            "concepto": request.form.get("concepto"),
+            "tipo_gasto_id": request.form.get("tipo_gasto_id") or None,
+            "centro_costo_id": request.form.get("centro_costo_id") or None,
+            "monto": request.form.get("monto"),
+            "observaciones": request.form.get("observaciones"),
+        },
+        es_super=True,
+    )
+    flash(msg, "warning" if dups else ("success" if ok else "danger"))
+    idx = request.form.get("i") or "0"
+    if ok:
+        linea_desp = db.obtener_linea(linea_id)
+        db.registrar_hist(
+            r["id"],
+            "preparada",
+            "preparada",
+            _email(),
+            f"Editó línea #{linea_id}: {motivo}"[:500],
+        )
+        asunto, cuerpo = avisos.texto_correccion_linea(
+            rid=r["id"],
+            correlativo=r.get("correlativo"),
+            revisor=_email(),
+            antes=linea_antes,
+            despues=linea_desp or {},
+            motivo=motivo,
+        )
+        res = avisos.avisar_dueno_fxr(r["usuario_email"], asunto, cuerpo)
+        if res.get("ok"):
+            flash("Se envió aviso al dueño por correo.", "info")
+        elif not res.get("omitido"):
+            flash(f"Guardado, pero no se pudo enviar correo: {res.get('error')}", "warning")
+    return redirect(url_for("fxr.revision_detalle", rid=r["id"], i=idx))
+
+
+@fxr_bp.route("/linea/<int:linea_id>/revision-quitar", methods=["POST"])
+@login_requerido
+@permiso_modulo("fxr")
+@super_requerido
+def revision_quitar_linea(linea_id):
+    """Super quita boleta → inbox del dueño, con motivo y correo."""
+    linea = db.obtener_linea(linea_id)
+    if not linea:
+        abort(404)
+    rid = int(linea["rendicion_id"])
+    r = db.obtener_rendicion(rid)
+    if not r or r["estado"] != "preparada":
+        flash("Solo se puede quitar en revisión (Preparada).", "warning")
+        return redirect(url_for("fxr.revision_cola"))
+    motivo = (request.form.get("motivo") or "").strip()
+    if not motivo:
+        flash("Indica el motivo para devolver el comprobante al inbox.", "danger")
+        return redirect(url_for("fxr.revision_detalle", rid=rid, i=request.form.get("i") or 0))
+    ok, msg, snap = db.quitar_linea_a_inbox(linea_id, _email(), es_super=True)
+    flash(msg, "success" if ok else "danger")
+    if not ok:
+        return redirect(url_for("fxr.revision_detalle", rid=rid, i=request.form.get("i") or 0))
+
+    db.registrar_hist(
+        rid,
+        "preparada",
+        "preparada",
+        _email(),
+        f"Quitó comprobante #{snap.get('comprobante_id') if snap else '?'} → inbox. Motivo: {motivo}"[:500],
+    )
+    asunto, cuerpo = avisos.texto_quitar_linea(
+        rid=rid,
+        correlativo=r.get("correlativo"),
+        revisor=_email(),
+        linea=snap or {},
+        motivo=motivo,
+    )
+    res = avisos.avisar_dueno_fxr(r["usuario_email"], asunto, cuerpo)
+    if res.get("ok"):
+        flash("Aviso enviado al dueño: comprobante en su inbox.", "info")
+    elif not res.get("omitido"):
+        flash(f"Quitado, pero no se pudo enviar correo: {res.get('error')}", "warning")
+
+    lineas = db.listar_lineas(rid)
+    if not lineas:
+        db.actualizar_rendicion_campos(rid, estado="borrador", preparada_at=None)
+        db.registrar_hist(
+            rid,
+            "preparada",
+            "borrador",
+            _email(),
+            "Sin comprobantes tras quitar el último; vuelve a borrador",
+        )
+        flash("No quedan comprobantes: la rendición volvió a borrador.", "warning")
+        return redirect(url_for("fxr.revision_cola"))
+    idx = int(request.form.get("i") or 0)
+    idx = max(0, min(idx, len(lineas) - 1))
+    return redirect(url_for("fxr.revision_detalle", rid=rid, i=idx))
 
 
 @fxr_bp.route("/linea/<int:linea_id>/autorizar-duplicado", methods=["POST"])
@@ -610,7 +761,17 @@ def rechazar(rid):
         rechazada_por=_email(),
     )
     db.registrar_hist(rid, "preparada", "rechazada", _email(), motivo)
-    flash("Rendición rechazada.", "warning")
+    asunto, cuerpo = avisos.texto_rechazo(
+        rid=rid,
+        correlativo=r.get("correlativo"),
+        revisor=_email(),
+        motivo=motivo,
+    )
+    res = avisos.avisar_dueno_fxr(r["usuario_email"], asunto, cuerpo)
+    if res.get("ok"):
+        flash("Rendición rechazada y dueño notificado por correo.", "warning")
+    else:
+        flash("Rendición rechazada." + ("" if res.get("omitido") else f" Correo: {res.get('error')}"), "warning")
     return redirect(url_for("fxr.revision_cola"))
 
 

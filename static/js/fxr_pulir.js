@@ -13,6 +13,7 @@
 
   let corners = []; // [{x,y}] en coords del bitmap de trabajo
   let dragIdx = -1;
+  let rectDrag = null; // {x0,y0,x1,y1} en coords imagen mientras se arrastra
   let scale = 1;
   let offsetX = 0;
   let offsetY = 0;
@@ -23,6 +24,7 @@
 
   const HANDLE = 14;
   const LETTER = 8.5 / 11;
+  const MIN_SEL = 24; // px mínimos en imagen para aceptar selección
 
   function setStatus(msg) {
     if (statusEl) statusEl.textContent = msg;
@@ -65,11 +67,75 @@
     };
   }
 
+  function cornersFromRect(x0, y0, x1, y1) {
+    const left = Math.min(x0, x1);
+    const right = Math.max(x0, x1);
+    const top = Math.min(y0, y1);
+    const bottom = Math.max(y0, y1);
+    if (right - left < MIN_SEL || bottom - top < MIN_SEL) return null;
+    return [
+      { x: left, y: top },
+      { x: right, y: top },
+      { x: right, y: bottom },
+      { x: left, y: bottom },
+    ];
+  }
+
+  function clearPreview() {
+    outBlob = null;
+    const el = document.getElementById("fxr-out-preview");
+    const ph = document.getElementById("fxr-out-placeholder");
+    if (el) {
+      el.removeAttribute("src");
+      el.style.display = "none";
+    }
+    if (ph) ph.style.display = "block";
+  }
+
+  function resetSeleccion() {
+    corners = [];
+    rectDrag = null;
+    dragIdx = -1;
+    clearPreview();
+    canvas.style.cursor = "crosshair";
+    draw();
+    setStatus("Clic y arrastra sobre la imagen para seleccionar el área del documento.");
+  }
+
   function draw() {
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(work, 0, 0, canvas.width, canvas.height);
-    if (corners.length !== 4) return;
+
+    // Rubber-band mientras se arrastra una selección rectangular
+    if (rectDrag) {
+      const a = toCanvas({ x: rectDrag.x0, y: rectDrag.y0 });
+      const b = toCanvas({ x: rectDrag.x1, y: rectDrag.y1 });
+      const x = Math.min(a.x, b.x);
+      const y = Math.min(a.y, b.y);
+      const w = Math.abs(b.x - a.x);
+      const h = Math.abs(b.y - a.y);
+      ctx.strokeStyle = "#ffe566";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeRect(x, y, w, h);
+      ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(255,229,102,0.15)";
+      ctx.fillRect(x, y, w, h);
+      return;
+    }
+
+    if (corners.length !== 4) {
+      // Hint: sin selección aún
+      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#ffe566";
+      ctx.font = "14px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("Arrastra para seleccionar el área", canvas.width / 2, canvas.height / 2);
+      ctx.textAlign = "start";
+      return;
+    }
     ctx.beginPath();
     const c0 = toCanvas(corners[0]);
     ctx.moveTo(c0.x, c0.y);
@@ -117,41 +183,79 @@
     };
   }
 
-  canvas.addEventListener("mousedown", (e) => {
+  function pointerDown(e) {
     const p = pointerPos(e);
-    dragIdx = hitHandle(p.x, p.y);
+    const hit = corners.length === 4 ? hitHandle(p.x, p.y) : -1;
+    if (hit >= 0) {
+      dragIdx = hit;
+      rectDrag = null;
+      return true;
+    }
+    // Nueva selección rectangular (clic + arrastre)
+    dragIdx = -1;
+    const imgP = toImg(p.x, p.y);
+    rectDrag = { x0: imgP.x, y0: imgP.y, x1: imgP.x, y1: imgP.y };
+    draw();
+    return true;
+  }
+
+  function pointerMove(e) {
+    const p = pointerPos(e);
+    if (dragIdx >= 0) {
+      corners[dragIdx] = toImg(p.x, p.y);
+      draw();
+      return;
+    }
+    if (rectDrag) {
+      const imgP = toImg(p.x, p.y);
+      rectDrag.x1 = imgP.x;
+      rectDrag.y1 = imgP.y;
+      draw();
+    }
+  }
+
+  function pointerUp() {
+    if (rectDrag) {
+      const pts = cornersFromRect(rectDrag.x0, rectDrag.y0, rectDrag.x1, rectDrag.y1);
+      rectDrag = null;
+      if (pts) {
+        corners = pts;
+        setStatus("Área seleccionada. Ajusta esquinas si hace falta o vuelve a arrastrar.");
+      } else if (corners.length !== 4) {
+        setStatus("Selección muy pequeña; arrastra un área mayor.");
+      }
+      draw();
+    }
+    dragIdx = -1;
+  }
+
+  canvas.addEventListener("mousedown", (e) => {
+    pointerDown(e);
   });
   window.addEventListener("mouseup", () => {
-    dragIdx = -1;
+    pointerUp();
   });
   canvas.addEventListener("mousemove", (e) => {
-    if (dragIdx < 0) return;
-    const p = pointerPos(e);
-    corners[dragIdx] = toImg(p.x, p.y);
-    draw();
+    pointerMove(e);
   });
   canvas.addEventListener(
     "touchstart",
     (e) => {
-      const p = pointerPos(e);
-      dragIdx = hitHandle(p.x, p.y);
-      if (dragIdx >= 0) e.preventDefault();
+      if (pointerDown(e)) e.preventDefault();
     },
     { passive: false }
   );
   canvas.addEventListener(
     "touchmove",
     (e) => {
-      if (dragIdx < 0) return;
+      if (dragIdx < 0 && !rectDrag) return;
       e.preventDefault();
-      const p = pointerPos(e);
-      corners[dragIdx] = toImg(p.x, p.y);
-      draw();
+      pointerMove(e);
     },
     { passive: false }
   );
   canvas.addEventListener("touchend", () => {
-    dragIdx = -1;
+    pointerUp();
   });
 
   function cornersToJscanify(pts) {
@@ -228,6 +332,10 @@
   }
 
   function warpDocument() {
+    if (corners.length !== 4) {
+      alert("Selecciona el área del documento (clic y arrastra) o usa Auto detectar.");
+      return null;
+    }
     const { outW, outH } = letterSizeFromCorners(corners);
     const cornerPoints = cornersToJscanify(corners);
 
@@ -361,9 +469,11 @@
 
   function autoDetect(silent) {
     if (!cvReady || !scanner) {
-      if (!silent) setStatus("Detector aún cargando… espera un momento.");
-      corners = defaultCorners(workW(), workH());
-      draw();
+      if (!silent) setStatus("Detector aún cargando… o usa clic+arrastre para seleccionar.");
+      if (!corners.length) {
+        corners = [];
+        draw();
+      }
       return false;
     }
     let mat = null;
@@ -372,17 +482,24 @@
       mat = cv.imread(work);
       contour = scanner.findPaperContour(mat);
       if (!contour) {
-        if (!silent) setStatus("No se detectó el papel; ajusta las esquinas a mano.");
-        corners = defaultCorners(workW(), workH());
-        draw();
+        if (!silent) resetSeleccion();
+        else {
+          corners = [];
+          draw();
+        }
+        if (!silent) setStatus("No se detectó el papel; clic y arrastra para seleccionar el área.");
         return false;
       }
       const cp = scanner.getCornerPoints(contour);
       const pts = jscanifyToCorners(cp);
       if (!pts) {
-        if (!silent) setStatus("Detección incompleta; ajusta las esquinas a mano.");
-        corners = defaultCorners(workW(), workH());
-        draw();
+        if (!silent) {
+          resetSeleccion();
+          setStatus("Detección incompleta; clic y arrastra para seleccionar.");
+        } else {
+          corners = [];
+          draw();
+        }
         return false;
       }
       // Validar área mínima
@@ -391,20 +508,28 @@
       const area =
         (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
       if (area < workW() * workH() * 0.05) {
-        if (!silent) setStatus("Área detectada muy pequeña; ajusta a mano.");
-        corners = defaultCorners(workW(), workH());
-        draw();
+        if (!silent) {
+          resetSeleccion();
+          setStatus("Área detectada muy pequeña; arrastra una selección más amplia.");
+        } else {
+          corners = [];
+          draw();
+        }
         return false;
       }
       corners = pts;
       draw();
-      setStatus("Arrastra las esquinas si hace falta. Usa Girar si la foto está ladeada.");
+      setStatus("Detectado. Arrastra para re-seleccionar o mueve las esquinas. Girar si hace falta.");
       return true;
     } catch (e) {
       console.warn("jscanify detect failed", e);
-      if (!silent) setStatus("Error al detectar; ajusta las esquinas a mano.");
-      corners = defaultCorners(workW(), workH());
-      draw();
+      if (!silent) {
+        resetSeleccion();
+        setStatus("Error al detectar; clic y arrastra para seleccionar.");
+      } else {
+        corners = [];
+        draw();
+      }
       return false;
     } finally {
       if (mat) mat.delete();
@@ -437,19 +562,18 @@
     layout();
     autoDetect(true);
     if (corners.length !== 4) {
-      corners = defaultCorners(workW(), workH());
+      setStatus("Girado. Clic y arrastra para seleccionar el área.");
       draw();
     }
   }
 
   document.getElementById("fxr-preview-btn").addEventListener("click", () => {
-    showPreview(warpDocument());
+    const c = warpDocument();
+    if (c) showPreview(c);
   });
 
   document.getElementById("fxr-reset").addEventListener("click", () => {
-    corners = defaultCorners(workW(), workH());
-    draw();
-    setStatus("Esquinas reiniciadas.");
+    resetSeleccion();
   });
 
   document.getElementById("fxr-detect").addEventListener("click", () => {
@@ -465,6 +589,7 @@
 
   document.getElementById("fxr-aplicar").addEventListener("click", () => {
     const c = warpDocument();
+    if (!c) return;
     c.toBlob(
       (blob) => {
         if (!blob) {
@@ -487,12 +612,14 @@
     if (!imgReady || !cvReady) return;
     scanner = typeof jscanify === "function" ? new jscanify() : null;
     if (!scanner) {
-      setStatus("jscanify no disponible; ajusta esquinas a mano.");
-      corners = defaultCorners(workW(), workH());
-      draw();
+      resetSeleccion();
+      setStatus("Detector no disponible; clic y arrastra para seleccionar el área.");
       return;
     }
     autoDetect(true);
+    if (corners.length !== 4) {
+      setStatus("Clic y arrastra para seleccionar el área del documento.");
+    }
   }
 
   function markCvReady() {
@@ -528,7 +655,7 @@
     work.height = img.naturalHeight;
     workCtx.drawImage(img, 0, 0);
     layout();
-    corners = defaultCorners(workW(), workH());
+    corners = [];
     draw();
     imgReady = true;
     onReady();

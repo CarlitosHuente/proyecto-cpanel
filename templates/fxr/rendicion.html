@@ -38,6 +38,12 @@
       {% if es_super and r.estado == 'preparada' %}
       <a class="btn btn-info" href="{{ url_for('fxr.revision_detalle', rid=r.id) }}">Revisar / aprobar</a>
       {% endif %}
+      {% if puede_retirar %}
+      <form method="post" action="{{ url_for('fxr.retirar_revision', rid=r.id) }}"
+            onsubmit="return confirm('¿Retirar de revisión para corregir? Volverá a borrador.');">
+        <button class="btn btn-outline-warning" type="submit">Retirar y corregir</button>
+      </form>
+      {% endif %}
       {% if r.pdf_url %}
       <a class="btn btn-success" href="{{ r.pdf_url }}" target="_blank">PDF Drive</a>
       {% endif %}
@@ -46,6 +52,20 @@
 
   {% if r.motivo_rechazo %}
   <div class="alert alert-warning">Rechazada: {{ r.motivo_rechazo }}</div>
+  {% endif %}
+  {% if hist %}
+  <div class="alert alert-secondary py-2">
+    <strong class="small">Avisos recientes:</strong>
+    <ul class="mb-0 small mt-1">
+      {% for h in hist[:5] %}
+      <li>
+        {{ h.created_at }} · {{ h.estado_desde or '—' }}→{{ h.estado_hasta }}
+        {% if h.nota %} — {{ h.nota }}{% endif %}
+        <span class="text-muted">({{ h.usuario_email }})</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
   {% endif %}
   {% if faltantes %}
   <div class="alert alert-danger">

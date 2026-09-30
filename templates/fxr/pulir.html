@@ -28,7 +28,7 @@
     <button type="button" class="btn btn-sm btn-outline-light" id="fxr-rotate-ccw" title="Girar 90° izquierda">Girar ⟲</button>
     <button type="button" class="btn btn-sm btn-outline-light" id="fxr-rotate-cw" title="Girar 90° derecha">Girar ⟳</button>
     <button type="button" class="btn btn-sm btn-outline-warning" id="fxr-detect">Auto detectar</button>
-    <button type="button" class="btn btn-sm btn-outline-light" id="fxr-reset">Reset esquinas</button>
+    <button type="button" class="btn btn-sm btn-outline-light" id="fxr-reset" title="Borra la selección y permite arrastrar un área nueva">Reset selección</button>
     <button type="button" class="btn btn-sm btn-outline-info" id="fxr-preview-btn">Vista previa</button>
     <button type="button" class="btn btn-sm btn-success" id="fxr-aplicar">Aplicar y guardar</button>
   </div>
@@ -64,5 +64,5 @@
 {# OpenCV.js async (pin 4.8.0) + jscanify v1.4.0 vendored #}
 <script async src="https://docs.opencv.org/4.8.0/opencv.js"></script>
 <script src="{{ url_for('static', filename='js/vendor/jscanify.js') }}?v=1"></script>
-<script src="{{ url_for('static', filename='js/fxr_pulir.js') }}?v=3"></script>
+<script src="{{ url_for('static', filename='js/fxr_pulir.js') }}?v=4"></script>
 {% endblock %}

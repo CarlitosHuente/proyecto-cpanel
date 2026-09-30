@@ -1,7 +1,9 @@
 <form method="post" {% if form_action %}action="{{ form_action }}"{% endif %}>
   {% if overlay %}<input type="hidden" name="overlay" value="1">{% endif %}
-  {% if wizard %}
+  {% if wizard or revision_edit %}
   <input type="hidden" name="i" value="{{ idx }}">
+  {% endif %}
+  {% if wizard %}
   <input type="hidden" name="accion" id="fxr-form-accion" value="guardar">
   {% endif %}
   <div class="row g-2">
@@ -51,6 +53,13 @@
       <label class="form-label small">Observaciones</label>
       <textarea name="observaciones" rows="2" class="form-control bg-black text-white border-secondary" {% if not editable %}readonly{% endif %}>{{ linea.observaciones or '' }}</textarea>
     </div>
+    {% if revision_edit and editable %}
+    <div class="col-12">
+      <label class="form-label small">Motivo del cambio (correo al dueño)</label>
+      <textarea name="motivo_aviso" rows="2" class="form-control bg-black text-white border-secondary"
+                placeholder="Ej. Monto mal digitado; corregí según boleta"></textarea>
+    </div>
+    {% endif %}
     {% if editable %}
     <div class="col-12 d-flex flex-wrap gap-2 mt-2">
       {% if wizard %}
@@ -62,6 +71,8 @@
       {% endif %}
       <button class="btn btn-outline-light" type="submit"
               onclick="document.getElementById('fxr-form-accion').value='lista'">Guardar y lista</button>
+      {% elif revision_edit %}
+      <button class="btn btn-success" type="submit">Guardar corrección</button>
       {% else %}
       <button class="btn btn-success" type="submit">Guardar</button>
       <button class="btn btn-outline-light" type="submit" name="volver" value="1">Guardar y volver</button>

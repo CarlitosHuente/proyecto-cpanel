@@ -2,7 +2,6 @@
 {% block title %}Revisar rendición #{{ r.id }}{% endblock %}
 {% block content %}
 <style>
-  /* Revisión fullscreen: fondos opacos, imagen grande */
   .fxr-rev-fs {
     position: fixed; inset: 0; z-index: 1040;
     background: #0d0d0d; color: #eee;
@@ -18,11 +17,11 @@
   .fxr-rev-body {
     flex: 1 1 auto;
     display: grid;
-    grid-template-columns: 1fr 320px;
+    grid-template-columns: 1fr minmax(300px, 400px);
     min-height: 0;
   }
   @media (max-width: 900px) {
-    .fxr-rev-body { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+    .fxr-rev-body { grid-template-columns: 1fr; grid-template-rows: minmax(35vh, 1fr) auto; }
   }
   .fxr-rev-viewer {
     background: #000;
@@ -37,6 +36,10 @@
   .fxr-rev-viewer iframe {
     width: 100%; height: calc(100vh - 140px); border: 0; background: #111;
   }
+  @media (max-width: 900px) {
+    .fxr-rev-viewer img { max-height: 38vh; }
+    .fxr-rev-viewer iframe { height: 38vh; }
+  }
   .fxr-rev-side {
     background: #1a1a1a;
     border-left: 1px solid #444;
@@ -45,8 +48,6 @@
     color: #eee;
   }
   .fxr-rev-side h6 { color: #ffe566; margin-bottom: .5rem; }
-  .fxr-rev-side .meta-row { margin-bottom: .35rem; font-size: .92rem; }
-  .fxr-rev-side .label { color: #aaa; display: inline-block; min-width: 5.5rem; }
   .fxr-rev-nav {
     flex: 0 0 auto;
     background: #1a1a1a;
@@ -65,9 +66,6 @@
   .fxr-rev-chips a.active { background: #ffe566; color: #111; border-color: #ffe566; font-weight: 600; }
 </style>
 
-{% set n = lineas|length %}
-{% set cur = lineas[idx] if n else none %}
-
 <div class="fxr-rev-fs">
   <div class="fxr-rev-top">
     <div class="d-flex flex-wrap align-items-center gap-2">
@@ -75,6 +73,7 @@
       <strong class="text-warning">{{ r.nombre_snapshot }}</strong>
       <span class="text-white">{{ r.total|dinero }}</span>
       <span class="badge bg-secondary">{{ r.estado }}</span>
+      <span class="small text-muted">{{ r.usuario_email }}</span>
       {% if n %}<span class="small text-muted">{{ idx + 1 }} / {{ n }}</span>{% endif %}
     </div>
     <div class="d-flex flex-wrap gap-2 align-items-center">
@@ -90,7 +89,7 @@
   </div>
 
   {% if dups_bloquean %}
-  <div class="alert alert-danger mb-0 rounded-0 py-2 px-3">Duplicados sin autorizar: {{ dups_bloquean|length }}. Autoriza en el panel derecho.</div>
+  <div class="alert alert-danger mb-0 rounded-0 py-2 px-3">Duplicados sin autorizar: {{ dups_bloquean|length }}. Autoriza abajo o corrige el N° doc.</div>
   {% endif %}
 
   <div class="fxr-rev-body">
@@ -108,17 +107,11 @@
 
     <aside class="fxr-rev-side">
       {% if cur %}
-      <h6>Datos del comprobante</h6>
-      <div class="meta-row"><span class="label">Concepto</span> <strong>{{ cur.concepto or '—' }}</strong></div>
-      <div class="meta-row"><span class="label">Tipo / N°</span> {{ cur.tipo_doc }} {{ cur.n_doc or '—' }}</div>
-      <div class="meta-row"><span class="label">Fecha</span> {{ cur.fecha_comprobante or '—' }}</div>
-      <div class="meta-row"><span class="label">Monto</span> <strong>{{ cur.monto|dinero }}</strong></div>
-      <div class="meta-row"><span class="label">T. gasto</span> {{ cur.tipo_gasto_nombre or '—' }}</div>
-      <div class="meta-row"><span class="label">C. costo</span> {{ cur.centro_costo_nombre or '—' }}</div>
-      {% if cur.observaciones %}
-      <div class="meta-row"><span class="label">Obs.</span> {{ cur.observaciones }}</div>
-      {% endif %}
-      <div class="d-flex flex-wrap gap-2 mt-3">
+      <h6>Editar / corregir</h6>
+      <p class="small text-muted mb-2">Puedes corregir datos o devolver el comprobante al inbox del usuario (con motivo; se envía correo).</p>
+      {% include "fxr/_form_linea.html" %}
+
+      <div class="d-flex flex-wrap gap-2 mt-2">
         {% if cur.duplicado_n_doc and not cur.duplicado_autorizado %}
         <form method="post" action="{{ url_for('fxr.autorizar_dup', linea_id=cur.id) }}">
           <input type="hidden" name="i" value="{{ idx }}">
@@ -127,8 +120,17 @@
         {% elif cur.duplicado_n_doc %}
         <span class="badge bg-warning text-dark">Dup OK</span>
         {% endif %}
-        <a class="btn btn-sm btn-outline-info" href="{{ url_for('fxr.editar_linea', linea_id=cur.id) }}" target="_blank">Detalle</a>
       </div>
+
+      <hr class="border-secondary">
+      <h6 class="text-danger">Quitar → inbox</h6>
+      <form method="post" action="{{ url_for('fxr.revision_quitar_linea', linea_id=cur.id) }}"
+            onsubmit="return confirm('¿Devolver este comprobante al inbox del usuario?');">
+        <input type="hidden" name="i" value="{{ idx }}">
+        <textarea name="motivo" rows="2" class="form-control form-control-sm bg-black text-white border-secondary mb-2"
+                  placeholder="Motivo (obligatorio, se envía al usuario)" required></textarea>
+        <button class="btn btn-sm btn-outline-danger" type="submit">Quitar comprobante</button>
+      </form>
       {% endif %}
 
       <hr class="border-secondary">
@@ -156,6 +158,20 @@
         {% endfor %}
       </ul>
       {% endif %}
+
+      {% if hist %}
+      <hr class="border-secondary">
+      <h6>Historial</h6>
+      <ul class="small ps-3 mb-0">
+        {% for h in hist[:8] %}
+        <li class="mb-1">
+          <span class="text-muted">{{ h.created_at }}</span>
+          · {{ h.estado_desde or '—' }}→{{ h.estado_hasta }}
+          {% if h.nota %}<br><em>{{ h.nota }}</em>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
     </aside>
   </div>
 
@@ -178,7 +194,7 @@
   var idx = {{ idx }};
   var n = {{ n }};
   document.addEventListener('keydown', function (e) {
-    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) return;
     if (e.key === 'ArrowLeft' && idx > 0) {
       window.location = '/fxr/revision/' + rid + '?i=' + (idx - 1);
     } else if (e.key === 'ArrowRight' && idx < n - 1) {
