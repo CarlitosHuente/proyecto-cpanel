@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Huentelauquen</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #f4f7f5; color: #1f2933; }
+    .caja { max-width: 440px; margin: 1.5rem auto; }
+    .marca { background: #1b4332; color: #fff; border-radius: 16px 16px 0 0; padding: 1.25rem 1.25rem .9rem; }
+    .marca small { letter-spacing: .08em; text-transform: uppercase; color: #b7e4c7; }
+    .cuerpo { background: #fff; border: 1px solid #d8e2dc; border-top: 0; border-radius: 0 0 16px 16px; padding: 1.25rem; }
+    .btn-huente { background: #1b4332; color: #fff; }
+    .btn-huente:hover { background: #2d6a4f; color: #fff; }
+    input.form-control { font-size: 1.05rem; padding: .7rem .8rem; }
+    .legal-caja { margin: .25rem 0 .4rem 1.6rem; font-size: .92rem; }
+    .legal-caja summary { color: #1b4332; cursor: pointer; }
+    .legal { max-height: 45vh; overflow: auto; margin-top: .4rem; padding: .65rem .75rem; background: #f8faf8; border: 1px solid #d8e2dc; border-radius: 8px; }
+    .legal img { max-width: 100%; height: auto; }
+  </style>
+</head>
+<body>
+  <div class="caja">
+    <div class="marca">
+      <small>Huentelauquen</small>
+      <h1 class="h4 mb-0 mt-1">Fidelización</h1>
+    </div>
+    <div class="cuerpo">
+      {% if error %}
+      <div class="alert alert-warning">{{ error }}</div>
+      {% endif %}
+
+      {% if vista == 'elegir' or vista == 'crear' or vista == 'recuperar' %}
+        {% if vista == 'elegir' %}
+        <p>Acercaste el teléfono. Si es tu primera vez, crea tu cuenta. Si ya estás registrado, entra con tu RUT y el código que te entreguen en el local.</p>
+        <div class="d-grid gap-2">
+          <button class="btn btn-huente btn-lg" type="button" onclick="mostrar('crear')">Crear cuenta</button>
+          <button class="btn btn-outline-dark btn-lg" type="button" onclick="mostrar('recuperar')">Ya tengo cuenta</button>
+        </div>
+        {% endif %}
+
+        <form id="form-crear" method="post" action="{{ url_for('fideliza.publico_cuenta', token=tag.token) }}" class="{{ '' if vista == 'crear' else 'd-none' }}">
+          <h2 class="h5">Crear cuenta</h2>
+          <label class="form-label mt-2">Nombre</label>
+          <input class="form-control" name="nombre" required maxlength="120" value="{{ form.get('nombre', '') if form else '' }}">
+          <label class="form-label mt-2">RUT</label>
+          <input class="form-control" name="rut" required inputmode="text" autocomplete="off" placeholder="12.345.678-9" value="{{ form.get('rut', '') if form else '' }}">
+          <label class="form-label mt-2">Correo</label>
+          <input class="form-control" type="email" name="correo" required maxlength="180" value="{{ form.get('correo', '') if form else '' }}">
+          <div class="form-check mt-3">
+            <input class="form-check-input" type="checkbox" name="acepta_puntos" value="1" id="acepta-puntos" required {% if form and form.get('acepta_puntos') == '1' %}checked{% endif %}>
+            <label class="form-check-label" for="acepta-puntos">{{ legales.etiqueta_puntos }}</label>
+          </div>
+          <details class="legal-caja">
+            <summary>Leer las bases del programa de puntos</summary>
+            <div class="legal">{{ legales.bases_puntos|safe }}</div>
+          </details>
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" name="acepta_publicidad" value="1" id="acepta-publicidad" required {% if form and form.get('acepta_publicidad') == '1' %}checked{% endif %}>
+            <label class="form-check-label" for="acepta-publicidad">{{ legales.etiqueta_conf }}</label>
+          </div>
+          <details class="legal-caja">
+            <summary>Leer confidencialidad y correos publicitarios</summary>
+            <div class="legal">{{ legales.bases_conf|safe }}</div>
+          </details>
+          <button class="btn btn-huente w-100 mt-3" type="submit">Registrarme</button>
+          {% if vista == 'elegir' %}
+          <button class="btn btn-link w-100" type="button" onclick="mostrar('elegir')">Volver</button>
+          {% endif %}
+        </form>
+
+        <form id="form-recuperar" method="post" action="{{ url_for('fideliza.publico_recuperar', token=tag.token) }}" class="{{ '' if vista == 'recuperar' else 'd-none' }}">
+          <h2 class="h5">Ya tengo cuenta</h2>
+          <p class="text-secondary small">Pide en el local el código de recuperación. Lo entregan después de revisar tu carnet.</p>
+          <label class="form-label">RUT</label>
+          <input class="form-control" name="rut" required value="{{ form.get('rut', '') if form else '' }}">
+          <label class="form-label mt-2">Código</label>
+          <input class="form-control" name="codigo" required inputmode="numeric" autocomplete="one-time-code" maxlength="8">
+          <button class="btn btn-huente w-100 mt-3" type="submit">Validar</button>
+          {% if vista == 'elegir' %}
+          <button class="btn btn-link w-100" type="button" onclick="mostrar('elegir')">Volver</button>
+          {% endif %}
+        </form>
+      {% elif vista == 'bienvenida' %}
+        <h2 class="h4">Bienvenido al Mundo Huentelauquen.</h2>
+        <p class="mb-0">{{ cliente.nombre }}, tu cuenta quedó lista. Cuando termines la compra, acerca de nuevo el teléfono para sumar puntos.</p>
+      {% elif vista == 'cargando' %}
+        <h2 class="h4" id="titulo">Cargando…</h2>
+        <p id="texto">{{ cliente.nombre }}, espera un momento. La cajera está registrando tu compra.</p>
+        <div id="resultado" class="d-none">
+          <p class="mb-1">Puntos actualizados.</p>
+          <p class="display-6 mb-1" id="saldo"></p>
+          <p class="text-secondary" id="detalle"></p>
+          <ul class="list-unstyled mb-0" id="premios"></ul>
+        </div>
+      {% elif vista == 'en_hora' %}
+        <h2 class="h5">Puntos al día</h2>
+        <p>{{ cliente.nombre }}, tu saldo es <strong>{{ cliente.saldo }}</strong> puntos.</p>
+        <p>Puedes volver a sumar desde las {{ hasta.strftime('%H:%M') }}.</p>
+        {% if premios %}
+        <ul class="list-unstyled mb-0">
+          {% for premio in premios %}
+          <li>
+            {% if premio.listo %}Ya puedes canjear {{ premio.nombre }}.
+            {% else %}Para {{ premio.nombre }} te faltan {{ premio.faltan }} puntos.
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+  {% if vista == 'elegir' %}
+  <script>
+    function mostrar(cual) {
+      document.getElementById("form-crear").classList.toggle("d-none", cual !== "crear");
+      document.getElementById("form-recuperar").classList.toggle("d-none", cual !== "recuperar");
+    }
+  </script>
+  {% elif vista == 'cargando' %}
+  <script>
+    const url = {{ url_for('fideliza.publico_estado', espera_token=espera.token)|tojson }};
+    async function mirar() {
+      try {
+        const r = await fetch(url, { cache: "no-store" });
+        if (!r.ok) return;
+        const d = await r.json();
+        if (d.estado === "acreditada") {
+          document.getElementById("titulo").textContent = "Puntos actualizados";
+          document.getElementById("texto").classList.add("d-none");
+          document.getElementById("resultado").classList.remove("d-none");
+          document.getElementById("saldo").textContent = d.saldo + " puntos";
+          document.getElementById("detalle").textContent = "Se sumaron " + d.puntos + " (" + d.detalle + ").";
+          const ul = document.getElementById("premios");
+          ul.replaceChildren();
+          (d.premios || []).forEach(function (p) {
+            const li = document.createElement("li");
+            li.textContent = p.listo
+              ? "Ya puedes canjear " + p.nombre + "."
+              : "Para " + p.nombre + " te faltan " + p.faltan + " puntos.";
+            ul.appendChild(li);
+          });
+          return;
+        }
+        if (d.estado === "cancelada" || d.estado === "expirada") {
+          document.getElementById("titulo").textContent = "Listo por ahora";
+          document.getElementById("texto").textContent = "Este turno ya no está en espera. Si vas a comprar, acerca de nuevo el teléfono.";
+          return;
+        }
+        setTimeout(mirar, 2000);
+      } catch (e) {
+        setTimeout(mirar, 3000);
+      }
+    }
+    mirar();
+  </script>
+  {% endif %}
+</body>
+</html>

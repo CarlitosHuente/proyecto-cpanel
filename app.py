@@ -28,6 +28,7 @@ from routes.fabrica_papaya_routes import fabrica_papaya_bp
 from routes.drive_prueba_routes import drive_prueba_bp
 from routes.fxr_routes import fxr_bp
 from routes.reporteria_routes import reporteria_bp
+from routes.fideliza_routes import fideliza_bp
 import os
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -84,6 +85,7 @@ app.register_blueprint(fabrica_papaya_bp)
 app.register_blueprint(drive_prueba_bp)
 app.register_blueprint(fxr_bp)
 app.register_blueprint(reporteria_bp)
+app.register_blueprint(fideliza_bp)
 
 
 

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}{{ cliente.nombre }} — Fidelización{% endblock %}
+{% block content %}
+<div class="container-fluid mt-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="text-info mb-0">{{ cliente.nombre }}</h2>
+    <a class="btn btn-outline-light btn-sm" href="{{ url_for('fideliza.clientes') }}">Volver</a>
+  </div>
+  <div class="row g-3">
+    <div class="col-lg-4">
+      <div class="card bg-dark border-secondary mb-3">
+        <div class="card-body">
+          <p class="mb-1">RUT {{ rut_mostrar(cliente.rut) }}</p>
+          <p class="mb-1">Saldo <strong>{{ cliente.saldo }}</strong> puntos</p>
+          <form method="post" action="{{ url_for('fideliza.ficha_datos', cliente_id=cliente.id) }}">
+            <label class="form-label">Nombre</label>
+            <input class="form-control mb-2" name="nombre" value="{{ cliente.nombre }}" required>
+            <label class="form-label">Correo</label>
+            <input class="form-control mb-2" type="email" name="correo" value="{{ cliente.correo }}" required>
+            <button class="btn btn-outline-light btn-sm" type="submit">Guardar datos</button>
+          </form>
+        </div>
+      </div>
+      <div class="card bg-dark border-secondary mb-3">
+        <div class="card-body">
+          <h3 class="h6">Código de recuperación</h3>
+          <p class="small text-secondary">Se entrega en el local, con el carnet a la vista. Dura {{ codigo_minutos }} minutos y sirve una vez.</p>
+          <form method="post" action="{{ url_for('fideliza.ficha_codigo', cliente_id=cliente.id) }}">
+            <button class="btn btn-warning btn-sm" type="submit">Generar código</button>
+          </form>
+        </div>
+      </div>
+      {% if premios %}
+      <div class="card bg-dark border-secondary">
+        <div class="card-body">
+          <h3 class="h6">Canjear</h3>
+          {% for premio in premios %}
+          <form class="mb-2" method="post" action="{{ url_for('fideliza.ficha_canjear', cliente_id=cliente.id) }}">
+            <input type="hidden" name="premio_id" value="{{ premio.id }}">
+            <button class="btn btn-outline-warning btn-sm" type="submit" {% if cliente.saldo < premio.puntos %}disabled{% endif %}>
+              {{ premio.nombre }} ({{ premio.puntos }} puntos)
+            </button>
+          </form>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    <div class="col-lg-8">
+      <div class="mb-2">
+        <a class="btn btn-sm {{ 'btn-success' if not tipo else 'btn-outline-light' }}" href="{{ url_for('fideliza.ficha', cliente_id=cliente.id) }}">Todos</a>
+        <a class="btn btn-sm {{ 'btn-success' if tipo == 'acumulacion' else 'btn-outline-light' }}" href="{{ url_for('fideliza.ficha', cliente_id=cliente.id, tipo='acumulacion') }}">Acumulaciones</a>
+        <a class="btn btn-sm {{ 'btn-success' if tipo == 'canje' else 'btn-outline-light' }}" href="{{ url_for('fideliza.ficha', cliente_id=cliente.id, tipo='canje') }}">Canjes</a>
+        <a class="btn btn-sm {{ 'btn-success' if tipo == 'anulacion' else 'btn-outline-light' }}" href="{{ url_for('fideliza.ficha', cliente_id=cliente.id, tipo='anulacion') }}">Anulaciones</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-dark table-sm align-middle">
+          <thead>
+            <tr>
+              <th>Fecha</th><th>Tipo</th><th>Detalle</th><th>Puntos</th><th>Saldo</th><th>Quién</th><th>Correo</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in movimientos %}
+            <tr>
+              <td>{{ m.creado_at.strftime('%d/%m/%Y %H:%M') }}</td>
+              <td>{{ m.tipo }}</td>
+              <td>{{ m.detalle }}</td>
+              <td>{{ m.puntos }}</td>
+              <td>{{ m.saldo_despues }}</td>
+              <td>{{ m.usuario or '—' }}</td>
+              <td>
+                {% if m.correo_ok %}Enviado
+                {% else %}No enviado{% if m.correo_error %}: {{ m.correo_error }}{% endif %}
+                <form method="post" action="{{ url_for('fideliza.ficha_reenviar', cliente_id=cliente.id) }}" class="d-inline">
+                  <input type="hidden" name="mov_id" value="{{ m.id }}">
+                  <button class="btn btn-link btn-sm p-0" type="submit">Reenviar</button>
+                </form>
+                {% endif %}
+              </td>
+              <td>
+                {% if m.tipo in ('acumulacion', 'canje') and not m.ya_anulado %}
+                <form method="post" action="{{ url_for('fideliza.ficha_anular', cliente_id=cliente.id) }}">
+                  <input type="hidden" name="mov_id" value="{{ m.id }}">
+                  <button class="btn btn-outline-danger btn-sm" type="submit">Anular</button>
+                </form>
+                {% elif m.ya_anulado %}
+                <span class="text-secondary">Anulado</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="8" class="text-secondary">Sin movimientos.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

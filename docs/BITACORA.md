@@ -8,6 +8,40 @@ Al cerrar un cambio relevante: entrada breve aquí + actualizar diccionario si c
 
 ---
 
+## 2026-10-19 — Fidelización: el editor ya deja escribir
+
+- El cuadro de bases y correo acepta texto al abrirlo con Editar.
+
+## 2026-10-19 — Fidelización: editor contraído e imágenes movibles
+
+- Las bases y el correo parten contraídos; se abren con Editar.
+- La imagen se ve en el texto, se arrastra, se alinea y se cambia de tamaño.
+
+## 2026-10-19 — Fidelización: bases legales y diseño del correo
+
+- En configuración se editan las dos bases (programa de puntos, y confidencialidad con correos publicitarios) y la frase de cada casilla.
+- El correo al cliente se puede armar con imagen, enlace, botón, columnas, tabla y salto de página. Si no se guarda un diseño, sigue el correo automático.
+
+## 2026-10-19 — Fidelización: Excel y aceptaciones
+
+- El administrador descarga clientes y movimientos en Excel.
+- Crear cuenta exige aceptar las bases de puntos y las de confidencialidad con correos publicitarios.
+- Al acreditar puntos se envía el correo si la casilla SMTP está configurada.
+
+## 2026-10-19 — Fidelización: nueva sucursal
+
+- Desde Premios y stickers se puede agregar otra sucursal. La cuenta del cliente es la misma en todos los locales.
+
+## 2026-10-19 — Fidelización: cartel por sucursal
+
+- El cartel se crea eligiendo una de las sucursales. En la caja de ese local se ve qué usuario de la sesión sumó los puntos.
+
+## 2026-10-19 — Fidelización NFC
+
+- Módulo nuevo: sticker abre una página, la cajera suma puntos (botones 8, 12 y 16) y el cliente recibe correo con saldo y premios.
+- Permiso padre `fideliza` para el módulo completo. `fideliza.vender` es la caja; se asigna a mano en Accesos.
+- Recuperación con RUT + código de un uso. Una espera a la vez y una suma por hora, contada por RUT.
+
 ## 2026-09-30 — FxR: corrección en revisión + selección arrastre
 
 - Dueño: botón «Retirar y corregir» si está Preparada (vuelve a borrador).

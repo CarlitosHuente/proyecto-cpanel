@@ -276,6 +276,27 @@
         </a>
         {% endif %}
 
+        {% if tiene_seccion(rol_actual, 'fideliza') %}
+          {% if tiene_permiso(rol_actual, 'fideliza') %}
+          <div class="dropdown">
+            <a class="dropdown-toggle d-block px-3 py-2 text-white" href="#" role="button" id="fidelizaDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+              <span class="texto-menu">Fidelización</span>
+            </a>
+            <ul class="dropdown-menu bg-dark border-0" aria-labelledby="fidelizaDropdown">
+              {% if tiene_permiso(rol_actual, 'fideliza.vender') %}
+              <li><a class="dropdown-item text-white" href="{{ url_for('fideliza.caja') }}">Caja</a></li>
+              {% endif %}
+              <li><a class="dropdown-item text-white" href="{{ url_for('fideliza.clientes') }}">Clientes</a></li>
+              <li><a class="dropdown-item text-white" href="{{ url_for('fideliza.config') }}">Premios y stickers</a></li>
+            </ul>
+          </div>
+          {% elif tiene_permiso(rol_actual, 'fideliza.vender') %}
+          <a href="{{ url_for('fideliza.caja') }}">
+            <span class="texto-menu">Fidelización</span>
+          </a>
+          {% endif %}
+        {% endif %}
+
         {% if tiene_permiso(session.get('rol'), 'despacho_web') %}
         <a href="{{ url_for('despacho_web.index') }}">
             <span class="texto-menu">DespachoWeb</span>

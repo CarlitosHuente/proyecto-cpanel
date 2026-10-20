@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Fidelización — Caja{% endblock %}
+{% block content %}
+<div class="container-fluid mt-3">
+  {% if not tag %}
+  <h2 class="text-info">Elige la sucursal</h2>
+  <p class="text-secondary">Cada local tiene su cartel. Al entrar ves solo a quien acercó el teléfono ahí, y quién de la sesión sumó los puntos.</p>
+  <div class="d-flex flex-wrap gap-2">
+    {% for local in locales %}
+      {% if local.tag and local.tag.activo %}
+      <a class="btn btn-success" href="{{ url_for('fideliza.caja', tag=local.tag.id) }}">{{ local.nombre_sucursal }}</a>
+      {% else %}
+      <span class="btn btn-outline-secondary disabled">{{ local.nombre_sucursal }} · sin cartel</span>
+      {% endif %}
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+      <h2 class="text-info mb-0">{{ tag.nombre }}</h2>
+      <div class="text-secondary">Los puntos los registra <strong class="text-white">{{ quien }}</strong></div>
+    </div>
+    <div class="d-flex gap-2">
+      {% if tiene_permiso(session.get('rol'), 'fideliza') %}
+      <a class="btn btn-outline-light btn-sm" href="{{ url_for('fideliza.exportar_movimientos_xlsx', tag=tag.id) }}">Exportar movimientos</a>
+      {% endif %}
+      <a class="btn btn-outline-light btn-sm" href="{{ url_for('fideliza.caja') }}?tag=">Otra sucursal</a>
+    </div>
+  </div>
+  <div class="row g-3">
+    <div class="col-lg-7">
+      <div class="list-group" id="cola"></div>
+    </div>
+    <div class="col-lg-5">
+      <div class="card bg-dark border-secondary" id="panel" hidden>
+        <div class="card-body">
+          <h3 class="h5" id="panel-nombre"></h3>
+          <p class="mb-1 text-secondary" id="panel-correo"></p>
+          <p>Puntos acumulados: <strong id="panel-saldo"></strong></p>
+          <form method="post" action="{{ url_for('fideliza.caja_acreditar') }}" class="d-flex flex-wrap gap-2 mb-3">
+            <input type="hidden" name="tag_id" value="{{ tag.id }}">
+            <input type="hidden" name="espera_id" id="espera_id">
+            {% for op in opciones %}
+            <button class="btn btn-success btn-lg" name="opcion_id" value="{{ op.id }}" type="submit">
+              {{ op.etiqueta }}<br><small>{{ op.puntos }} {{ 'punto' if op.puntos == 1 else 'puntos' }}</small>
+            </button>
+            {% endfor %}
+          </form>
+          <div id="canjes" class="d-flex flex-wrap gap-2 mb-3"></div>
+          <form method="post" action="{{ url_for('fideliza.caja_quitar') }}">
+            <input type="hidden" name="tag_id" value="{{ tag.id }}">
+            <input type="hidden" name="espera_id" id="quitar_id">
+            <button class="btn btn-outline-secondary btn-sm" type="submit">Quitar de la lista</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  <h3 class="h5 mt-4">Quién sumó puntos en {{ tag.nombre }}</h3>
+  <div class="table-responsive">
+    <table class="table table-dark table-sm">
+      <thead><tr><th>Fecha</th><th>Cliente</th><th>Detalle</th><th>Puntos</th><th>Usuario de la sesión</th></tr></thead>
+      <tbody>
+        {% for m in movimientos %}
+        <tr>
+          <td>{{ m.creado_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>{{ m.cliente }}</td>
+          <td>{{ m.detalle }}</td>
+          <td>{{ m.puntos }}</td>
+          <td>{{ m.usuario_nombre }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-secondary">Todavía no hay movimientos en esta sucursal.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% if tag %}
+<script>
+  const colaUrl = {{ url_for('fideliza.caja_cola', tag=tag.id)|tojson }};
+  const canjeUrl = {{ url_for('fideliza.caja_canjear')|tojson }};
+  const premios = {{ premios|tojson }};
+  let elegido = null;
+
+  function pintar(filas) {
+    const caja = document.getElementById("cola");
+    caja.replaceChildren();
+    document.getElementById("caja-vacio").textContent = filas.length ? "" : "Esperando un teléfono…";
+    filas.forEach(function (fila) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "list-group-item list-group-item-action bg-dark text-white border-secondary text-start";
+      if (elegido && elegido.id === fila.id) btn.classList.add("active");
+      btn.innerHTML = "";
+      const fuerte = document.createElement("strong");
+      fuerte.textContent = fila.nombre;
+      const extra = document.createElement("div");
+      extra.className = "small";
+      extra.textContent = fila.correo + " · " + fila.saldo + " puntos · desde " + fila.desde;
+      btn.append(fuerte, extra);
+      btn.addEventListener("click", function () { elegir(fila); pintar(filas); });
+      caja.appendChild(btn);
+    });
+    if (elegido && !filas.some(function (f) { return f.id === elegido.id; })) {
+      elegido = null;
+      document.getElementById("panel").hidden = true;
+    } else if (elegido) {
+      const viva = filas.find(function (f) { return f.id === elegido.id; });
+      if (viva) elegir(viva);
+    }
+  }
+
+  function elegir(fila) {
+    elegido = fila;
+    document.getElementById("panel").hidden = false;
+    document.getElementById("panel-nombre").textContent = fila.nombre;
+    document.getElementById("panel-correo").textContent = fila.correo;
+    document.getElementById("panel-saldo").textContent = String(fila.saldo);
+    document.getElementById("espera_id").value = fila.id;
+    document.getElementById("quitar_id").value = fila.id;
+    const box = document.getElementById("canjes");
+    box.replaceChildren();
+    premios.forEach(function (premio) {
+      if (fila.saldo < premio.puntos) return;
+      const form = document.createElement("form");
+      form.method = "post";
+      form.action = canjeUrl;
+      const sucursal = document.createElement("input");
+      sucursal.type = "hidden";
+      sucursal.name = "tag_id";
+      sucursal.value = {{ tag.id }};
+      const cliente = document.createElement("input");
+      cliente.type = "hidden";
+      cliente.name = "cliente_id";
+      cliente.value = fila.cliente_id;
+      const idp = document.createElement("input");
+      idp.type = "hidden";
+      idp.name = "premio_id";
+      idp.value = premio.id;
+      const boton = document.createElement("button");
+      boton.className = "btn btn-warning";
+      boton.type = "submit";
+      boton.textContent = "Canjear " + premio.nombre;
+      form.append(sucursal, cliente, idp, boton);
+      box.appendChild(form);
+    });
+  }
+
+  async function cargar() {
+    try {
+      const r = await fetch(colaUrl, { cache: "no-store" });
+      if (!r.ok) return;
+      const data = await r.json();
+      pintar(data.espera || []);
+    } catch (e) {}
+  }
+  cargar();
+  setInterval(cargar, 3000);
+</script>
+{% endif %}
+{% endblock %}

@@ -717,3 +717,162 @@ ALTER TABLE reporteria_reportes ADD COLUMN periodo_anio INT NULL;
 -- ALTER TABLE reporteria_reportes DROP COLUMN periodo_num;
 -- ALTER TABLE reporteria_reportes DROP COLUMN periodo_anio;
 
+
+-- [2026-10-19] [IA] [Fidelización]
+-- Motivo: cuentas, espera de caja, puntos, canjes y códigos de recuperación.
+-- Entorno probado: local (las tablas también se crean al abrir el módulo si no existen).
+-- SQL:
+
+CREATE TABLE IF NOT EXISTS fideliza_tag (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    token VARCHAR(80) NOT NULL,
+    nombre VARCHAR(80) NOT NULL,
+    activo TINYINT NOT NULL DEFAULT 1,
+    creado_at DATETIME NOT NULL,
+    UNIQUE KEY uq_fid_tag_token (token)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fideliza_cliente (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(120) NOT NULL,
+    rut VARCHAR(12) NOT NULL,
+    correo VARCHAR(180) NOT NULL,
+    saldo INT NOT NULL DEFAULT 0,
+    cookie_token VARCHAR(80) NOT NULL,
+    ultima_acreditacion_at DATETIME NULL,
+    creado_at DATETIME NOT NULL,
+    UNIQUE KEY uq_fid_cliente_rut (rut),
+    UNIQUE KEY uq_fid_cliente_correo (correo),
+    UNIQUE KEY uq_fid_cliente_cookie (cookie_token)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fideliza_espera (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    cliente_id INT NOT NULL,
+    tag_id INT NOT NULL,
+    token VARCHAR(80) NOT NULL,
+    estado VARCHAR(20) NOT NULL,
+    creado_at DATETIME NOT NULL,
+    cerrado_at DATETIME NULL,
+    UNIQUE KEY uq_fid_espera_token (token),
+    KEY idx_fid_espera_estado (estado, creado_at),
+    KEY idx_fid_espera_cliente (cliente_id, estado),
+    CONSTRAINT fk_fid_espera_cliente FOREIGN KEY (cliente_id) REFERENCES fideliza_cliente(id),
+    CONSTRAINT fk_fid_espera_tag FOREIGN KEY (tag_id) REFERENCES fideliza_tag(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fideliza_movimiento (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    cliente_id INT NOT NULL,
+    espera_id INT NULL,
+    tipo VARCHAR(20) NOT NULL,
+    detalle VARCHAR(180) NOT NULL,
+    puntos INT NOT NULL,
+    saldo_despues INT NOT NULL,
+    usuario VARCHAR(120) NULL,
+    correo_ok TINYINT NOT NULL DEFAULT 0,
+    correo_error VARCHAR(255) NULL,
+    anula_movimiento_id INT NULL,
+    creado_at DATETIME NOT NULL,
+    KEY idx_fid_mov_cliente (cliente_id, creado_at),
+    KEY idx_fid_mov_anula (anula_movimiento_id),
+    CONSTRAINT fk_fid_mov_cliente FOREIGN KEY (cliente_id) REFERENCES fideliza_cliente(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fideliza_opcion (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    etiqueta VARCHAR(40) NOT NULL,
+    puntos INT NOT NULL,
+    orden INT NOT NULL DEFAULT 0,
+    activo TINYINT NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fideliza_premio (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(120) NOT NULL,
+    puntos INT NOT NULL,
+    orden INT NOT NULL DEFAULT 0,
+    activo TINYINT NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fideliza_config (
+    id INT NOT NULL PRIMARY KEY,
+    minutos_entre_puntos INT NOT NULL DEFAULT 60
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fideliza_codigo (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    cliente_id INT NOT NULL,
+    codigo VARCHAR(12) NOT NULL,
+    vence_at DATETIME NOT NULL,
+    usado_at DATETIME NULL,
+    creado_por VARCHAR(120) NULL,
+    creado_at DATETIME NOT NULL,
+    KEY idx_fid_codigo_cliente (cliente_id, usado_at),
+    CONSTRAINT fk_fid_codigo_cliente FOREIGN KEY (cliente_id) REFERENCES fideliza_cliente(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fideliza_recup_intento (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    rut VARCHAR(12) NOT NULL,
+    creado_at DATETIME NOT NULL,
+    KEY idx_fid_intento_rut (rut, creado_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- [2026-10-19] [IA] [Fidelización — sucursal en el cartel y en el movimiento]
+-- Motivo: un cartel por sucursal y saber qué usuario de sesión sumó los puntos.
+-- SQL: omitir cada ALTER si la columna o el índice ya existen (la app también los agrega).
+
+ALTER TABLE fideliza_tag ADD COLUMN sucursal_id INT NULL;
+ALTER TABLE fideliza_tag ADD UNIQUE KEY uq_fid_tag_sucursal (sucursal_id);
+ALTER TABLE fideliza_movimiento ADD COLUMN tag_id INT NULL;
+
+-- [2026-10-19] [IA] [Fidelización — aceptaciones al crear cuenta]
+-- Motivo: guardar las dos aceptaciones (bases de puntos, y confidencialidad con correos publicitarios).
+-- SQL: omitir cada ALTER si la columna ya existe.
+
+ALTER TABLE fideliza_cliente ADD COLUMN acepta_puntos TINYINT NOT NULL DEFAULT 0;
+ALTER TABLE fideliza_cliente ADD COLUMN acepta_publicidad TINYINT NOT NULL DEFAULT 0;
+ALTER TABLE fideliza_cliente ADD COLUMN acepta_at DATETIME NULL;
+
+-- [2026-10-19] [IA] [Fidelización — bases legales y diseño del correo]
+-- Motivo: guardar los dos textos legales y el HTML del correo al cliente.
+-- SQL: omitir cada ALTER si la columna ya existe (la app también las agrega).
+
+ALTER TABLE fideliza_config ADD COLUMN bases_puntos MEDIUMTEXT NULL;
+ALTER TABLE fideliza_config ADD COLUMN bases_confidencialidad MEDIUMTEXT NULL;
+ALTER TABLE fideliza_config ADD COLUMN etiqueta_puntos VARCHAR(240) NULL;
+ALTER TABLE fideliza_config ADD COLUMN etiqueta_confidencialidad VARCHAR(240) NULL;
+ALTER TABLE fideliza_config ADD COLUMN correo_asunto VARCHAR(180) NULL;
+ALTER TABLE fideliza_config ADD COLUMN correo_html MEDIUMTEXT NULL;
+
+-- Rollback:
+-- ALTER TABLE fideliza_config DROP COLUMN correo_html;
+-- ALTER TABLE fideliza_config DROP COLUMN correo_asunto;
+-- ALTER TABLE fideliza_config DROP COLUMN etiqueta_confidencialidad;
+-- ALTER TABLE fideliza_config DROP COLUMN etiqueta_puntos;
+-- ALTER TABLE fideliza_config DROP COLUMN bases_confidencialidad;
+-- ALTER TABLE fideliza_config DROP COLUMN bases_puntos;
+
+-- Rollback:
+-- ALTER TABLE fideliza_cliente DROP COLUMN acepta_at;
+-- ALTER TABLE fideliza_cliente DROP COLUMN acepta_publicidad;
+-- ALTER TABLE fideliza_cliente DROP COLUMN acepta_puntos;
+
+-- Rollback:
+-- ALTER TABLE fideliza_movimiento DROP COLUMN tag_id;
+-- ALTER TABLE fideliza_tag DROP INDEX uq_fid_tag_sucursal;
+-- ALTER TABLE fideliza_tag DROP COLUMN sucursal_id;
+
+
+-- Rollback:
+-- DROP TABLE IF EXISTS fideliza_recup_intento;
+-- DROP TABLE IF EXISTS fideliza_codigo;
+-- DROP TABLE IF EXISTS fideliza_movimiento;
+-- DROP TABLE IF EXISTS fideliza_espera;
+-- DROP TABLE IF EXISTS fideliza_premio;
+-- DROP TABLE IF EXISTS fideliza_opcion;
+-- DROP TABLE IF EXISTS fideliza_config;
+-- DROP TABLE IF EXISTS fideliza_cliente;
+-- DROP TABLE IF EXISTS fideliza_tag;
+

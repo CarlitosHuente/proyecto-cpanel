@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Fidelización{% endblock %}
+{% block content %}
+<div class="container-fluid mt-3">
+  <h2 class="text-info">Fidelización</h2>
+  <p class="text-secondary">Administración de cuentas, puntos y stickers. La caja está en un permiso aparte.</p>
+  <div class="d-flex flex-wrap gap-2 mb-4">
+    {% if puede_vender %}
+    <a class="btn btn-outline-light" href="{{ url_for('fideliza.caja') }}">Caja</a>
+    {% endif %}
+    <a class="btn btn-outline-light" href="{{ url_for('fideliza.clientes') }}">Clientes y movimientos</a>
+    <a class="btn btn-outline-light" href="{{ url_for('fideliza.config') }}">Premios y carteles</a>
+  </div>
+  <h3 class="h5">Sucursales</h3>
+  <div class="d-flex flex-wrap gap-2">
+    {% for local in locales %}
+      {% if local.tag and local.tag.activo and puede_vender %}
+      <a class="btn btn-success" href="{{ url_for('fideliza.caja', tag=local.tag.id) }}">{{ local.nombre_sucursal }}</a>
+      {% else %}
+      <span class="btn btn-outline-secondary disabled">{{ local.nombre_sucursal }}{% if not local.tag %} · sin cartel{% endif %}</span>
+      {% endif %}
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

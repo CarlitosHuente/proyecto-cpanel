@@ -31,6 +31,7 @@
 19. [Drive vía Apps Script (archivos / fotos)](#19-drive-vía-apps-script-archivos--fotos)
 20. [Fondos por Rendir (FxR)](#20-fondos-por-rendir-fxr)
 21. [Reportería](#21-reportería)
+22. [Fidelización](#22-fidelización)
 
 ---
 
@@ -495,6 +496,30 @@ El archivo queda en `uploads/reporteria/reporte_<id>.pdf`. El periodo en curso s
 **Correo:** icono del listado, solo si el estado es `listo`. Si no hay correos guardados, los pide y los guarda. Adjunto PDF vía `enviar_correo(..., adjuntos=)`.
 
 **Archivos:** `routes/reporteria_routes.py`, `utils/reporteria_db.py`, `utils/reporteria_ventas.py`, `utils/reporteria_pdf.py`, `templates/reporteria/*`, `static/js/reporteria.js`.
+
+---
+
+## 22. Fidelización
+
+**Objetivo:** el cliente acerca el celular a un sticker NFC, se abre una página y, si el teléfono ya lo recuerda, queda en la lista de la cajera. Ella suma 1, 2 o 3 puntos con los botones 8, 12 y 16. El superusuario ve cuentas, movimientos y configuración. La cajera solo entra si se le asigna el permiso de caja.
+
+**Permisos:** padre `fideliza` (módulo completo: clientes, movimientos, premios, stickers, códigos). Hijo `fideliza.vender` (caja: lista de espera, sumar y canjear). El rol `superusuario` entra con `*`. El permiso de caja no se asigna solo: se marca en Config → Accesos.
+
+**Página del cliente:** `/f/<token>` (token largo del sticker, sin login). Sin cookie: «Crear cuenta» (nombre, RUT, correo y dos aceptaciones obligatorias) o «Ya tengo cuenta» (RUT + código de un uso). Cada casilla muestra la frase configurada y el texto legal completo (bases de puntos, y confidencialidad con correos publicitarios). Con cookie: «Cargando» y una sola espera. La primera alta no entra a la cola. Cookie `fideliza_cli`, HttpOnly, cerca de un año, renovada en cada acercamiento. El chip guarda esa URL fija; lo que caduca es el turno (30 minutos o al aceptar). La cuenta y el saldo son los mismos en todas las sucursales.
+
+**Caja:** `/fideliza/caja`. Primero se elige la sucursal (un cartel por local). La lista muestra solo a quien acercó el teléfono en ese local, con nombre, correo y saldo. Arriba dice qué usuario de la sesión está registrando, y abajo el historial de esa sucursal con el mismo dato. Un cliente no aparece dos veces. No se puede sumar de nuevo antes del plazo (por RUT, parte en 60 minutos, se cambia en configuración). Canjear no usa ese plazo. Quitar de la lista no suma puntos.
+
+**Administración:** `/fideliza/` inicio; `/fideliza/clientes` y ficha con acumulaciones, canjes y anulaciones; `/fideliza/config` bases legales, diseño del correo, botones, premios, minutos y stickers. El código de recuperación lo genera el administrador en la ficha, dura 10 minutos y sirve una vez. Cinco intentos fallidos bloquean el RUT 15 minutos.
+
+**Textos:** en configuración, el permiso `fideliza` edita la frase y el documento de cada aceptación. Cada editor parte contraído y se abre con Editar. En la página pública se leen antes de marcar las casillas. El mismo editor arma el correo (imagen subida o por URL, enlace, botón, columnas, tabla, salto de página y HTML). Al hacer clic en una imagen se puede arrastrar, alinear, agrandar o achicar. Las imágenes quedan en `uploads/fideliza/` y se sirven en `/fideliza/correo-img/<archivo>`. Dentro del correo van embebidas para que se vean sin abrir el sitio.
+
+**Correo:** al acreditar, canjear o anular, con `utils/mail_smtp.py` (remitente Huentelauquen). Sale cuando la cajera acepta. Si hay un diseño guardado, se usa ese: los datos del movimiento entran con `{{nombre}}`, `{{fecha}}`, `{{sucursal}}`, `{{movimiento}}`, `{{detalle}}`, `{{puntos}}`, `{{saldo}}` y `{{premios}}`. Si no hay diseño, el correo automático lleva fecha Chile, detalle, puntos, saldo y cuánto falta para cada premio activo. Desde configuración se puede enviar una prueba. Si el envío falla, los puntos quedan y la ficha permite reenviar.
+
+**Excel:** `/fideliza/exportar/clientes` y `/fideliza/exportar/movimientos` (permiso `fideliza`). El de movimientos acepta `?tag=` para una sucursal. Botones en Clientes y en la caja.
+
+**Tablas:** `fideliza_tag`, `fideliza_cliente`, `fideliza_espera`, `fideliza_movimiento`, `fideliza_opcion`, `fideliza_premio`, `fideliza_config`, `fideliza_codigo`, `fideliza_recup_intento`. Se crean al abrir el módulo (`asegurar_esquema`) y el SQL está en `docs/QUERY_CAMBIOS_PRODUCCION.sql`.
+
+**Archivos:** `routes/fideliza_routes.py`, `utils/fideliza_db.py`, `utils/fideliza_html.py`, `utils/fideliza_mail.py`, `templates/fideliza/*`, `static/js/fideliza_editor.js`.
 
 ---
 

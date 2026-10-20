@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Fidelización — Clientes{% endblock %}
+{% block content %}
+<div class="container-fluid mt-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="text-info mb-0">Clientes</h2>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-light btn-sm" href="{{ url_for('fideliza.exportar_clientes_xlsx') }}">Descargar clientes</a>
+      <a class="btn btn-outline-light btn-sm" href="{{ url_for('fideliza.exportar_movimientos_xlsx') }}">Exportar movimientos</a>
+      <a class="btn btn-outline-light btn-sm" href="{{ url_for('fideliza.inicio') }}">Volver</a>
+    </div>
+  </div>
+  <form class="row g-2 mb-3" method="get">
+    <div class="col-md-6">
+      <input class="form-control" name="q" value="{{ q }}" placeholder="Nombre, RUT o correo">
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-success" type="submit">Buscar</button>
+    </div>
+  </form>
+  <div class="table-responsive">
+    <table class="table table-dark table-hover align-middle">
+      <thead>
+        <tr><th>Nombre</th><th>RUT</th><th>Correo</th><th>Puntos</th></tr>
+      </thead>
+      <tbody>
+        {% for c in clientes %}
+        <tr>
+          <td><a href="{{ url_for('fideliza.ficha', cliente_id=c.id) }}">{{ c.nombre }}</a></td>
+          <td>{{ rut_mostrar(c.rut) }}</td>
+          <td>{{ c.correo }}</td>
+          <td>{{ c.saldo }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-secondary">No hay clientes.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

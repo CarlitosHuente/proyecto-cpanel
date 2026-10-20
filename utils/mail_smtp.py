@@ -61,6 +61,7 @@ def enviar_correo(
     html: Optional[str] = None,
     bcc: Optional[Union[str, Sequence[str]]] = None,
     adjuntos: Optional[Sequence[tuple]] = None,
+    inline: Optional[Sequence[tuple]] = None,
 ) -> dict:
     """
     Envía un correo de texto (y HTML opcional).
@@ -109,6 +110,18 @@ def enviar_correo(
     msg.set_content(body_text or "")
     if html:
         msg.add_alternative(html, subtype="html")
+        if inline:
+            parte_html = msg.get_payload()[-1]
+            for cid, data, mime in inline:
+                if not cid or not data:
+                    continue
+                maintype, _, subtype = (mime or "image/png").partition("/")
+                parte_html.add_related(
+                    data,
+                    maintype=maintype or "image",
+                    subtype=subtype or "png",
+                    cid=f"<{cid}>",
+                )
     for adj in adjuntos or ():
         nombre, data, mime = adj[0], adj[1], (adj[2] if len(adj) > 2 else "application/octet-stream")
         if not data:

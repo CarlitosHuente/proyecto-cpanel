@@ -137,6 +137,18 @@ CATALOGO: List[dict] = [
         "hijos": [],
     },
     {
+        "id": "fideliza",
+        "label": "Fidelización",
+        "desc": "Cuentas, movimientos, premios y stickers. El permiso padre ve el módulo completo.",
+        "hijos": [
+            {
+                "id": "fideliza.vender",
+                "label": "Caja — sumar y canjear",
+                "desc": "Lista de espera, botones de puntos y canje en el local.",
+            },
+        ],
+    },
+    {
         "id": "utilidades",
         "label": "Utilidades",
         "desc": "Calculadoras y herramientas de apoyo.",
@@ -205,6 +217,8 @@ PAGINAS_INICIO: List[dict] = [
     {"endpoint": "fabrica.calendario_produccion", "label": "Fábrica — Calendario"},
     {"endpoint": "fabrica_papaya.informe_semanal", "label": "Fábrica Papaya — Informe semanal"},
     {"endpoint": "fxr.index", "label": "Fondos por Rendir"},
+    {"endpoint": "fideliza.inicio", "label": "Fidelización"},
+    {"endpoint": "fideliza.caja", "label": "Fidelización — Caja"},
     {"endpoint": "utilidades.calculadora_margen", "label": "Utilidades — Calculadoras"},
     {"endpoint": "config.usuarios", "label": "Config — Usuarios"},
     {"endpoint": "config.accesos", "label": "Config — Centro de Accesos"},

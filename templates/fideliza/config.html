@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+{% block title %}Fidelización — Configuración{% endblock %}
+{% block content %}
+<style>
+  .fid-editor { background: #fff; color: #1f2933 !important; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; }
+  .fid-editor h1, .fid-editor h2, .fid-editor h3, .fid-editor h4,
+  .fid-editor p, .fid-editor div, .fid-editor span, .fid-editor li,
+  .fid-editor td, .fid-editor th, .fid-editor figcaption, .fid-editor blockquote {
+    color: #1f2933 !important;
+  }
+  .fid-editor a { color: #1b4332 !important; }
+  .fid-editor:not(.fid-abierto) .fid-cuerpo { display: none; }
+  .fid-plegar {
+    display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 10px 12px; border: 0; background: #fff; text-align: left; cursor: pointer;
+  }
+  .fid-resumen { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #334155 !important; font-size: 14px; }
+  .fid-accion { flex: none; color: #1b4332 !important; font-weight: 700; font-size: 13px; }
+  .fid-tools { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 8px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+  .fid-tools button, .fid-tools select, .fid-tools label, .fid-tools span {
+    font-size: 12px; line-height: 1.2; color: #1f2933 !important;
+  }
+  .fid-tools button, .fid-tools select { padding: 4px 7px; border: 1px solid #cbd5e1; background: #fff; border-radius: 4px; }
+  .fid-tools button:hover { background: #eef6f1; }
+  .fid-color { display: inline-flex; align-items: center; gap: 4px; margin: 0; }
+  .fid-color input { width: 28px; height: 22px; padding: 0; border: 0; background: transparent; }
+  .fid-area, .fid-fuente { min-height: 180px; max-height: 68vh; overflow: auto; padding: 16px 16px 32px; outline: none; background: #fff; cursor: text; }
+  .fid-area:empty:before { content: "Escribe aquí. Puedes soltar una imagen y luego moverla."; color: #94a3b8 !important; }
+  .fid-fuente { width: 100%; border: 0; font-family: ui-monospace, monospace; font-size: 12px; color: #1f2933 !important; }
+  .fid-area table { max-width: 100%; }
+  .fid-area figure.fid-img { position: relative; max-width: 100%; clear: both; cursor: grab; }
+  .fid-area figure.fid-img.fid-sel { outline: 2px solid #1b4332; outline-offset: 4px; }
+  .fid-area figure.fid-img img { width: 100%; height: auto; display: block; pointer-events: none; }
+  .fid-asa {
+    display: none; position: absolute; right: -7px; bottom: -7px; width: 16px; height: 16px;
+    background: #1b4332; border: 2px solid #fff; border-radius: 4px; cursor: nwse-resize; z-index: 2;
+  }
+  .fid-area figure.fid-sel .fid-asa { display: block; }
+  .fid-img-bar { display: none; flex-wrap: wrap; gap: 4px; align-items: center; padding: 6px 8px; background: #1b4332; }
+  .fid-img-bar.fid-on { display: flex; }
+  .fid-img-bar button, .fid-img-bar span { color: #fff !important; background: transparent; border: 1px solid rgba(255,255,255,.4); border-radius: 4px; font-size: 12px; padding: 3px 7px; }
+  .fid-img-bar span { border: 0; padding-left: 0; }
+  #fid-marco { width: 100%; height: 420px; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; }
+</style>
+{% macro herramientas(variables=false) %}
+<div class="fid-tools">
+  <button type="button" data-cmd="undo" title="Deshacer">Deshacer</button>
+  <button type="button" data-cmd="redo" title="Rehacer">Rehacer</button>
+  <button type="button" data-block="P">Párrafo</button>
+  <button type="button" data-block="H1">Título 1</button>
+  <button type="button" data-block="H2">Título 2</button>
+  <button type="button" data-block="H3">Título 3</button>
+  <select data-font aria-label="Fuente">
+    <option value="Arial">Arial</option>
+    <option value="Georgia">Georgia</option>
+    <option value="Verdana">Verdana</option>
+    <option value="Tahoma">Tahoma</option>
+    <option value="Courier New">Courier</option>
+  </select>
+  <select data-size aria-label="Tamaño">
+    <option value="2">Chico</option>
+    <option value="3" selected>Normal</option>
+    <option value="5">Grande</option>
+    <option value="6">Muy grande</option>
+  </select>
+  <label class="fid-color">Texto <input type="color" data-color="foreColor" value="#1f2933"></label>
+  <label class="fid-color">Fondo <input type="color" data-color="hiliteColor" value="#fff3bf"></label>
+  <button type="button" data-cmd="bold"><strong>Negrita</strong></button>
+  <button type="button" data-cmd="italic"><em>Cursiva</em></button>
+  <button type="button" data-cmd="underline"><u>Subrayado</u></button>
+  <button type="button" data-cmd="strikeThrough"><s>Tachado</s></button>
+  <button type="button" data-cmd="justifyLeft">Izquierda</button>
+  <button type="button" data-cmd="justifyCenter">Centro</button>
+  <button type="button" data-cmd="justifyRight">Derecha</button>
+  <button type="button" data-cmd="insertUnorderedList">Viñetas</button>
+  <button type="button" data-cmd="insertOrderedList">Números</button>
+  <button type="button" data-cmd="indent">Sangría</button>
+  <button type="button" data-cmd="outdent">Sin sangría</button>
+  <button type="button" data-block="BLOCKQUOTE">Cita</button>
+  <button type="button" data-cmd="linea">Línea</button>
+  <button type="button" data-cmd="salto">Salto de página</button>
+  <button type="button" data-cmd="enlace">Enlace</button>
+  <button type="button" data-cmd="quitar-enlace">Quitar enlace</button>
+  <button type="button" data-cmd="imagen-archivo">Imagen</button>
+  <button type="button" data-cmd="imagen-url">Imagen por URL</button>
+  <button type="button" data-cmd="boton">Botón</button>
+  <button type="button" data-cmd="columnas">Dos columnas</button>
+  <button type="button" data-cmd="tabla">Tabla</button>
+  <button type="button" data-cmd="removeFormat">Limpiar formato</button>
+  <button type="button" data-cmd="fuente">Ver HTML</button>
+  {% if variables %}
+  <button type="button" data-var="nombre">Nombre</button>
+  <button type="button" data-var="fecha">Fecha</button>
+  <button type="button" data-var="sucursal">Sucursal</button>
+  <button type="button" data-var="movimiento">Movimiento</button>
+  <button type="button" data-var="detalle">Detalle</button>
+  <button type="button" data-var="puntos">Puntos</button>
+  <button type="button" data-var="saldo">Saldo</button>
+  <button type="button" data-var="premios">Premios</button>
+  {% endif %}
+</div>
+{% endmacro %}
+<div class="container-fluid mt-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="text-info mb-0">Configuración</h2>
+    <a class="btn btn-outline-light btn-sm" href="{{ url_for('fideliza.inicio') }}">Volver</a>
+  </div>
+
+  <div class="card bg-dark border-secondary mb-3">
+    <div class="card-body">
+      <h3 class="h6">Bases y temas legales</h3>
+      <p class="small text-secondary mb-3">Estos textos aparecen al crear la cuenta. Las dos aceptaciones siguen siendo obligatorias. Puedes cambiar la frase de cada casilla y el documento completo: títulos, imágenes, enlaces y saltos.</p>
+      <form method="post">
+        <input type="hidden" name="accion" value="legales">
+        <label class="form-label">Frase de la casilla — programa de puntos</label>
+        <input class="form-control mb-2" name="etiqueta_puntos" maxlength="240" required value="{{ editor.etiqueta_puntos }}">
+        <div class="fid-editor mb-3" data-fid-editor data-upload="{{ url_for('fideliza.config_imagen') }}">
+          {{ herramientas() }}
+          <div class="fid-area" data-area contenteditable="true"></div>
+          <textarea class="fid-fuente d-none" data-source></textarea>
+          <textarea class="d-none" name="bases_puntos" data-hidden>{{ editor.bases_puntos }}</textarea>
+          <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" data-file hidden>
+          <div class="small px-2 py-1" data-estado></div>
+        </div>
+        <label class="form-label">Frase de la casilla — confidencialidad y correos publicitarios</label>
+        <input class="form-control mb-2" name="etiqueta_conf" maxlength="240" required value="{{ editor.etiqueta_conf }}">
+        <div class="fid-editor mb-3" data-fid-editor data-upload="{{ url_for('fideliza.config_imagen') }}">
+          {{ herramientas() }}
+          <div class="fid-area" data-area contenteditable="true"></div>
+          <textarea class="fid-fuente d-none" data-source></textarea>
+          <textarea class="d-none" name="bases_conf" data-hidden>{{ editor.bases_conf }}</textarea>
+          <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" data-file hidden>
+          <div class="small px-2 py-1" data-estado></div>
+        </div>
+        <button class="btn btn-success" type="submit">Guardar bases</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card bg-dark border-secondary mb-3">
+    <div class="card-body">
+      <h3 class="h6">Diseño del correo</h3>
+      <p class="small text-secondary">Se envía al aceptar puntos, al canjear y al anular. Arma el mensaje con imagen, enlace, botón, columnas, tabla y salto de página. El salto se ve como una línea en el celular y separa la hoja al imprimir.</p>
+      {% if editor.correo_activo %}
+      <p class="small text-info">Estás enviando este diseño personalizado.</p>
+      {% else %}
+      <p class="small text-warning">Todavía se envía el correo automático. Si guardas, pasa a usarse este diseño.</p>
+      {% endif %}
+      <form method="post" id="form-correo">
+        <input type="hidden" name="accion" value="correo">
+        <label class="form-label" for="fid-asunto">Asunto</label>
+        <input class="form-control mb-2" id="fid-asunto" name="asunto" maxlength="180" required value="{{ editor.asunto }}">
+        <p class="small text-secondary">Inserta los datos de cada movimiento con los botones Nombre, Fecha, Sucursal, Movimiento, Detalle, Puntos, Saldo y Premios.</p>
+        <div class="fid-editor mb-3" id="editor-correo" data-fid-editor data-upload="{{ url_for('fideliza.config_imagen') }}">
+          {{ herramientas(true) }}
+          <div class="fid-area" data-area contenteditable="true"></div>
+          <textarea class="fid-fuente d-none" data-source></textarea>
+          <textarea class="d-none" name="correo_html" data-hidden>{{ editor.correo }}</textarea>
+          <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" data-file hidden>
+          <div class="small px-2 py-1" data-estado></div>
+        </div>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <button class="btn btn-success" type="submit">Guardar correo</button>
+          <button class="btn btn-outline-light" type="button" id="fid-previa">Vista previa</button>
+        </div>
+      </form>
+      <iframe id="fid-marco" class="d-none mt-3" sandbox title="Vista previa del correo"></iframe>
+      <div class="row g-2 align-items-end mt-3">
+        <div class="col-md-5">
+          <label class="form-label" for="fid-destino">Enviar una prueba de lo que está en pantalla</label>
+          <input class="form-control" id="fid-destino" type="email" placeholder="correo@ejemplo.cl">
+        </div>
+        <div class="col-auto">
+          <button class="btn btn-outline-info" type="button" id="fid-prueba" data-url="{{ url_for('fideliza.correo_prueba') }}">Enviar prueba</button>
+        </div>
+        <div class="col-12"><div id="fid-prueba-estado" class="small"></div></div>
+      </div>
+      {% if editor.correo_activo %}
+      <form class="mt-3" method="post">
+        <input type="hidden" name="accion" value="correo_automatico">
+        <button class="btn btn-outline-secondary btn-sm" type="submit">Volver al correo automático</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card bg-dark border-secondary mb-3">
+    <div class="card-body">
+      <h3 class="h6">Tiempo mínimo entre sumas</h3>
+      <form class="row g-2 align-items-end" method="post">
+        <input type="hidden" name="accion" value="minutos">
+        <div class="col-auto">
+          <input class="form-control" type="number" name="minutos" min="1" max="1440" value="{{ minutos }}" required>
+        </div>
+        <div class="col-auto"><span class="text-secondary">minutos</span></div>
+        <div class="col-auto"><button class="btn btn-success" type="submit">Guardar</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card bg-dark border-secondary mb-3">
+    <div class="card-body">
+      <h3 class="h6">Botones de la caja</h3>
+      {% for op in opciones %}
+      <form class="row g-2 align-items-end mb-2" method="post">
+        <input type="hidden" name="accion" value="opcion">
+        <input type="hidden" name="opcion_id" value="{{ op.id }}">
+        <div class="col-md-3">
+          <label class="form-label">Etiqueta</label>
+          <input class="form-control" name="etiqueta" value="{{ op.etiqueta }}" required>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Puntos</label>
+          <input class="form-control" type="number" name="puntos" min="1" value="{{ op.puntos }}" required>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Orden</label>
+          <input class="form-control" type="number" name="orden" value="{{ op.orden }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Activo</label>
+          <select class="form-select" name="activo">
+            <option value="1" {% if op.activo %}selected{% endif %}>Sí</option>
+            <option value="0" {% if not op.activo %}selected{% endif %}>No</option>
+          </select>
+        </div>
+        <div class="col-auto"><button class="btn btn-outline-light" type="submit">Guardar</button></div>
+      </form>
+      {% endfor %}
+      <form class="row g-2 align-items-end mt-3" method="post">
+        <input type="hidden" name="accion" value="opcion_nueva">
+        <div class="col-md-3"><input class="form-control" name="etiqueta" placeholder="Nueva etiqueta" required></div>
+        <div class="col-md-2"><input class="form-control" type="number" name="puntos" min="1" placeholder="Puntos" required></div>
+        <div class="col-auto"><button class="btn btn-success" type="submit">Agregar botón</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card bg-dark border-secondary mb-3">
+    <div class="card-body">
+      <h3 class="h6">Premios / canjes</h3>
+      <p class="small text-secondary">El correo dice cuántos puntos faltan para cada premio activo.</p>
+      {% for premio in premios %}
+      <form class="row g-2 align-items-end mb-2" method="post">
+        <input type="hidden" name="accion" value="premio">
+        <input type="hidden" name="premio_id" value="{{ premio.id }}">
+        <div class="col-md-4">
+          <input class="form-control" name="nombre" value="{{ premio.nombre }}" required>
+        </div>
+        <div class="col-md-2">
+          <input class="form-control" type="number" name="puntos" min="1" value="{{ premio.puntos }}" required>
+        </div>
+        <div class="col-md-2">
+          <input class="form-control" type="number" name="orden" value="{{ premio.orden }}">
+        </div>
+        <div class="col-md-2">
+          <select class="form-select" name="activo">
+            <option value="1" {% if premio.activo %}selected{% endif %}>Activo</option>
+            <option value="0" {% if not premio.activo %}selected{% endif %}>Pausado</option>
+          </select>
+        </div>
+        <div class="col-auto"><button class="btn btn-outline-light" type="submit">Guardar</button></div>
+      </form>
+      {% endfor %}
+      <form class="row g-2 align-items-end mt-3" method="post">
+        <input type="hidden" name="accion" value="premio_nuevo">
+        <div class="col-md-4"><input class="form-control" name="nombre" placeholder="Nombre del premio" required></div>
+        <div class="col-md-2"><input class="form-control" type="number" name="puntos" min="1" placeholder="Puntos" required></div>
+        <div class="col-auto"><button class="btn btn-success" type="submit">Agregar premio</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card bg-dark border-secondary">
+    <div class="card-body">
+      <h3 class="h6">Cartel por sucursal</h3>
+      <p class="small text-secondary">Un cartel NFC por local. El nombre es el de la sucursal. La dirección larga se graba en el chip de ese local (NFC Tools, registro URL https) y después se bloquea.</p>
+      {% for local in locales %}
+      <div class="border border-secondary rounded p-2 mb-2">
+        <div class="d-flex justify-content-between align-items-center gap-2">
+          <strong>{{ local.nombre_sucursal }}</strong>
+          {% if local.tag %}
+          <div class="d-flex gap-2">
+            <a class="btn btn-sm btn-success" href="{{ url_for('fideliza.caja', tag=local.tag.id) }}">Entrar</a>
+            <form method="post">
+              <input type="hidden" name="accion" value="tag_activo">
+              <input type="hidden" name="tag_id" value="{{ local.tag.id }}">
+              <input type="hidden" name="activo" value="{{ 0 if local.tag.activo else 1 }}">
+              <button class="btn btn-sm btn-outline-secondary" type="submit">{{ 'Desactivar' if local.tag.activo else 'Activar' }}</button>
+            </form>
+          </div>
+          {% endif %}
+        </div>
+        {% if local.tag %}
+        {% set ruta = url_for('fideliza.publico', token=local.tag.token) %}
+        {% if request.host.startswith('127.') or 'localhost' in request.host %}
+        <code class="small user-select-all d-block mt-2">https://datoshuente.com{{ ruta }}</code>
+        <p class="small text-warning mb-0">En pantalla estás en este computador. En el sticker graba la dirección de arriba, no la que dice 127.0.0.1.</p>
+        {% else %}
+        <code class="small user-select-all d-block mt-2">{{ url_for('fideliza.publico', token=local.tag.token, _external=True) }}</code>
+        {% endif %}
+        {% else %}
+        <form class="mt-2" method="post">
+          <input type="hidden" name="accion" value="tag">
+          <input type="hidden" name="sucursal_id" value="{{ local.sucursal_id }}">
+          <button class="btn btn-success btn-sm" type="submit">Crear cartel</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endfor %}
+      <form class="row g-2 align-items-end mt-3" method="post">
+        <input type="hidden" name="accion" value="sucursal">
+        <div class="col-md-6">
+          <label class="form-label">Nueva sucursal</label>
+          <input class="form-control" name="nombre" maxlength="100" placeholder="Nombre del local" required>
+        </div>
+        <div class="col-auto"><button class="btn btn-outline-light" type="submit">Agregar sucursal</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/fideliza_editor.js') }}?v=3"></script>
+{% endblock %}
