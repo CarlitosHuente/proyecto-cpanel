@@ -29,6 +29,7 @@
   </div>
   <div class="row g-3">
     <div class="col-lg-7">
+      <p class="text-secondary mb-2" id="caja-vacio">Esperando un teléfono…</p>
       <div class="list-group" id="cola"></div>
     </div>
     <div class="col-lg-5">
@@ -87,7 +88,8 @@
   function pintar(filas) {
     const caja = document.getElementById("cola");
     caja.replaceChildren();
-    document.getElementById("caja-vacio").textContent = filas.length ? "" : "Esperando un teléfono…";
+    const vacio = document.getElementById("caja-vacio");
+    if (vacio) vacio.hidden = filas.length > 0;
     filas.forEach(function (fila) {
       const btn = document.createElement("button");
       btn.type = "button";
