@@ -76,6 +76,7 @@ from utils.fideliza_db import (
 from utils.fideliza_html import (
     armar_correo,
     editor_textos,
+    guardar_color_correo,
     guardar_correo,
     guardar_imagen,
     guardar_legales,
@@ -601,6 +602,8 @@ def config():
                     request.form.get("etiqueta_conf", ""),
                     request.form.get("bases_conf", ""),
                 )
+            elif accion == "correo_color":
+                guardar_color_correo(request.form.get("correo_color", ""))
             elif accion == "correo":
                 guardar_correo(request.form.get("asunto", ""), request.form.get("correo_html", ""))
             elif accion == "correo_automatico":
@@ -655,6 +658,7 @@ def correo_prueba():
         request.form.get("asunto", ""),
         request.form.get("html", ""),
         variables_de_prueba(faltan_premios(5)),
+        color=request.form.get("correo_color", ""),
     )
     envio = enviar_correo(
         destino,

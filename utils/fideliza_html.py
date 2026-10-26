@@ -24,6 +24,8 @@ ETIQUETA_CONF = (
     "para enviarme correos publicitarios."
 )
 ASUNTO_DEFECTO = "Tus puntos en Huentelauquen"
+COLOR_FRANJA = "#c1121f"
+_VERDE_FRANJA = "#1b4332"
 
 BASES_PUNTOS = """
 <h2>Bases del programa de puntos</h2>
@@ -48,7 +50,7 @@ CORREO_DEFECTO = """
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f7f5;">
 <tr><td align="center" style="padding:16px;">
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background-color:#ffffff;">
-<tr><td style="background-color:#1b4332;color:#ffffff;padding:20px;font-family:Arial,sans-serif;">
+<tr><td data-franja="1" bgcolor="#c1121f" style="background-color:#c1121f;color:#ffffff;padding:20px;font-family:Arial,sans-serif;">
 <div style="font-size:12px;letter-spacing:1px;">HUENTELAUQUEN</div>
 <div style="font-size:22px;font-weight:bold;">Tus puntos</div>
 </td></tr>
@@ -168,6 +170,8 @@ def _attr(tag: str, attrs) -> str:
             bgcolor = vistos.get("bgcolor", "")
             if re.fullmatch(r"#[0-9a-fA-F]{3,8}", bgcolor):
                 limpio.append(("bgcolor", bgcolor))
+            if tag == "td" and vistos.get("data-franja") == "1":
+                limpio.append(("data-franja", "1"))
             for clave in ("colspan", "rowspan"):
                 if re.fullmatch(r"[1-6]", vistos.get(clave, "")):
                     limpio.append((clave, vistos[clave]))
@@ -271,6 +275,70 @@ def guardar_legales(etiqueta_puntos: str, bases_puntos: str, etiqueta_conf: str,
     )
 
 
+def color_franja(raw: str | None) -> str:
+    valor = (raw or "").strip()
+    if re.fullmatch(r"#[0-9a-fA-F]{6}", valor):
+        return valor.lower()
+    return COLOR_FRANJA
+
+
+def _pintar_td(tag: str, color: str) -> str:
+    if re.search(r"background-color\s*:", tag, re.I):
+        tag = re.sub(
+            r"background-color\s*:\s*[^;\"']+",
+            f"background-color:{color}",
+            tag,
+            count=1,
+            flags=re.I,
+        )
+    elif re.search(r"style\s*=", tag, re.I):
+        tag = re.sub(r'style="', f'style="background-color:{color};', tag, count=1, flags=re.I)
+    else:
+        tag = tag[:-1] + f' style="background-color:{color};color:#ffffff;">'
+    if re.search(r"bgcolor\s*=", tag, re.I):
+        tag = re.sub(r'bgcolor="[^"]*"', f'bgcolor="{color}"', tag, count=1, flags=re.I)
+    else:
+        tag = tag[:-1] + f' bgcolor="{color}">'
+    return tag
+
+
+def aplicar_franja(html: str, color: str | None) -> str:
+    """Pinta la barra superior del correo. La primera franja verde antigua también cuenta."""
+    color = color_franja(color)
+    origen = html or ""
+    if 'data-franja="1"' not in origen.lower():
+        def marcar(match):
+            tag = match.group(0)
+            if marcar.listo:
+                return tag
+            if re.search(rf"background(?:-color)?\s*:\s*{_VERDE_FRANJA}", tag, re.I) or re.search(
+                rf'bgcolor="{_VERDE_FRANJA}"', tag, re.I
+            ):
+                marcar.listo = True
+                if "data-franja" not in tag.lower():
+                    tag = tag[:-1] + ' data-franja="1">'
+            return tag
+
+        marcar.listo = False
+        origen = re.sub(r"<td\b[^>]*>", marcar, origen, flags=re.I)
+
+    def pintar(match):
+        tag = match.group(0)
+        if 'data-franja="1"' not in tag.lower():
+            return tag
+        return _pintar_td(tag, color)
+
+    return re.sub(r"<td\b[^>]*>", pintar, origen, flags=re.I)
+
+
+def guardar_color_correo(color: str) -> None:
+    from utils.fideliza_db import _guardar_columnas
+
+    if not re.fullmatch(r"#[0-9a-fA-F]{6}", (color or "").strip()):
+        raise FidelizaError("Elige un color para la franja del correo.")
+    _guardar_columnas({"correo_color": color.strip().lower()})
+
+
 def guardar_correo(asunto: str, html: str) -> None:
     from utils.fideliza_db import _guardar_columnas
 
@@ -284,14 +352,16 @@ def guardar_correo(asunto: str, html: str) -> None:
 
 
 def editor_textos(row: dict) -> dict:
+    color = color_franja(row.get("correo_color"))
     return {
         "etiqueta_puntos": row.get("etiqueta_puntos") or ETIQUETA_PUNTOS,
         "bases_puntos": row.get("bases_puntos") or BASES_PUNTOS,
         "etiqueta_conf": row.get("etiqueta_confidencialidad") or ETIQUETA_CONF,
         "bases_conf": row.get("bases_confidencialidad") or BASES_CONF,
         "asunto": row.get("correo_asunto") or ASUNTO_DEFECTO,
-        "correo": row.get("correo_html") or CORREO_DEFECTO,
+        "correo": aplicar_franja(row.get("correo_html") or CORREO_DEFECTO, color),
         "correo_activo": bool((row.get("correo_html") or "").strip()),
+        "correo_color": color,
     }
 
 
@@ -528,8 +598,8 @@ def url_publica() -> str:
     return SITIO_PUBLICO
 
 
-def armar_correo(asunto: str, html: str, valores: dict, base: str | None = None) -> dict:
-    cuerpo_base = sanitizar(html) or sanitizar(CORREO_DEFECTO)
+def armar_correo(asunto: str, html: str, valores: dict, base: str | None = None, color: str | None = None) -> dict:
+    cuerpo_base = aplicar_franja(sanitizar(html) or sanitizar(CORREO_DEFECTO), color)
     cuerpo = _aplicar(cuerpo_base, valores, True)
     cuerpo, inline = _cid(cuerpo)
     cuerpo = _absolutas(cuerpo, (base or url_publica()).rstrip("/"))

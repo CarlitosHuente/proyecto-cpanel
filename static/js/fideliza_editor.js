@@ -446,7 +446,33 @@
     }
   }
 
+  function pintarFranja(color) {
+    const root = document.getElementById("editor-correo");
+    if (!root || !/^#[0-9a-fA-F]{6}$/.test(color || "")) return;
+    const area = areaActiva(root);
+    if (!area) return;
+    let celda = area.querySelector('td[data-franja="1"]');
+    if (!celda) {
+      celda = Array.from(area.querySelectorAll("td")).find(function (td) {
+        const estilo = (td.getAttribute("style") || "") + (td.getAttribute("bgcolor") || "");
+        return /#1b4332/i.test(estilo);
+      });
+      if (celda) celda.setAttribute("data-franja", "1");
+    }
+    if (!celda) return;
+    celda.style.backgroundColor = color;
+    celda.setAttribute("bgcolor", color);
+  }
+
   document.querySelectorAll("[data-fid-editor]").forEach(preparar);
+
+  const franja = document.getElementById("fid-franja");
+  if (franja) {
+    pintarFranja(franja.value);
+    franja.addEventListener("input", function () {
+      pintarFranja(franja.value);
+    });
+  }
 
   const prueba = document.getElementById("fid-prueba");
   if (prueba) {
@@ -458,6 +484,8 @@
       datos.append("destino", destino);
       datos.append("asunto", document.getElementById("fid-asunto").value);
       datos.append("html", htmlActual(root));
+      const franjaActual = document.getElementById("fid-franja");
+      if (franjaActual) datos.append("correo_color", franjaActual.value);
       prueba.disabled = true;
       aviso.textContent = "Enviando prueba…";
       aviso.className = "small text-secondary";

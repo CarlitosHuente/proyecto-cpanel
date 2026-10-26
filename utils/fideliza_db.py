@@ -237,6 +237,7 @@ def asegurar_esquema() -> None:
                 )
                 _agregar_columna(cur, "fideliza_config", "correo_asunto", "correo_asunto VARCHAR(180) NULL")
                 _agregar_columna(cur, "fideliza_config", "correo_html", "correo_html MEDIUMTEXT NULL")
+                _agregar_columna(cur, "fideliza_config", "correo_color", "correo_color VARCHAR(7) NULL")
                 cur.execute(
                     """
                     SELECT COUNT(*) AS n FROM information_schema.STATISTICS
@@ -1118,7 +1119,7 @@ def leer_textos() -> dict:
             cur.execute(
                 """
                 SELECT bases_puntos, bases_confidencialidad, etiqueta_puntos,
-                       etiqueta_confidencialidad, correo_asunto, correo_html
+                       etiqueta_confidencialidad, correo_asunto, correo_html, correo_color
                 FROM fideliza_config WHERE id = 1
                 """
             )
@@ -1132,6 +1133,7 @@ def leer_textos() -> dict:
         "etiqueta_confidencialidad": row.get("etiqueta_confidencialidad"),
         "correo_asunto": row.get("correo_asunto"),
         "correo_html": row.get("correo_html"),
+        "correo_color": row.get("correo_color"),
     }
 
 
@@ -1143,6 +1145,7 @@ def _guardar_columnas(valores: dict) -> None:
         "etiqueta_confidencialidad",
         "correo_asunto",
         "correo_html",
+        "correo_color",
     }
     if not valores or any(clave not in permitidas for clave in valores):
         raise FidelizaError("No se pudo guardar.")

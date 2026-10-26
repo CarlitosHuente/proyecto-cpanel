@@ -122,8 +122,12 @@ def envolver_reporte_html(
     aviso: str = "",
     secciones_html: Iterable[str] = (),
     pie: str = "Huente CPanel",
+    color_franja: Optional[str] = None,
 ) -> str:
     """Envoltura común para reportes HTML por correo."""
+    franja = color_franja or _COLOR_HEADER
+    marca = "#ffffff" if color_franja else "#b7e4c7"
+    bajada = "#ffffff" if color_franja else "#d8f3dc"
     meta_block = _meta_table(meta) if meta else ""
     aviso_block = ""
     if aviso:
@@ -145,11 +149,11 @@ def envolver_reporte_html(
         border:1px solid {_COLOR_BORDER};border-radius:10px;overflow:hidden;
         font-family:Arial,Helvetica,sans-serif;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
         <tr>
-          <td style="background:{_COLOR_HEADER};padding:18px 22px;">
+          <td style="background:{franja};padding:18px 22px;">
             <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;
-              color:#b7e4c7;font-weight:700;">Huentelauquen</div>
+              color:{marca};font-weight:700;">Huentelauquen</div>
             <div style="font-size:20px;color:#ffffff;font-weight:700;margin-top:4px;">{esc(titulo)}</div>
-            {f'<div style="font-size:13px;color:#d8f3dc;margin-top:6px;">{esc(subtitulo)}</div>' if subtitulo else ''}
+            {f'<div style="font-size:13px;color:{bajada};margin-top:6px;">{esc(subtitulo)}</div>' if subtitulo else ''}
           </td>
         </tr>
         <tr>

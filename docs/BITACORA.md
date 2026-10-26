@@ -8,6 +8,10 @@ Al cerrar un cambio relevante: entrada breve aquí + actualizar diccionario si c
 
 ---
 
+## 2026-10-26 — Fidelización: color de la franja del correo
+
+- En configuración se elige el color de la barra superior del correo. Parte en rojo.
+
 ## 2026-10-19 — Fidelización: la caja muestra la espera
 
 - La lista de la caja volvía a quedar en blanco porque faltaba el aviso de “esperando” y el refresco se cortaba antes de pintar al cliente.

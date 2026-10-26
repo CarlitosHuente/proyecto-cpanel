@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from utils.fideliza_db import leer_textos
-from utils.fideliza_html import armar_correo, variables_desde_aviso
+from utils.fideliza_html import armar_correo, color_franja, variables_desde_aviso
 from utils.mail_reporte_html import envolver_reporte_html, seccion_tabla
 from utils.mail_smtp import enviar_correo
 
@@ -24,11 +24,13 @@ def _tipo(tipo: str) -> str:
 
 def enviar_aviso(aviso: dict) -> dict:
     textos = leer_textos()
+    color = color_franja(textos.get("correo_color"))
     if (textos.get("correo_html") or "").strip():
         armado = armar_correo(
             textos.get("correo_asunto") or "",
             textos["correo_html"],
             variables_desde_aviso(aviso),
+            color=color,
         )
         return enviar_correo(
             aviso["mov"]["correo"],
@@ -79,6 +81,7 @@ def enviar_aviso(aviso: dict) -> dict:
         ],
         secciones_html=secciones,
         pie="Huentelauquen",
+        color_franja=color,
     )
     return enviar_correo(
         mov["correo"],

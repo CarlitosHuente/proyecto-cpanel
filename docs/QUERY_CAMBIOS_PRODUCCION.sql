@@ -845,8 +845,10 @@ ALTER TABLE fideliza_config ADD COLUMN etiqueta_puntos VARCHAR(240) NULL;
 ALTER TABLE fideliza_config ADD COLUMN etiqueta_confidencialidad VARCHAR(240) NULL;
 ALTER TABLE fideliza_config ADD COLUMN correo_asunto VARCHAR(180) NULL;
 ALTER TABLE fideliza_config ADD COLUMN correo_html MEDIUMTEXT NULL;
+ALTER TABLE fideliza_config ADD COLUMN correo_color VARCHAR(7) NULL;
 
 -- Rollback:
+-- ALTER TABLE fideliza_config DROP COLUMN correo_color;
 -- ALTER TABLE fideliza_config DROP COLUMN correo_html;
 -- ALTER TABLE fideliza_config DROP COLUMN correo_asunto;
 -- ALTER TABLE fideliza_config DROP COLUMN etiqueta_confidencialidad;

@@ -9,6 +9,7 @@
     color: #1f2933 !important;
   }
   .fid-editor a { color: #1b4332 !important; }
+  .fid-editor td[data-franja="1"], .fid-editor td[data-franja="1"] div { color: #ffffff !important; }
   .fid-editor:not(.fid-abierto) .fid-cuerpo { display: none; }
   .fid-plegar {
     display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px;
@@ -141,6 +142,15 @@
     <div class="card-body">
       <h3 class="h6">Diseño del correo</h3>
       <p class="small text-secondary">Se envía al aceptar puntos, al canjear y al anular. Arma el mensaje con imagen, enlace, botón, columnas, tabla y salto de página. El salto se ve como una línea en el celular y separa la hoja al imprimir.</p>
+      <form method="post" class="d-flex flex-wrap gap-3 align-items-end mb-3">
+        <input type="hidden" name="accion" value="correo_color">
+        <div>
+          <label class="form-label" for="fid-franja">Color de la franja</label>
+          <input class="form-control form-control-color" type="color" id="fid-franja" name="correo_color" value="{{ editor.correo_color }}">
+        </div>
+        <button class="btn btn-success" type="submit">Guardar color</button>
+        <p class="small text-secondary mb-2">Es la barra de arriba del correo. Parte en rojo y puedes cambiarla cuando quieras.</p>
+      </form>
       {% if editor.correo_activo %}
       <p class="small text-info">Estás enviando este diseño personalizado.</p>
       {% else %}
@@ -321,5 +331,5 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/fideliza_editor.js') }}?v=3"></script>
+<script src="{{ url_for('static', filename='js/fideliza_editor.js') }}?v=4"></script>
 {% endblock %}
