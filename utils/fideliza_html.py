@@ -262,15 +262,13 @@ def _texto_plano(valor: str, limite: int) -> str:
     return valor[:limite]
 
 
-def guardar_legales(etiqueta_puntos: str, bases_puntos: str, etiqueta_conf: str, bases_conf: str) -> None:
+def guardar_legales(etiqueta_puntos: str, bases_puntos: str) -> None:
     from utils.fideliza_db import _guardar_columnas
 
     _guardar_columnas(
         {
             "etiqueta_puntos": _texto_plano(etiqueta_puntos, MAX_ETIQUETA) or None,
             "bases_puntos": sanitizar(bases_puntos) or None,
-            "etiqueta_confidencialidad": _texto_plano(etiqueta_conf, MAX_ETIQUETA) or None,
-            "bases_confidencialidad": sanitizar(bases_conf) or None,
         }
     )
 

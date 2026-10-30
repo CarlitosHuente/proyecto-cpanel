@@ -110,7 +110,7 @@
   <div class="card bg-dark border-secondary mb-3">
     <div class="card-body">
       <h3 class="h6">Bases y temas legales</h3>
-      <p class="small text-secondary mb-3">Estos textos aparecen al crear la cuenta. Las dos aceptaciones siguen siendo obligatorias. Puedes cambiar la frase de cada casilla y el documento completo: títulos, imágenes, enlaces y saltos.</p>
+      <p class="small text-secondary mb-3">Al crear la cuenta se pide una sola aceptación: las bases del programa. Puedes cambiar la frase de la casilla y el documento completo.</p>
       <form method="post">
         <input type="hidden" name="accion" value="legales">
         <label class="form-label">Frase de la casilla — programa de puntos</label>
@@ -120,16 +120,6 @@
           <div class="fid-area" data-area contenteditable="true"></div>
           <textarea class="fid-fuente d-none" data-source></textarea>
           <textarea class="d-none" name="bases_puntos" data-hidden>{{ editor.bases_puntos }}</textarea>
-          <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" data-file hidden>
-          <div class="small px-2 py-1" data-estado></div>
-        </div>
-        <label class="form-label">Frase de la casilla — confidencialidad y correos publicitarios</label>
-        <input class="form-control mb-2" name="etiqueta_conf" maxlength="240" required value="{{ editor.etiqueta_conf }}">
-        <div class="fid-editor mb-3" data-fid-editor data-upload="{{ url_for('fideliza.config_imagen') }}">
-          {{ herramientas() }}
-          <div class="fid-area" data-area contenteditable="true"></div>
-          <textarea class="fid-fuente d-none" data-source></textarea>
-          <textarea class="d-none" name="bases_conf" data-hidden>{{ editor.bases_conf }}</textarea>
           <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" data-file hidden>
           <div class="small px-2 py-1" data-estado></div>
         </div>

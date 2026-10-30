@@ -228,7 +228,6 @@ def publico_cuenta(token):
             request.form.get("rut", ""),
             request.form.get("correo", ""),
             request.form.get("acepta_puntos") == "1",
-            request.form.get("acepta_publicidad") == "1",
         )
     except FidelizaError as exc:
         return _publica(token, vista="crear", error=str(exc), form=request.form)
@@ -599,8 +598,6 @@ def config():
                 guardar_legales(
                     request.form.get("etiqueta_puntos", ""),
                     request.form.get("bases_puntos", ""),
-                    request.form.get("etiqueta_conf", ""),
-                    request.form.get("bases_conf", ""),
                 )
             elif accion == "correo_color":
                 guardar_color_correo(request.form.get("correo_color", ""))

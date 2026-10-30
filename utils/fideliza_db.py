@@ -406,8 +406,8 @@ def crear_cliente(nombre: str, rut: str, correo: str, acepta_puntos: bool = Fals
     correo_n = normalizar_correo(correo)
     if not correo_n:
         raise FidelizaError("El correo no es válido.")
-    if not acepta_puntos or not acepta_publicidad:
-        raise FidelizaError("Para crear la cuenta hay que aceptar las dos bases.")
+    if not acepta_puntos:
+        raise FidelizaError("Para crear la cuenta hay que aceptar las bases.")
     momento = ahora()
     conn = get_db_connection()
     try:
@@ -424,7 +424,7 @@ def crear_cliente(nombre: str, rut: str, correo: str, acepta_puntos: bool = Fals
                 INSERT INTO fideliza_cliente
                     (nombre, rut, correo, saldo, cookie_token, creado_at,
                      acepta_puntos, acepta_publicidad, acepta_at)
-                VALUES (%s, %s, %s, 0, %s, %s, 1, 1, %s)
+                VALUES (%s, %s, %s, 0, %s, %s, 1, 0, %s)
                 """,
                 (nombre, rut_n, correo_n, token, momento, momento),
             )

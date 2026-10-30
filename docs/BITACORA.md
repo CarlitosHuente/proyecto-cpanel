@@ -8,6 +8,10 @@ Al cerrar un cambio relevante: entrada breve aquí + actualizar diccionario si c
 
 ---
 
+## 2026-10-30 — Fidelización: una sola aceptación al crear cuenta
+
+- Crear cuenta pide solo las bases del programa. Ya no pide la aceptación de confidencialidad y correos publicitarios.
+
 ## 2026-10-26 — Fidelización: color de la franja del correo
 
 - En configuración se elige el color de la barra superior del correo. Parte en rojo.

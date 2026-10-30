@@ -57,14 +57,6 @@
             <summary>Leer las bases del programa de puntos</summary>
             <div class="legal">{{ legales.bases_puntos|safe }}</div>
           </details>
-          <div class="form-check mt-2">
-            <input class="form-check-input" type="checkbox" name="acepta_publicidad" value="1" id="acepta-publicidad" required {% if form and form.get('acepta_publicidad') == '1' %}checked{% endif %}>
-            <label class="form-check-label" for="acepta-publicidad">{{ legales.etiqueta_conf }}</label>
-          </div>
-          <details class="legal-caja">
-            <summary>Leer confidencialidad y correos publicitarios</summary>
-            <div class="legal">{{ legales.bases_conf|safe }}</div>
-          </details>
           <button class="btn btn-huente w-100 mt-3" type="submit">Registrarme</button>
           {% if vista == 'elegir' %}
           <button class="btn btn-link w-100" type="button" onclick="mostrar('elegir')">Volver</button>
