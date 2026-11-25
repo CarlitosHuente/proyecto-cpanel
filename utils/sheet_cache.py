@@ -33,6 +33,12 @@ _cache = {}
 #     (antes solo se limpiaba la memoria del proceso que atendía la petición);
 #   - cada fuente vence sola (TTL) para no mostrar datos viejos indefinidamente.
 # Si la carpeta no se puede escribir, se sigue funcionando solo en memoria.
+#
+# Ventas de MySQL (comercial/agricola) NO se guardan en disco por defecto: en el
+# servidor pesan ~70 MB y serializarlas superaba el límite de 2 GB de RAM de la
+# cuenta (el proceso moría a mitad de escritura). Para ellas se usa solo un
+# archivo marcador <fuente>.version: al importar ventas se toca y todos los
+# procesos descartan su copia en memoria. Se puede activar con CACHE_DISCO_BD=1.
 
 _CACHE_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "cache"
@@ -52,6 +58,16 @@ def _ttl_segundos(empresa):
     except ValueError:
         minutos = defecto
     return max(minutos, 0) * 60
+
+
+def _usa_disco(empresa):
+    if empresa not in _FUENTES_BD:
+        return True
+    return (os.environ.get("CACHE_DISCO_BD") or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _ruta_marcador(empresa):
+    return os.path.join(_CACHE_DIR, f"{empresa}.version")
 
 
 def _ruta_cache(empresa):
@@ -79,7 +95,7 @@ def _sincronizar_con_disco(empresa):
     ahora = time.time()
     ttl = _ttl_segundos(empresa)
     ruta = _ruta_cache(empresa)
-    mtime = _mtime(ruta)
+    mtime = _mtime(ruta) if _usa_disco(empresa) else None
 
     if mtime is not None and ahora - mtime < ttl:
         stamp = _cache_stamp.get(empresa)
@@ -96,10 +112,13 @@ def _sincronizar_con_disco(empresa):
         _ultima_actualizacion[empresa] = _fecha_chile(mtime)
         return
 
-    # Sin archivo vigente: solo sirve una copia "solo memoria" (disco no escribible) aún vigente.
+    # Sin archivo vigente: sirve la copia "solo memoria" si sigue vigente y nadie
+    # la invalidó después de cargarla (marcador tocado por forzar_actualizacion).
     stamp = _cache_stamp.get(empresa)
     if empresa in _cache and stamp and stamp[0] is None and ahora - stamp[1] < ttl:
-        return
+        marcador = _mtime(_ruta_marcador(empresa))
+        if marcador is None or marcador < stamp[1]:
+            return
     _olvidar_memoria(empresa)
 
 
@@ -107,15 +126,20 @@ def _guardar_en_cache(empresa, df):
     """Guarda en memoria y, si se puede, en disco (escritura atómica)."""
     ahora = time.time()
     mtime = None
-    try:
-        os.makedirs(_CACHE_DIR, exist_ok=True)
+    if _usa_disco(empresa):
         ruta = _ruta_cache(empresa)
         tmp = f"{ruta}.{os.getpid()}.tmp"
-        df.to_pickle(tmp)
-        os.replace(tmp, ruta)
-        mtime = _mtime(ruta)
-    except Exception as e:
-        print(f"⚠️ No se pudo escribir la caché en disco para '{empresa}': {e}")
+        try:
+            os.makedirs(_CACHE_DIR, exist_ok=True)
+            df.to_pickle(tmp)
+            os.replace(tmp, ruta)
+            mtime = _mtime(ruta)
+        except Exception as e:
+            print(f"⚠️ No se pudo escribir la caché en disco para '{empresa}': {e}")
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
     _cache[empresa] = df
     _cache_stamp[empresa] = (mtime, ahora)
     _ultima_actualizacion[empresa] = _fecha_chile(mtime or ahora)
@@ -581,7 +605,7 @@ def _cargar_desde_fuente(empresa, raise_errors=False):
 
 def obtener_fecha_actualizacion(empresa="comercial"):
     """Fecha de la última carga; si otro proceso la dejó en disco, se usa la de ese archivo."""
-    mtime = _mtime(_ruta_cache(empresa))
+    mtime = _mtime(_ruta_cache(empresa)) if _usa_disco(empresa) else None
     if mtime is not None and time.time() - mtime < _ttl_segundos(empresa):
         return _fecha_chile(mtime)
     return _ultima_actualizacion.get(empresa)
@@ -590,6 +614,12 @@ def obtener_fecha_actualizacion(empresa="comercial"):
 def forzar_actualizacion(empresa="comercial"):
     """Invalida la fuente para TODOS los procesos (borra el archivo compartido)."""
     _olvidar_memoria(empresa)
+    try:  # marcador: los demás procesos descartan su copia en memoria
+        os.makedirs(_CACHE_DIR, exist_ok=True)
+        with open(_ruta_marcador(empresa), "w"):
+            pass
+    except OSError as e:
+        print(f"⚠️ No se pudo marcar la invalidación de '{empresa}': {e}")
     try:
         os.remove(_ruta_cache(empresa))
     except FileNotFoundError:
