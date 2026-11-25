@@ -1,6 +1,9 @@
 # Asegúrate de tener estos imports al principio del archivo sheet_cache.py
+import re
 import unicodedata
+import numpy as np
 import pandas as pd
+import pymysql
 from datetime import datetime
 import pytz
 import io
@@ -222,13 +225,13 @@ def _mask_presentacion_empanada_queso_cruda(df):
     """
     if "DESCRIPCION" not in df.columns:
         return pd.Series(False, index=df.index)
-    d = df["DESCRIPCION"].astype(str).map(_fold_sin_tilde)
-    mask_docenas_pos = d.str.contains("DOCENA EMPANADA CRUDA", na=False)
-    emp = d.str.contains("EMPANADA", na=False)
-    queso = d.str.contains("QUESO", na=False)
-    cruda = d.str.contains("CRUDA", na=False) | d.str.contains("CRUDAS", na=False)
+    d = df["DESCRIPCION"].astype(str).pipe(_fold_columna)
+    mask_docenas_pos = _contiene(d, "DOCENA EMPANADA CRUDA", na=False)
+    emp = _contiene(d, "EMPANADA", na=False)
+    queso = _contiene(d, "QUESO", na=False)
+    cruda = _contiene(d, "CRUDA", na=False) | _contiene(d, "CRUDAS", na=False)
     # Web no cataloga frita; en sucursales sí puede existir «EMPANADA DE QUESO FRITA».
-    frita = d.str.contains("FRITA", na=False)
+    frita = _contiene(d, "FRITA", na=False)
     mask_nombre_web = emp & queso & cruda & ~frita
     return mask_docenas_pos | mask_nombre_web
 
@@ -248,24 +251,24 @@ def _aplicar_familia_presentacion_comercial(df, mask_empanada_queso_cruda):
         .str.replace(r"^[\\/]+", "", regex=True)
         .str.strip()
     )
-    fam0 = df["FAMILIA"].map(_fold_sin_tilde)
+    fam0 = df["FAMILIA"].pipe(_fold_columna)
     mask_otros = fam0.isin(["MALLA", "MALLAS", "OTROS", "OTRO"])
     mask_queso_fam = fam0.isin(["QUESO", "QUESOS"])
     df.loc[mask_otros, "FAMILIA"] = FAMILIA_PRESENTACION_OTROS
     df.loc[mask_queso_fam, "FAMILIA"] = FAMILIA_PRESENTACION_QUESOS
 
-    fam0 = df["FAMILIA"].map(_fold_sin_tilde)
+    fam0 = df["FAMILIA"].pipe(_fold_columna)
     df.loc[fam0.isin(["EMPANADAS", "EMPANADA"]), "FAMILIA"] = FAMILIA_PRESENTACION_EMPANADAS
     df.loc[fam0.isin(["PAPAYA", "PAPAYAS"]), "FAMILIA"] = FAMILIA_PRESENTACION_PAPAYAS
     df.loc[fam0.isin(["BEBIDAS", "BEBIDA"]), "FAMILIA"] = FAMILIA_PRESENTACION_BEBIDAS
     df.loc[fam0.isin(["PIZZA", "PIZZAS"]), "FAMILIA"] = FAMILIA_PRESENTACION_PIZZAS
     df.loc[fam0.isin(["HELADO", "HELADOS"]), "FAMILIA"] = FAMILIA_PRESENTACION_HELADOS
 
-    desc_fold_f = df["DESCRIPCION"].astype(str).map(_fold_sin_tilde)
+    desc_fold_f = df["DESCRIPCION"].astype(str).pipe(_fold_columna)
     mask_emp_queso_frita = (
-        desc_fold_f.str.contains("EMPANADA", na=False)
-        & desc_fold_f.str.contains("QUESO", na=False)
-        & desc_fold_f.str.contains("FRITA", na=False)
+        _contiene(desc_fold_f, "EMPANADA", na=False)
+        & _contiene(desc_fold_f, "QUESO", na=False)
+        & _contiene(desc_fold_f, "FRITA", na=False)
     )
     df.loc[mask_emp_queso_frita, "FAMILIA"] = FAMILIA_PRESENTACION_EMPANADAS
 
@@ -281,12 +284,70 @@ def _fold_sin_tilde(texto):
     return "".join(c for c in s if unicodedata.category(c) != "Mn")
 
 
+def _mapear_unicos(serie, func):
+    """
+    Igual que ``serie.map(func)`` pero llamando ``func`` una vez por valor distinto.
+    Las ventas tienen cientos de miles de filas y solo decenas de descripciones/familias:
+    hacerlo fila a fila era el ~80 % del tiempo de carga.
+    """
+    codigos, unicos = pd.factorize(serie.to_numpy(dtype=object), use_na_sentinel=False)
+    valores = np.array([func(v) for v in unicos], dtype=object)
+    return pd.Series(valores[codigos], index=serie.index, name=serie.name)
+
+
+def _fold_columna(serie):
+    return _mapear_unicos(serie, _fold_sin_tilde)
+
+
+def _contiene(serie, patron, na=False):
+    """Igual que ``serie.str.contains(patron, na=na)`` (regex), evaluado una vez por valor distinto."""
+    rx = re.compile(patron)
+    return _mapear_unicos(
+        serie, lambda v: (rx.search(v) is not None) if isinstance(v, str) else na
+    ).astype(bool)
+
+
+def _compactar_textos(df):
+    """
+    PyMySQL crea un objeto str nuevo por cada fila aunque el texto se repita
+    (sucursal, familia, producto). Se reemplazan por referencias al mismo objeto:
+    mismos valores y tipos, mucha menos RAM (sobre todo en Python 3.9 / pandas 2.x).
+    """
+    for col in df.columns:
+        if df[col].dtype == object:
+            vals = df[col].to_numpy(dtype=object)
+            codigos, unicos = pd.factorize(vals, use_na_sentinel=True)
+            if len(unicos) * 2 < len(vals):
+                nuevo = np.empty(len(vals), dtype=object)
+                nuevo[:] = unicos.take(np.maximum(codigos, 0))
+                nuevo[codigos < 0] = None
+                df[col] = nuevo
+    return df
+
+
+def _filas_mysql(sql):
+    """Ejecuta ``sql`` y devuelve un DataFrame (tuplas en vez de dicts: menos memoria al leer)."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(pymysql.cursors.Cursor)
+        cursor.execute(sql)
+        columnas = [d[0] for d in cursor.description]
+        filas = cursor.fetchall()
+    finally:
+        conn.close()
+    if not filas:
+        return pd.DataFrame(columns=columnas)
+    df = pd.DataFrame.from_records(filas, columns=columnas)
+    del filas
+    return _compactar_textos(df)
+
+
 def _mask_articulo_despacho_web_sin_iva(df):
     """DESPACHO WEB: articulo sin IVA — en BD viene sin factor 1,19; NETO = bruto de linea tal cual."""
     if "DESCRIPCION" not in df.columns:
         return pd.Series(False, index=df.index)
-    d = df["DESCRIPCION"].astype(str).map(_fold_sin_tilde)
-    return d.str.contains("DESPACHO WEB", na=False)
+    d = df["DESCRIPCION"].astype(str).pipe(_fold_columna)
+    return _contiene(d, "DESPACHO WEB", na=False)
 
 
 def procesar_neto_comercial_mismo_que_dashboard(df, diagnostico=False):
@@ -313,8 +374,8 @@ def procesar_neto_comercial_mismo_que_dashboard(df, diagnostico=False):
     """
     df = df.copy()
     if "FAMILIA" in df.columns:
-        fam_fold = df["FAMILIA"].map(_fold_sin_tilde)
-        es_promocion = fam_fold.str.contains("PROMOCION", na=False)
+        fam_fold = df["FAMILIA"].pipe(_fold_columna)
+        es_promocion = _contiene(fam_fold, "PROMOCION", na=False)
         df = df.loc[~es_promocion].copy()
     if df.empty:
         return df
@@ -323,17 +384,17 @@ def procesar_neto_comercial_mismo_que_dashboard(df, diagnostico=False):
     precio_u = pd.to_numeric(df.get("PRECIO"), errors="coerce").fillna(0)
     precio_lis_u = pd.to_numeric(df.get("PRECIO_LIS"), errors="coerce").fillna(0)
     sub = pd.to_numeric(df.get("SUB_RENGL"), errors="coerce").fillna(0)
-    desc_u = df["DESCRIPCION"].astype(str).str.upper()
-    desc_fold = df["DESCRIPCION"].astype(str).map(_fold_sin_tilde)
+    desc_u = _mapear_unicos(df["DESCRIPCION"].astype(str), str.upper)
+    desc_fold = df["DESCRIPCION"].astype(str).pipe(_fold_columna)
 
     px_l = precio_lis_u.astype(float)
     px_u = precio_u.astype(float)
 
-    mask_queso_pieza_kg = desc_u.str.contains(
+    mask_queso_pieza_kg = _contiene(desc_u,
         "QUESO PIEZA", na=False
-    ) & desc_u.str.contains("(KG)", na=False)
+    ) & _contiene(desc_u, "(KG)", na=False)
     # Cubre «MEDIA DOCENA EMPANADA CRUDA» y «DOCENA EMPANADA CRUDA».
-    mask_emp_cruda_precio_fact = desc_fold.str.contains(
+    mask_emp_cruda_precio_fact = _contiene(desc_fold,
         "DOCENA EMPANADA CRUDA", na=False
     )
 
@@ -489,9 +550,6 @@ def _cargar_desde_fuente(empresa, raise_errors=False):
         elif empresa == "agricola":
             try:
                 # --- LEER DESDE LA BASE DE DATOS LOCAL ---
-                conn = get_db_connection()
-                cursor = conn.cursor()
-                
                 # Optimizamos la consulta para traer SOLO las columnas necesarias
                 # y filtrar directo en MySQL, reduciendo drásticamente el uso de RAM y tiempo.
                 query = """
@@ -500,15 +558,12 @@ def _cargar_desde_fuente(empresa, raise_errors=False):
                     WHERE UPPER(TRIM(estado)) IN ('COBRADO', 'COBRADA', 'DESPACH./COBRADA')
                       AND fecha IS NOT NULL
                 """
-                cursor.execute(query)
-                rows = cursor.fetchall()
-                conn.close()
-                
+                df = _filas_mysql(query)
+
                 cols_base = ["FECHA", "DESCRIPCION", "NETO", "CANTIDAD", "SUCURSAL", "FAMILIA", "AÑO", "SEMANA"]
-                if not rows:
+                if df.empty:
                     return pd.DataFrame(columns=cols_base)
-                    
-                df = pd.DataFrame(rows)
+
                 df.columns = df.columns.str.strip().str.upper()
 
                 # 1. Renombrar para el Dashboard estándar (El filtro de estado ya se hizo en SQL)
@@ -534,7 +589,7 @@ def _cargar_desde_fuente(empresa, raise_errors=False):
                         return "FACTURA"
 
                 if "DES_CLIENT" in df.columns:
-                    df["SUCURSAL"] = df["DES_CLIENT"].apply(clasificar_cliente)
+                    df["SUCURSAL"] = _mapear_unicos(df["DES_CLIENT"], clasificar_cliente)
                 else:
                     df["SUCURSAL"] = "FACTURA"
 
@@ -554,15 +609,10 @@ def _cargar_desde_fuente(empresa, raise_errors=False):
         elif empresa == "comercial":
             cols_out = ["FECHA", "DESCRIPCION", "NETO", "CANTIDAD", "SUCURSAL", "FAMILIA", "AÑO", "SEMANA", "N_BOLETA"]
             try:
-                conn = get_db_connection()
-                cursor = conn.cursor()
-                cursor.execute(SQL_VENTAS_COMERCIAL_LINEAS)
-                rows = cursor.fetchall()
-                conn.close()
-                if not rows:
+                df = _filas_mysql(SQL_VENTAS_COMERCIAL_LINEAS)
+                if df.empty:
                     df = pd.DataFrame(columns=cols_out)
                 else:
-                    df = pd.DataFrame(rows)
                     df.columns = df.columns.str.strip().str.upper()
                     df.rename(columns={
                         "DES_ARTICU": "DESCRIPCION",
@@ -579,6 +629,11 @@ def _cargar_desde_fuente(empresa, raise_errors=False):
                         df = df.dropna(subset=["FECHA", "DESCRIPCION"])
                         df["SEMANA"] = df["FECHA"].dt.isocalendar().week
                         df["AÑO"] = df["FECHA"].dt.year
+                        # Decimal de MySQL -> float: ~3x menos RAM; quien las usa ya hace to_numeric.
+                        for col in ("PRECIO", "PRECIO_LIS", "SUB_RENGL"):
+                            if col in df.columns:
+                                df[col] = pd.to_numeric(df[col], errors="coerce")
+                        df = _compactar_textos(df)
             except Exception as e:
                 print(f"❌ Error crítico procesando '{empresa}' (DB): {e}")
                 if raise_errors:
