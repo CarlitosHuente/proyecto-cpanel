@@ -10,3 +10,4 @@ instance/
 credenciales_google.json
 .env
 *.json
+data/cache/

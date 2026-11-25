@@ -12,8 +12,136 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
+import time
+from contextlib import contextmanager
+
+try:  # Bloqueo entre procesos (Linux/macOS). En Windows se omite.
+    import fcntl
+except ImportError:  # pragma: no cover
+    fcntl = None
+
 _ultima_actualizacion = {}
 _cache = {}
+
+# --- Caché compartida en disco -------------------------------------------------
+# En cPanel (Passenger) la app corre en varios procesos que se apagan al quedar
+# inactivos. Antes cada proceso tenía su propia copia en memoria y volvía a leer
+# todo MySQL/Sheets al arrancar. Ahora el DataFrame ya procesado se guarda en
+# data/cache/<fuente>.pkl y lo comparten todos los procesos:
+#   - un proceso nuevo lo lee del disco en milisegundos;
+#   - forzar_actualizacion() borra el archivo, así TODOS los procesos recargan
+#     (antes solo se limpiaba la memoria del proceso que atendía la petición);
+#   - cada fuente vence sola (TTL) para no mostrar datos viejos indefinidamente.
+# Si la carpeta no se puede escribir, se sigue funcionando solo en memoria.
+
+_CACHE_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "cache"
+)
+_FUENTES_BD = ("comercial", "agricola")  # se invalidan al importar ventas
+_cache_stamp = {}  # empresa -> (mtime del archivo en disco o None, time.time() de carga)
+
+
+def _ttl_segundos(empresa):
+    """Minutos de vigencia: BD (se invalida al importar) vs. fuentes externas (Sheets/Drive)."""
+    if empresa in _FUENTES_BD:
+        var, defecto = "CACHE_TTL_MIN_BD", 720
+    else:
+        var, defecto = "CACHE_TTL_MIN_EXTERNO", 30
+    try:
+        minutos = float(os.environ.get(var) or defecto)
+    except ValueError:
+        minutos = defecto
+    return max(minutos, 0) * 60
+
+
+def _ruta_cache(empresa):
+    return os.path.join(_CACHE_DIR, f"{empresa}.pkl")
+
+
+def _mtime(ruta):
+    try:
+        return os.path.getmtime(ruta)
+    except OSError:
+        return None
+
+
+def _fecha_chile(ts):
+    return datetime.fromtimestamp(ts, pytz.timezone("America/Santiago"))
+
+
+def _olvidar_memoria(empresa):
+    _cache.pop(empresa, None)
+    _cache_stamp.pop(empresa, None)
+
+
+def _sincronizar_con_disco(empresa):
+    """Deja en _cache[empresa] la versión vigente (disco > memoria) o la quita si venció."""
+    ahora = time.time()
+    ttl = _ttl_segundos(empresa)
+    ruta = _ruta_cache(empresa)
+    mtime = _mtime(ruta)
+
+    if mtime is not None and ahora - mtime < ttl:
+        stamp = _cache_stamp.get(empresa)
+        if empresa in _cache and stamp and stamp[0] == mtime:
+            return  # memoria ya tiene la misma versión que el disco
+        try:
+            df = pd.read_pickle(ruta)
+        except Exception as e:
+            print(f"⚠️ Caché en disco ilegible para '{empresa}', se recarga: {e}")
+            _olvidar_memoria(empresa)
+            return
+        _cache[empresa] = df
+        _cache_stamp[empresa] = (mtime, ahora)
+        _ultima_actualizacion[empresa] = _fecha_chile(mtime)
+        return
+
+    # Sin archivo vigente: solo sirve una copia "solo memoria" (disco no escribible) aún vigente.
+    stamp = _cache_stamp.get(empresa)
+    if empresa in _cache and stamp and stamp[0] is None and ahora - stamp[1] < ttl:
+        return
+    _olvidar_memoria(empresa)
+
+
+def _guardar_en_cache(empresa, df):
+    """Guarda en memoria y, si se puede, en disco (escritura atómica)."""
+    ahora = time.time()
+    mtime = None
+    try:
+        os.makedirs(_CACHE_DIR, exist_ok=True)
+        ruta = _ruta_cache(empresa)
+        tmp = f"{ruta}.{os.getpid()}.tmp"
+        df.to_pickle(tmp)
+        os.replace(tmp, ruta)
+        mtime = _mtime(ruta)
+    except Exception as e:
+        print(f"⚠️ No se pudo escribir la caché en disco para '{empresa}': {e}")
+    _cache[empresa] = df
+    _cache_stamp[empresa] = (mtime, ahora)
+    _ultima_actualizacion[empresa] = _fecha_chile(mtime or ahora)
+
+
+@contextmanager
+def _bloqueo_carga(empresa):
+    """Evita que varios procesos consulten MySQL/Sheets a la vez para la misma fuente."""
+    if fcntl is None:
+        yield
+        return
+    f = None
+    try:
+        os.makedirs(_CACHE_DIR, exist_ok=True)
+        f = open(os.path.join(_CACHE_DIR, f"{empresa}.lock"), "w")
+        fcntl.flock(f, fcntl.LOCK_EX)
+    except OSError:
+        if f:
+            f.close()
+        f = None
+    try:
+        yield
+    finally:
+        if f:
+            fcntl.flock(f, fcntl.LOCK_UN)
+            f.close()
 # ... (Aquí va tu diccionario de URLS, sin cambios)
 URLS = {
     "temperatura_equipos": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRkmW7dl4WeFzctQZhjY8ENeSkyhl1a5sy_4t9qA08QsxIbp_JiHNV8ZP6gWsA204izNAEiIPh3AUCH/pub?output=csv",
@@ -267,6 +395,20 @@ def obtener_dataframe_comercial_export_diagnostico():
 # Reemplaza la función completa en utils/sheet_cache.py
 
 def obtener_datos(empresa="comercial", raise_errors=False):
+    _sincronizar_con_disco(empresa)
+    if empresa not in _cache:
+        with _bloqueo_carga(empresa):
+            # Otro proceso pudo dejarla en disco mientras esperábamos el bloqueo.
+            _sincronizar_con_disco(empresa)
+            if empresa not in _cache:
+                sin_cachear = _cargar_desde_fuente(empresa, raise_errors)
+                if sin_cachear is not None:
+                    return sin_cachear  # error de carga: se devuelve vacío sin guardarlo
+    return _cache[empresa].copy()
+
+
+def _cargar_desde_fuente(empresa, raise_errors=False):
+    """Lee MySQL / Drive / Sheets y guarda en caché. Devuelve un DataFrame solo si NO se cacheó."""
     if empresa not in _cache:
         url_o_id = URLS.get(empresa)
 
@@ -431,20 +573,29 @@ def obtener_datos(empresa="comercial", raise_errors=False):
                     raise e
                 return pd.DataFrame(columns=["FECHA", "DESCRIPCION", "NETO", "CANTIDAD", "SUCURSAL", "FAMILIA", "AÑO", "SEMANA"])
 
-        _cache[empresa] = df
-        chile = pytz.timezone("America/Santiago")
-        _ultima_actualizacion[empresa] = datetime.now(chile)
+        if df.empty:
+            return df  # vacío (error o sin datos): no se cachea para reintentar en la próxima visita
+        _guardar_en_cache(empresa, df)
 
-    return _cache[empresa].copy()
+    return None
 
 def obtener_fecha_actualizacion(empresa="comercial"):
+    """Fecha de la última carga; si otro proceso la dejó en disco, se usa la de ese archivo."""
+    mtime = _mtime(_ruta_cache(empresa))
+    if mtime is not None and time.time() - mtime < _ttl_segundos(empresa):
+        return _fecha_chile(mtime)
     return _ultima_actualizacion.get(empresa)
 
 
 def forzar_actualizacion(empresa="comercial"):
-    global _cache
-    if empresa in _cache:
-        del _cache[empresa]
+    """Invalida la fuente para TODOS los procesos (borra el archivo compartido)."""
+    _olvidar_memoria(empresa)
+    try:
+        os.remove(_ruta_cache(empresa))
+    except FileNotFoundError:
+        pass
+    except OSError as e:
+        print(f"⚠️ No se pudo borrar la caché en disco de '{empresa}': {e}")
 
 def refrescar_todo_el_cache():
     resultados = []
@@ -456,8 +607,7 @@ def refrescar_todo_el_cache():
         
     for key in fuentes:
         try:
-            if key in _cache:
-                del _cache[key]
+            forzar_actualizacion(key)
             obtener_datos(key, raise_errors=True)  # Forza recarga y lanza error si hay problema
             resultados.append({"fuente": key, "status": "success", "error": None})
         except Exception as e:
